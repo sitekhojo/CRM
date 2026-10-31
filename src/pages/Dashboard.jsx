@@ -8,6 +8,7 @@ import { useConfig, stagesFor } from '../lib/config'
 import DealFilters from '../components/DealFilters'
 import { Stat, StageBadge, PageLoader } from '../components/ui'
 import { fmtNum, daysLabel, startOfWeek, startOfMonth, fmtDate } from '../lib/format'
+import { haversine } from '../lib/geo'
 
 export default function Dashboard() {
   const { deals, loading } = useDeals()
@@ -44,7 +45,9 @@ export default function Dashboard() {
       const c = acc[r.city] || (acc[r.city] = { city: r.city, sites: 0, qis: 0 })
       c.sites += 1; c.qis += qisOf(r); return acc
     }, {})).sort((a, b) => b[metric] - a[metric] || b.sites - a.sites)
+    const energizedDeals = rows.filter(r => r.stage_category === 'live')
     const net = network.filter(n => n.point_type === 'own_station' && (!filters.city.length || filters.city.includes(n.city)) && (!filters.siteType.length || filters.siteType.includes(n.site_type)))
+      .filter(n => !energizedDeals.some(d => haversine(d.latitude, d.longitude, n.latitude, n.longitude) <= 100)) // already counted as a deal
 
     // weekly trend (last 12 weeks)
     const weeks = Array.from({ length: 12 }, (_, i) => { const d = startOfWeek(); d.setDate(d.getDate() - 7 * (11 - i)); return d })
@@ -61,7 +64,7 @@ export default function Dashboard() {
       return { id: s.id, name: s.name, color: s.color, sla: s.sla_days, avg: avg(xs), n: xs.length }
     }).filter(x => x.n > 0)
 
-    // Lead → Live cycle time
+    // Lead → Energized cycle time
     const firstAt = {}, liveAt = {}
     const liveIds = new Set(stages.filter(s => s.category === 'live').map(s => s.id))
     for (const x of (history || [])) {
@@ -78,16 +81,16 @@ export default function Dashboard() {
       const moves = h.filter(x => x.changed_by === u.id)
       return {
         id: u.id, name: u.full_name || u.email, active: u.is_active,
-        scouted: mine.length,
-        week: mine.filter(r => new Date(r.created_at) >= wk).length,
-        month: mine.filter(r => new Date(r.created_at) >= mo).length,
-        owned: owned.filter(r => r.stage_category === 'active').length,
-        won: owned.filter(r => ['approved', 'live'].includes(r.stage_category)).length,
-        dropped: owned.filter(r => r.stage_category === 'dropped').length,
+        scouted: qs(mine),
+        week: qs(mine.filter(r => new Date(r.created_at) >= wk)),
+        month: qs(mine.filter(r => new Date(r.created_at) >= mo)),
+        owned: qs(owned.filter(r => ['active', 'approved'].includes(r.stage_category))),
+        won: qs(owned.filter(r => r.stage_category === 'live')),
+        dropped: qs(owned.filter(r => r.stage_category === 'dropped')),
         overdue: owned.filter(r => r.is_overdue).length,
         moves: moves.length,
       }
-    }).filter(t => t.scouted || t.owned || t.moves || t.active).sort((a, b) => b.scouted - a.scouted)
+    }).filter(t => t.scouted.sites || t.owned.sites || t.moves || t.active).sort((a, b) => b.scouted.qis - a.scouted.qis)
 
     const stuck = rows.filter(r => r.is_overdue).sort((a, b) => (b.days_in_stage - b.stage_sla_days) - (a.days_in_stage - a.stage_sla_days))
 
@@ -128,14 +131,13 @@ export default function Dashboard() {
       </div>
       <DealFilters value={filters} onChange={setFilters} show={['city', 'type', 'stage', 'siteType', 'date']} />
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-7">
-        <Stat label="Total sites" value={fmtNum(m.total)} icon={Layers} sub={`${m.leads} leads · ${m.deals} deals · excl. dropped`} />
-        <Stat label="Total QIS" value={fmtNum(m.totalQis)} icon={Boxes} tone="teal" sub="across those sites" />
-        <Stat label="This week" value={fmtNum(m.week)} icon={CalendarPlus} tone="blue" sub={`${fmtNum(m.weekQis)} QIS`} />
-        <Stat label="This month" value={fmtNum(m.month)} icon={CalendarDays} tone="blue" sub={`${fmtNum(m.monthQis)} QIS`} />
-        <Stat label="In pipeline" value={fmtNum(m.active)} icon={Activity} sub={`${fmtNum(m.pipeQis)} QIS`} />
-        <Stat label="Live (from pipeline)" value={fmtNum(m.live)} icon={Zap} tone="green" sub={`${fmtNum(m.liveQis)} QIS`} />
-        <Stat label="Live network" value={`${fmtNum(m.netQis + m.liveQis)} QIS`} icon={Network} tone="green" sub={`${fmtNum(m.netSites + m.live)} sites (network data + live deals)`} />
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        <Stat label="Total QIS" value={fmtNum(m.totalQis)} icon={Boxes} sub={`${fmtNum(m.total)} sites · ${m.leads} leads · ${m.deals} deals (excl. dropped)`} />
+        <Stat label="QIS added this week" value={fmtNum(m.weekQis)} icon={CalendarPlus} tone="blue" sub={`${fmtNum(m.week)} sites`} />
+        <Stat label="QIS added this month" value={fmtNum(m.monthQis)} icon={CalendarDays} tone="blue" sub={`${fmtNum(m.month)} sites`} />
+        <Stat label="QIS in pipeline" value={fmtNum(m.pipeQis)} icon={Activity} tone="teal" sub={`${fmtNum(m.active)} sites · Scouting → Handover`} />
+        <Stat label="QIS energized (pipeline)" value={fmtNum(m.liveQis)} icon={Zap} tone="green" sub={`${fmtNum(m.live)} sites`} />
+        <Stat label="Energized network" value={fmtNum(m.netQis + m.liveQis)} icon={Network} tone="green" sub={`${fmtNum(m.netSites + m.live)} sites · QIS tracker + energized deals`} />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-3">
@@ -170,15 +172,15 @@ export default function Dashboard() {
         <Panel title="Pending at each stage" className="xl:col-span-2">
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
-              <thead><tr className="border-b border-slate-100"><th className="th">Stage</th><th className="th text-right">Sites</th><th className="th text-right">QIS</th><th className="th text-right">Avg days in stage</th><th className="th text-right">SLA</th><th className="th text-right">Beyond SLA</th><th className="th text-right">Avg TAT (exited)</th></tr></thead>
+              <thead><tr className="border-b border-slate-100"><th className="th">Stage</th><th className="th text-right">QIS</th><th className="th text-right">Sites</th><th className="th text-right">Avg days in stage</th><th className="th text-right">SLA</th><th className="th text-right">Beyond SLA</th><th className="th text-right">Avg TAT (exited)</th></tr></thead>
               <tbody>
                 {m.pipeline.map(p => {
                   const t = m.tat.find(x => x.id === p.id)
                   return (
                     <tr key={p.id} className="cursor-pointer border-b border-slate-50 hover:bg-slate-50" onClick={() => go(`stage=${p.id}`)}>
                       <td className="td"><StageBadge name={p.name} color={p.color} /></td>
-                      <td className="td text-right font-semibold">{p.count}</td>
-                      <td className="td text-right">{p.qis || '—'}</td>
+                      <td className="td text-right font-semibold">{p.qis || '—'}</td>
+                      <td className="td text-right text-slate-500">{p.count}</td>
                       <td className="td text-right">{p.count ? daysLabel(p.avgDays) : '—'}</td>
                       <td className="td text-right text-slate-500">{p.sla ? `${p.sla} d` : '—'}</td>
                       <td className={`td text-right font-semibold ${p.overdue ? 'text-red-600' : 'text-slate-300'}`}>{p.overdue}</td>
@@ -189,7 +191,7 @@ export default function Dashboard() {
               </tbody>
             </table>
           </div>
-          <p className="mt-2 text-xs text-slate-500">Avg TAT = average days deals spent in a stage before moving on. Avg lead → live cycle: <b>{m.cycle !== null ? daysLabel(m.cycle) : 'no live deals yet'}</b></p>
+          <p className="mt-2 text-xs text-slate-500">Avg TAT = average days deals spent in a stage before moving on. Avg scouting → energized cycle: <b>{m.cycle !== null ? daysLabel(m.cycle) : 'no energized deals yet'}</b></p>
         </Panel>
         <Panel title="Sites added — last 12 weeks">
           <ResponsiveContainer width="100%" height={250}>
@@ -236,15 +238,15 @@ export default function Dashboard() {
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead><tr className="border-b border-slate-100">
-              <th className="th">Team member</th><th className="th text-right">Scouted</th><th className="th text-right">This week</th><th className="th text-right">This month</th>
-              <th className="th text-right">Open deals owned</th><th className="th text-right">Approved / Live</th><th className="th text-right">Dropped</th><th className="th text-right">Beyond SLA</th><th className="th text-right">Stage moves</th>
+              <th className="th">Team member</th><th className="th text-right">QIS scouted</th><th className="th text-right">This week</th><th className="th text-right">This month</th>
+              <th className="th text-right">QIS in pipeline (owned)</th><th className="th text-right">QIS energized</th><th className="th text-right">QIS dropped</th><th className="th text-right">Beyond SLA</th><th className="th text-right">Stage moves</th>
             </tr></thead>
             <tbody>
               {m.team.map(t => (
                 <tr key={t.id} className="border-b border-slate-50 hover:bg-slate-50">
                   <td className="td font-semibold">{t.name}{!t.active && <span className="ml-1 text-xs text-slate-400">(inactive)</span>}</td>
-                  <td className="td text-right font-bold">{t.scouted}</td><td className="td text-right">{t.week}</td><td className="td text-right">{t.month}</td>
-                  <td className="td text-right">{t.owned}</td><td className="td text-right text-emerald-700">{t.won}</td><td className="td text-right text-slate-500">{t.dropped}</td>
+                  <QS v={t.scouted} bold /><QS v={t.week} /><QS v={t.month} />
+                  <QS v={t.owned} /><QS v={t.won} cls="text-emerald-700" /><QS v={t.dropped} cls="text-slate-500" />
                   <td className={`td text-right ${t.overdue ? 'font-semibold text-red-600' : 'text-slate-300'}`}>{t.overdue}</td><td className="td text-right">{t.moves}</td>
                 </tr>
               ))}
@@ -260,6 +262,10 @@ export default function Dashboard() {
 const Panel = ({ title, children, className = '' }) => (
   <div className={`card p-4 sm:p-5 ${className}`}><h3 className="mb-3 text-sm font-bold text-slate-900">{title}</h3>{children}</div>
 )
+const QS = ({ v, bold, cls = '' }) => (
+  <td className={`td text-right ${cls}`}><span className={bold ? 'font-bold' : ''}>{v.qis}</span><span className="block text-[11px] text-slate-400">{v.sites} sites</span></td>
+)
+const qs = rs => ({ qis: rs.reduce((a, r) => a + (Number(r.extra?.qis_count) || 0), 0), sites: rs.length })
 const qisOf = r => Number(r.extra?.qis_count) || 0
 const sumQis = rs => rs.reduce((a, r) => a + qisOf(r), 0)
 const Toggle = ({ value, onChange }) => (

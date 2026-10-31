@@ -66,7 +66,7 @@ function Stages() {
               <td className="td"><input type="color" className="h-8 w-12 cursor-pointer rounded border border-slate-300" value={s.color} onChange={e => set(i, 'color', e.target.value)} /></td>
               <td className="td"><input className="input w-20 py-1" type="number" min="1" placeholder="none" value={s.sla_days ?? ''} onChange={e => set(i, 'sla_days', e.target.value)} /></td>
               <td className="td"><select className="input w-auto py-1" value={s.category} onChange={e => set(i, 'category', e.target.value)}>
-                <option value="active">Pipeline</option><option value="approved">Post-agreement</option><option value="live">Live</option><option value="hold">Hold</option><option value="dropped">Dropped</option></select></td>
+                <option value="active">Pipeline</option><option value="approved">Post-agreement</option><option value="live">Energized (final)</option><option value="hold">Hold</option><option value="dropped">Dropped</option></select></td>
               <td className="td">
                 <div className="flex flex-wrap gap-x-2 gap-y-1">
                   {SITE_TYPES.map(t => (
@@ -191,7 +191,7 @@ function Network() {
   return (
     <div className="space-y-4">
       <div className="card p-4">
-        <p className="mb-3 text-sm text-slate-500">Upload the reference layers used by Network Planning: your existing stations, competitor stations, demand hotspots (fleet hubs, markets, EV clusters) and restricted zones. Deals in a <b>Live</b> stage are automatically treated as own stations.</p>
+        <p className="mb-3 text-sm text-slate-500">Upload the reference layers used by Network Planning: your existing stations, competitor stations, demand hotspots (fleet hubs, markets, EV clusters) and restricted zones. Deals in the <b>Energized</b> stage are automatically treated as own stations.</p>
         <div className="flex flex-wrap items-end gap-2">
           <Field label="Default type (if file has no Type column)">
             <select className="input w-auto" value={type} onChange={e => setType(e.target.value)}>{Object.entries(NETWORK_TYPES).map(([k, t]) => <option key={k} value={k}>{t.label}</option>)}</select>
