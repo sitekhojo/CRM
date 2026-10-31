@@ -759,3 +759,5 @@ update public.stages set sort_order = 9 where key = 'dropped';
 -- Site Khojo v1.5: per-day energization counts on network points (from QIS tracker).
 -- Pipeline milestone dates live in sites.extra: ho_date, energized_on.
 alter table public.network_points add column if not exists energized_dates jsonb;  -- {"YYYY-MM-DD": no. of QIS}
+-- Site Khojo v1.6: Agreement Registered stage retired (no sites were in it)
+update public.stages set is_active = false where key = 'agreement_registered';
