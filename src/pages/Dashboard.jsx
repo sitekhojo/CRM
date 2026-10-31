@@ -257,40 +257,6 @@ export default function Dashboard() {
         )}
       </Modal>
 
-      <Panel title={<span className="flex flex-wrap items-center gap-2">
-          <span className="mr-auto">QIS energized{showHo ? ' & handed over' : ''} — {grain === 'week' ? 'week on week (Mon–Sun)' : 'month on month'}</span>
-          <label className="flex items-center gap-1.5 text-xs font-medium text-slate-600"><input type="checkbox" checked={showHo} onChange={e => setShowHo(e.target.checked)} className="accent-amber-500" />Show handover</label>
-          <span className="flex rounded-lg border border-slate-300 p-0.5 text-xs font-semibold">
-            {[['month', 'MoM'], ['week', 'WoW']].map(([v, l]) => <button key={v} onClick={() => setGrain(v)} className={`rounded-md px-2.5 py-1 ${grain === v ? 'bg-navy-900 text-white' : 'text-slate-600'}`}>{l}</button>)}
-          </span>
-        </span>}>
-        <div className="mb-3 flex flex-wrap gap-x-6 gap-y-1 text-sm">
-          <span>{grain === 'week' ? 'This week' : 'This month'}: <b className="text-emerald-700">{fmtNum(m.delivery.cur.en)} QIS</b> energized <span className="text-slate-400">({m.delivery.cur.enSites} sites)</span>
-            {m.delivery.enChg !== null && <span className={`ml-1 font-semibold ${m.delivery.enChg >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{m.delivery.enChg >= 0 ? '▲' : '▼'} {Math.abs(m.delivery.enChg)}% vs {grain === 'week' ? 'last week' : 'last month'} ({fmtNum(m.delivery.prev.en)})</span>}</span>
-          <span className="text-slate-500">Avg of previous 11 {grain === 'week' ? 'weeks' : 'months'}: <b>{fmtNum(m.delivery.avgEn)} QIS</b></span>
-          {showHo && <span>Handed over: <b className="text-amber-600">{fmtNum(m.delivery.cur.ho)} QIS</b>{m.delivery.hoChg !== null && <span className={`ml-1 font-semibold ${m.delivery.hoChg >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{m.delivery.hoChg >= 0 ? '▲' : '▼'} {Math.abs(m.delivery.hoChg)}%</span>}</span>}
-        </div>
-        <ResponsiveContainer width="100%" height={260}>
-          <BarChart data={m.delivery.rows} margin={{ left: -20, right: 4, top: 16 }}>
-            <CartesianGrid vertical={false} stroke="#f1f5f9" />
-            <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-            <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-            <Tooltip cursor={{ fill: '#f8fafc' }} content={({ active, payload }) => {
-              if (!active || !payload?.length) return null
-              const x = payload[0].payload
-              return <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs shadow">
-                <div className="font-semibold">{fmtDate(x.from)} – {fmtDate(x.to)}</div>
-                <div className="text-emerald-700">Energized: <b>{x.en} QIS</b> · {x.enSites} sites</div>
-                {showHo && <div className="text-amber-600">Handed over: <b>{x.ho} QIS</b> · {x.hoSites} sites</div>}
-              </div>
-            }} />
-            {showHo && <Legend wrapperStyle={{ fontSize: 12 }} />}
-            <Bar dataKey="en" name="QIS energized" fill="#10b981" radius={[4, 4, 0, 0]}><LabelList dataKey="en" position="top" fontSize={10} fill="#475569" formatter={v => (v ? v : '')} /></Bar>
-            {showHo && <Bar dataKey="ho" name="QIS handed over" fill="#f59e0b" radius={[4, 4, 0, 0]}><LabelList dataKey="ho" position="top" fontSize={10} fill="#475569" formatter={v => (v ? v : '')} /></Bar>}
-          </BarChart>
-        </ResponsiveContainer>
-        <p className="mt-1 text-xs text-slate-500">Energized = QIS-tracker energisation dates + pipeline sites energized in the CRM (not double-counted). {grain === 'week' ? 'The current week is partial.' : 'The current month is partial.'} Follows the region / city / site-type filters above.</p>
-      </Panel>
 
       <Panel title={`Where did the QIS added ${m.period.label} go? (current stage)`}>
         {m.period.flow.length === 0 ? <p className="text-sm text-slate-400">No QIS added in this period.</p> : (
@@ -438,6 +404,41 @@ export default function Dashboard() {
           </table>
         </div>
         <p className="mt-2 text-xs text-slate-500">Click a name to see their sites. Reassign owners from the Owner column in Leads &amp; Deals. Data as of {fmtDate(new Date())}.</p>
+      </Panel>
+
+      <Panel title={<span className="flex flex-wrap items-center gap-2">
+          <span className="mr-auto">QIS energized{showHo ? ' & handed over' : ''} — {grain === 'week' ? 'week on week (Mon–Sun)' : 'month on month'}</span>
+          <label className="flex items-center gap-1.5 text-xs font-medium text-slate-600"><input type="checkbox" checked={showHo} onChange={e => setShowHo(e.target.checked)} className="accent-amber-500" />Show handover</label>
+          <span className="flex rounded-lg border border-slate-300 p-0.5 text-xs font-semibold">
+            {[['month', 'MoM'], ['week', 'WoW']].map(([v, l]) => <button key={v} onClick={() => setGrain(v)} className={`rounded-md px-2.5 py-1 ${grain === v ? 'bg-navy-900 text-white' : 'text-slate-600'}`}>{l}</button>)}
+          </span>
+        </span>}>
+        <div className="mb-3 flex flex-wrap gap-x-6 gap-y-1 text-sm">
+          <span>{grain === 'week' ? 'This week' : 'This month'}: <b className="text-emerald-700">{fmtNum(m.delivery.cur.en)} QIS</b> energized <span className="text-slate-400">({m.delivery.cur.enSites} sites)</span>
+            {m.delivery.enChg !== null && <span className={`ml-1 font-semibold ${m.delivery.enChg >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{m.delivery.enChg >= 0 ? '▲' : '▼'} {Math.abs(m.delivery.enChg)}% vs {grain === 'week' ? 'last week' : 'last month'} ({fmtNum(m.delivery.prev.en)})</span>}</span>
+          <span className="text-slate-500">Avg of previous 11 {grain === 'week' ? 'weeks' : 'months'}: <b>{fmtNum(m.delivery.avgEn)} QIS</b></span>
+          {showHo && <span>Handed over: <b className="text-amber-600">{fmtNum(m.delivery.cur.ho)} QIS</b>{m.delivery.hoChg !== null && <span className={`ml-1 font-semibold ${m.delivery.hoChg >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{m.delivery.hoChg >= 0 ? '▲' : '▼'} {Math.abs(m.delivery.hoChg)}%</span>}</span>}
+        </div>
+        <ResponsiveContainer width="100%" height={260}>
+          <BarChart data={m.delivery.rows} margin={{ left: -20, right: 4, top: 16 }}>
+            <CartesianGrid vertical={false} stroke="#f1f5f9" />
+            <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+            <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+            <Tooltip cursor={{ fill: '#f8fafc' }} content={({ active, payload }) => {
+              if (!active || !payload?.length) return null
+              const x = payload[0].payload
+              return <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs shadow">
+                <div className="font-semibold">{fmtDate(x.from)} – {fmtDate(x.to)}</div>
+                <div className="text-emerald-700">Energized: <b>{x.en} QIS</b> · {x.enSites} sites</div>
+                {showHo && <div className="text-amber-600">Handed over: <b>{x.ho} QIS</b> · {x.hoSites} sites</div>}
+              </div>
+            }} />
+            {showHo && <Legend wrapperStyle={{ fontSize: 12 }} />}
+            <Bar dataKey="en" name="QIS energized" fill="#10b981" radius={[4, 4, 0, 0]}><LabelList dataKey="en" position="top" fontSize={10} fill="#475569" formatter={v => (v ? v : '')} /></Bar>
+            {showHo && <Bar dataKey="ho" name="QIS handed over" fill="#f59e0b" radius={[4, 4, 0, 0]}><LabelList dataKey="ho" position="top" fontSize={10} fill="#475569" formatter={v => (v ? v : '')} /></Bar>}
+          </BarChart>
+        </ResponsiveContainer>
+        <p className="mt-1 text-xs text-slate-500">Energized = QIS-tracker energisation dates + pipeline sites energized in the CRM (not double-counted). {grain === 'week' ? 'The current week is partial.' : 'The current month is partial.'} Follows the region / city / site-type filters above.</p>
       </Panel>
     </div>
   )
