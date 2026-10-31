@@ -18,15 +18,12 @@ export function useDeals() {
 }
 
 /**
- * Was this site in the pipeline at some point between `from` and `to` (ISO days)?
- * = added on/before `to`, and not already dropped or energized before `from`.
+ * Pipeline for a period: added on/before `to`, and not Dropped or Energized
+ * (Scouting → Handover Done, plus Hold).
  */
 export function inPipeline(d, from, to) {
   if (to && String(d.created_at).slice(0, 10) > to) return false
-  if (!from) return true
-  if (d.stage_category === 'dropped' && String(d.stage_entered_at || '').slice(0, 10) < from) return false
-  if (d.stage_category === 'live' && String(d.extra?.energized_on || d.stage_entered_at || '').slice(0, 10) < from) return false
-  return true
+  return d.stage_category !== 'dropped' && d.stage_category !== 'live'
 }
 
 export const EMPTY_FILTERS = { q: '', city: [], recordType: '', stage: [], siteType: [], region: [], owner: [], member: '', from: '', to: '', overdue: false, mine: false, age: '', ho: '', en: '', openOnly: false, inPipe: '' }

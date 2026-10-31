@@ -171,6 +171,8 @@ export default function Dashboard() {
         const pFrom = isoDay(pStart), pTo = isoDay(pEnd)
         const pipe = rows.filter(r => inPipeline(r, pFrom, pTo))
         const carried = pipe.filter(r => String(r.created_at).slice(0, 10) < pFrom)
+        const pipeAdded = pipe.filter(r => !carried.includes(r))
+        const closedDrop = rows.filter(r => r.stage_category === 'dropped' && inP(r.stage_entered_at))
         const status = {}
         for (const r of pipe) {
           const k = r.stage_id; const isNew = !carried.includes(r)
@@ -184,7 +186,7 @@ export default function Dashboard() {
           added: qs(added), open: qs(stillOpen), ho: qs(ho),
           en: { qis: trackerEn + sumQis(crmEn), sites: enSites, list: enList }, crmMatched: crmMatchedIds.size,
           flow: Object.values(flow).sort((a, b) => a.order - b.order),
-          pipe: qs(pipe), carried: qs(carried), status: Object.values(status).sort((a, b) => a.order - b.order),
+          pipe: qs(pipe), carried: qs(carried), pipeAdded: qs(pipeAdded), droppedInP: qs(closedDrop), status: Object.values(status).sort((a, b) => a.order - b.order),
         }
       })(),
       totalQis: sumQis(open),
@@ -234,7 +236,7 @@ export default function Dashboard() {
       <PeriodBar value={period} onChange={setPeriod} label={m.period.label} />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <Stat label="Total QIS in pipeline" value={fmtNum(m.period.pipe.qis)} icon={Boxes} sub={`${fmtNum(m.period.pipe.sites)} sites · ${fmtNum(m.period.carried.qis)} carried in + ${fmtNum(m.period.added.qis)} added · ${m.period.label}`}
+        <Stat label="Total QIS in pipeline" value={fmtNum(m.period.pipe.qis)} icon={Boxes} sub={`${fmtNum(m.period.pipe.sites)} sites · ${fmtNum(m.period.carried.qis)} carried in + ${fmtNum(m.period.pipeAdded.qis)} added · excl. dropped & energized`}
           onClick={() => goCard(`Total QIS in pipeline ${m.period.label}`, { inp: `${m.period.from},${m.period.to}` })} />
         <Stat label="QIS added" value={fmtNum(m.period.added.qis)} icon={CalendarPlus} tone="blue" sub={`${fmtNum(m.period.added.sites)} sites · ${m.period.label}`}
           onClick={() => goCard(`QIS added ${m.period.label}`, { from: m.period.from, to: m.period.to })} />
@@ -270,7 +272,7 @@ export default function Dashboard() {
 
 
       <Panel title={<span className="flex flex-wrap items-center gap-2"><span className="mr-auto">Status of the {fmtNum(m.period.pipe.qis)} QIS in pipeline {m.period.label} (current stage)</span>
-          <span className="text-xs font-normal text-slate-500">{fmtNum(m.period.carried.qis)} carried in from before + {fmtNum(m.period.added.qis)} added {m.period.label}</span></span>}>
+          <span className="text-xs font-normal text-slate-500">{fmtNum(m.period.carried.qis)} carried in from before + {fmtNum(m.period.pipeAdded.qis)} added {m.period.label}</span></span>}>
         {m.period.status.length === 0 ? <p className="text-sm text-slate-400">Nothing in the pipeline in this period.</p> : (
           <>
             <div className="flex h-8 w-full overflow-hidden rounded-lg">
@@ -288,10 +290,10 @@ export default function Dashboard() {
                     <td className="text-right font-semibold">{fmtNum(f.qis)}</td><td className="text-right text-slate-500">{f.sites}</td><td className="text-right text-slate-500">{fmtNum(f.newQis)}</td>
                   </tr>
                 ))}
-                <tr className="border-t-2 border-slate-200 font-bold"><td className="py-1.5">Total</td><td className="text-right">{fmtNum(m.period.pipe.qis)}</td><td className="text-right">{m.period.pipe.sites}</td><td className="text-right">{fmtNum(m.period.added.qis)}</td></tr>
+                <tr className="border-t-2 border-slate-200 font-bold"><td className="py-1.5">Total</td><td className="text-right">{fmtNum(m.period.pipe.qis)}</td><td className="text-right">{m.period.pipe.sites}</td><td className="text-right">{fmtNum(m.period.pipeAdded.qis)}</td></tr>
               </tbody>
             </table>
-            <p className="mt-2 text-xs text-slate-500">In pipeline = added on or before the end of the period, and not already dropped or energized before it started. Dropped / Energized rows are the ones that closed during the period. Click a row to see the sites.</p>
+            <p className="mt-2 text-xs text-slate-500">Pipeline = every site added up to the end of the period that is not Dropped or Energized. Not in the total: {fmtNum(m.period.droppedInP.qis)} QIS dropped and {fmtNum(m.period.en.qis)} QIS energized {m.period.label} (see the Energized card). Click a row to see the sites.</p>
           </>
         )}
       </Panel>
