@@ -77,7 +77,7 @@ export default function Planning() {
               {network.map(p => (
                 <CircleMarker key={'n' + p.id} center={[p.latitude, p.longitude]} radius={6}
                   pathOptions={{ color: '#fff', weight: 2, fillColor: NETWORK_TYPES[p.point_type].color, fillOpacity: 0.9 }}>
-                  <LTooltip>{NETWORK_TYPES[p.point_type].label}: {p.name}{has ? ` · ${fmtDist(distanceTo(loc, p))}` : ''}</LTooltip>
+                  <LTooltip>{NETWORK_TYPES[p.point_type].label}{p.site_type ? ` (${p.site_type})` : ''}: {p.name}{p.weight > 1 ? ` · ${p.weight} QIS` : ''}{has ? ` · ${fmtDist(distanceTo(loc, p))}` : ''}</LTooltip>
                 </CircleMarker>
               ))}
               {res && <DealMarkers deals={res.nearby.pipeline} radius={6} />}

@@ -48,10 +48,10 @@ export default function MapPage() {
         <div className="relative min-h-[420px] flex-1">
           <BaseMap>
             <FitBounds points={rows.map(r => [r.latitude, r.longitude])} fitKey={fitKey} />
-            {showNet && network.map(p => (
+            {showNet && network.filter(p => !filters.siteType.length || p.point_type !== 'own_station' || filters.siteType.includes(p.site_type)).filter(p => !filters.city.length || filters.city.includes(p.city)).map(p => (
               <CircleMarker key={'n' + p.id} center={[p.latitude, p.longitude]} radius={5}
                 pathOptions={{ color: NETWORK_TYPES[p.point_type].color, weight: 2, fillColor: '#fff', fillOpacity: 1 }}>
-                <LTooltip>{NETWORK_TYPES[p.point_type].label}: {p.name}</LTooltip>
+                <LTooltip>{NETWORK_TYPES[p.point_type].label}{p.site_type ? ` (${p.site_type})` : ''}: {p.name}{p.weight > 1 ? ` · ${p.weight} QIS` : ''}</LTooltip>
               </CircleMarker>
             ))}
             <DealMarkers deals={rows} />

@@ -5,7 +5,7 @@ import { useConfig, DEFAULT_RULES } from '../lib/config'
 import { useToast, Field, StageBadge } from '../components/ui'
 import { readSheet, normaliseRow, toNum, downloadTemplate, exportRows } from '../lib/excel'
 import { NETWORK_TYPES } from './Planning'
-import { SITE_TYPES } from '../lib/format'
+import { SITE_TYPES, normaliseSiteType } from '../lib/format'
 
 const TABS = [['stages', 'Pipeline stages'], ['cities', 'Cities'], ['drops', 'Drop reasons'], ['rules', 'Feasibility rules'], ['network', 'Network data']]
 
@@ -148,7 +148,7 @@ function Rules() {
   )
 }
 
-const NET_FIELDS = [['point_type', 'Type'], ['name', 'Name'], ['city', 'City'], ['latitude', 'Latitude'], ['longitude', 'Longitude'], ['weight', 'Weight'], ['notes', 'Notes']]
+const NET_FIELDS = [['point_type', 'Type'], ['name', 'Name'], ['city', 'City'], ['site_type', 'Site type'], ['latitude', 'Latitude'], ['longitude', 'Longitude'], ['weight', 'Weight'], ['notes', 'Notes']]
 
 function Network() {
   const toast = useToast()
@@ -169,7 +169,7 @@ function Network() {
         const t = typeBy[String(o.point_type || type).toLowerCase()] || type
         const lat = toNum(o.latitude), lng = toNum(o.longitude)
         if (!o.name || lat === null || lng === null) return bad.push(i + 2)
-        rows.push({ point_type: t, name: String(o.name), city: o.city || null, latitude: lat, longitude: lng, weight: toNum(o.weight) ?? 1, notes: o.notes || null })
+        rows.push({ point_type: t, name: String(o.name), city: o.city || null, site_type: normaliseSiteType(o.site_type), latitude: lat, longitude: lng, weight: toNum(o.weight) ?? 1, notes: o.notes || null })
       })
       for (let i = 0; i < rows.length; i += 500) {
         const { error } = await supabase.from('network_points').insert(rows.slice(i, i + 500))
@@ -201,7 +201,7 @@ function Network() {
           <button className="btn-secondary" onClick={() => downloadTemplate(NET_FIELDS, 'sitekhojo-network-template')}><Download className="h-4 w-4" />Template</button>
           {points?.length > 0 && <button className="btn-secondary" onClick={() => exportRows(points, NET_FIELDS, 'sitekhojo-network-points')}><Download className="h-4 w-4" />Export</button>}
         </div>
-        <p className="mt-2 text-xs text-slate-500">Columns: Type (own_station / competitor / demand_hotspot / restricted), Name, City, Latitude, Longitude, Weight (optional), Notes (optional).</p>
+        <p className="mt-2 text-xs text-slate-500">Columns: Type (own_station / competitor / demand_hotspot / restricted), Name, City, Site type (Franchise / Private / SPP / IOCL / Metro & Railways), Latitude, Longitude, Weight = no. of QIS (optional), Notes (optional).</p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {Object.entries(NETWORK_TYPES).map(([k, t]) => {

@@ -22,13 +22,14 @@ export const POWER_FEASIBILITY = {
   unknown: { label: 'Unknown', cls: 'bg-slate-100 text-slate-600' },
 }
 
-export const SITE_TYPES = ['Franchise', 'Private', 'SPP', 'Metro', 'IOCL', 'Railways']
+export const SITE_TYPES = ['Franchise', 'Private', 'SPP', 'IOCL', 'Metro & Railways']
 
 /** Match free text (e.g. from Excel) to a known site type. */
 export function normaliseSiteType(v) {
   const s = String(v ?? '').trim().toLowerCase()
   if (!s) return null
   if (s === 'pvt') return 'Private'
+  if (['metro', 'railways', 'railway', 'metro & railways', 'metro/railways'].includes(s)) return 'Metro & Railways'
   return SITE_TYPES.find(t => t.toLowerCase() === s) || String(v).trim()
 }
 
