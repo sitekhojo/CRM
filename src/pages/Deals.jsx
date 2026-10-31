@@ -9,6 +9,7 @@ import { StageBadge, PageLoader, Empty, Pill } from '../components/ui'
 import { fmtDate, fmtINR, daysLabel, POWER_FEASIBILITY, RECORD_TYPES } from '../lib/format'
 import { exportRows, DEAL_COLUMNS } from '../lib/excel'
 import ImportDealsModal from '../components/ImportDealsModal'
+import StageCell from '../components/StageCell'
 
 export default function Deals() {
   const { deals, loading, reload } = useDeals()
@@ -26,7 +27,7 @@ export default function Deals() {
 
   const rows = useMemo(() => {
     if (!deals) return []
-    const r = applyFilters(deals, filters, user?.id).map(d => ({ ...d, qis: d.extra?.qis_count ?? null }))
+    const r = applyFilters(deals, filters, user?.id).map(d => ({ ...d, qis: d.extra?.qis_count ?? null, ho_sort: d.extra?.ho_date ?? null, en_sort: d.extra?.energized_on ?? null }))
     const { key, dir } = sort
     return [...r].sort((a, b) => {
       const x = a[key], y = b[key]
@@ -87,7 +88,7 @@ export default function Deals() {
               <tr>
                 <SortTh k="site_code">ID</SortTh><SortTh k="record_type">Type</SortTh><SortTh k="name">Site</SortTh><SortTh k="stage_order">Stage</SortTh>
                 <SortTh k="qis">QIS</SortTh><SortTh k="days_in_stage">In stage</SortTh><SortTh k="city">City</SortTh><SortTh k="rent_expectation">Rent</SortTh>
-                <th className="th">Power</th><SortTh k="assigned_to_name">Owner</SortTh><SortTh k="created_at">Created</SortTh>
+                <th className="th">Power</th><SortTh k="ho_sort">HO date</SortTh><SortTh k="en_sort">Energized</SortTh><SortTh k="assigned_to_name">Owner</SortTh><SortTh k="created_at">Created</SortTh>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -96,7 +97,7 @@ export default function Deals() {
                   <td className="td font-mono text-xs text-slate-500">{d.site_code}</td>
                   <td className="td"><Pill className={RECORD_TYPES[d.record_type || 'deal'].cls}>{RECORD_TYPES[d.record_type || 'deal'].label}</Pill></td>
                   <td className="td max-w-[260px]"><div className="truncate font-semibold text-slate-900">{d.name}</div><div className="truncate text-xs text-slate-500">{[d.site_type, d.address].filter(Boolean).join(' · ') || '—'}</div></td>
-                  <td className="td"><StageBadge name={d.stage_name} color={d.stage_color} /></td>
+                  <td className="td" onClick={e => e.stopPropagation()}><StageCell deal={d} onChanged={reload} /></td>
                   <td className="td font-semibold">{d.qis ?? '—'}</td>
                   <td className="td">
                     <span className={d.is_overdue ? 'inline-flex items-center gap-1 font-semibold text-red-600' : ''}>
@@ -107,6 +108,8 @@ export default function Deals() {
                   <td className="td">{d.city}</td>
                   <td className="td">{fmtINR(d.rent_expectation)}</td>
                   <td className="td"><Pill className={POWER_FEASIBILITY[d.power_feasibility]?.cls}>{POWER_FEASIBILITY[d.power_feasibility]?.label}</Pill></td>
+                  <td className="td text-slate-600">{d.extra?.ho_date ? fmtDate(d.extra.ho_date) : '—'}</td>
+                  <td className="td text-slate-600">{d.extra?.energized_on ? fmtDate(d.extra.energized_on) : '—'}</td>
                   <td className="td">{d.assigned_to_name || '—'}</td>
                   <td className="td text-slate-500">{fmtDate(d.created_at)}</td>
                 </tr>

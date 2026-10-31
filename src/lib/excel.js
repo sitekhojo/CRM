@@ -11,6 +11,7 @@ export const DEAL_COLUMNS = [
   ['power_feasibility', 'Power feasibility'], ['power_notes', 'Power notes'], ['observations', 'Observations'],
   ['remarks', 'Remarks'], ['drop_reason', 'Drop reason'], ['drop_notes', 'Drop notes'],
   ['qis_count', 'No. of QIS'], ['expected_ho', 'Expected HO date'], ['priority_zone', 'Priority zone (P0/P1)'], ['probability', 'Probability %'],
+  ['ho_date', 'Handover date'], ['energized_on', 'Energization date'],
   ['assigned_to_name', 'Owner'], ['created_by_name', 'Scouted by'], ['created_at', 'Created at'], ['stage_entered_at', 'Stage since'],
 ]
 
@@ -24,6 +25,7 @@ export const IMPORT_FIELDS = [
   ['observations', 'Observations'], ['remarks', 'Remarks'], ['stage', 'Stage'], ['owner_email', 'Owner email'],
   ['record_type', 'Type'], ['drop_reason', 'Drop reason'],
   ['qis_count', 'No. of QIS'], ['expected_ho', 'Expected HO date'], ['priority_zone', 'Priority zone (P0/P1)'], ['probability', 'Probability %'],
+  ['ho_date', 'Handover date'], ['energized_on', 'Energization date'],
 ]
 
 const cell = v => (v === null || v === undefined ? '' : typeof v === 'boolean' ? (v ? 'Yes' : 'No') : v)

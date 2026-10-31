@@ -54,7 +54,7 @@ export default function ImportDealsModal({ open, onClose, onDone }) {
           drop_reason: o.drop_reason || null,
           extra: Object.fromEntries([
             ['qis_count', toNum(o.qis_count)], ['probability', toNum(o.probability)],
-            ['expected_ho', toDateStr(o.expected_ho)], ['priority_zone', o.priority_zone ? String(o.priority_zone) : null],
+            ['expected_ho', toDateStr(o.expected_ho)], ['ho_date', toDateStr(o.ho_date)], ['energized_on', toDateStr(o.energized_on)], ['priority_zone', o.priority_zone ? String(o.priority_zone) : null],
           ].filter(([, v]) => v !== null && v !== '')),
           ...(stage_id ? { stage_id } : {}), ...(assigned_to ? { assigned_to } : {}),
           stage_note: 'Imported',

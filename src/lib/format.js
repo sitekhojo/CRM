@@ -39,6 +39,8 @@ export const EXTRA_FIELDS = [
   ['expected_ho', 'Expected HO date', 'date'],
   ['priority_zone', 'Priority zone (P0/P1)', 'text'],
   ['probability', 'Probability %', 'number'],
+  ['ho_date', 'Handover date', 'date'],
+  ['energized_on', 'Energization date', 'date'],
 ]
 
 export const RECORD_TYPES = {
