@@ -53,7 +53,7 @@ export default function Dashboard() {
     const weeks = Array.from({ length: 12 }, (_, i) => { const d = startOfWeek(); d.setDate(d.getDate() - 7 * (11 - i)); return d })
     const trend = weeks.map((w, i) => {
       const end = weeks[i + 1] || new Date(8.64e15)
-      return { week: w.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }), count: rows.filter(r => { const c = new Date(r.created_at); return c >= w && c < end }).length }
+      return { week: w.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }), count: (() => { const xs = rows.filter(r => { const c = new Date(r.created_at); return c >= w && c < end }); return metric === 'qis' ? xs.reduce((a, r) => a + qisOf(r), 0) : xs.length })() }
     })
 
     // TAT between stages, restricted to the filtered deals
@@ -193,14 +193,14 @@ export default function Dashboard() {
           </div>
           <p className="mt-2 text-xs text-slate-500">Avg TAT = average days deals spent in a stage before moving on. Avg scouting → energized cycle: <b>{m.cycle !== null ? daysLabel(m.cycle) : 'no energized deals yet'}</b></p>
         </Panel>
-        <Panel title="Sites added — last 12 weeks">
+        <Panel title={`${metric === 'qis' ? 'QIS' : 'Sites'} added — last 12 weeks`}>
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={m.trend} margin={{ left: -25, right: 4 }}>
               <CartesianGrid vertical={false} stroke="#f1f5f9" />
               <XAxis dataKey="week" tick={{ fontSize: 10 }} interval={1} />
               <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
               <Tooltip cursor={{ fill: '#f8fafc' }} />
-              <Bar dataKey="count" name="Sites" fill="#10b981" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="count" name={metric === 'qis' ? 'QIS' : 'Sites'} fill="#10b981" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </Panel>
