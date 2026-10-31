@@ -32,6 +32,14 @@ export function normaliseSiteType(v) {
   return SITE_TYPES.find(t => t.toLowerCase() === s) || String(v).trim()
 }
 
+/** Pipeline attributes kept in sites.extra (no DB change needed to add more). */
+export const EXTRA_FIELDS = [
+  ['qis_count', 'No. of QIS', 'number'],
+  ['expected_ho', 'Expected HO date', 'date'],
+  ['priority_zone', 'Priority zone (P0/P1)', 'text'],
+  ['probability', 'Probability %', 'number'],
+]
+
 export const RECORD_TYPES = {
   lead: { label: 'Lead', cls: 'bg-sky-100 text-sky-700' },
   deal: { label: 'Deal', cls: 'bg-violet-100 text-violet-700' },

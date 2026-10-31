@@ -26,7 +26,7 @@ export default function Deals() {
 
   const rows = useMemo(() => {
     if (!deals) return []
-    const r = applyFilters(deals, filters, user?.id)
+    const r = applyFilters(deals, filters, user?.id).map(d => ({ ...d, qis: d.extra?.qis_count ?? null }))
     const { key, dir } = sort
     return [...r].sort((a, b) => {
       const x = a[key], y = b[key]
@@ -59,8 +59,8 @@ export default function Deals() {
           ))}
         </div>
         <div className="flex gap-2">
-          <button className="btn-secondary" onClick={() => exportRows(rows, DEAL_COLUMNS, `sitekhojo-deals-${new Date().toISOString().slice(0, 10)}`)}><Download className="h-4 w-4" />Excel</button>
-          <button className="btn-secondary" onClick={() => exportRows(rows, DEAL_COLUMNS, `sitekhojo-deals-${new Date().toISOString().slice(0, 10)}`, 'csv')}>CSV</button>
+          <button className="btn-secondary" onClick={() => exportRows(flatten(rows), DEAL_COLUMNS, `sitekhojo-deals-${new Date().toISOString().slice(0, 10)}`)}><Download className="h-4 w-4" />Excel</button>
+          <button className="btn-secondary" onClick={() => exportRows(flatten(rows), DEAL_COLUMNS, `sitekhojo-deals-${new Date().toISOString().slice(0, 10)}`, 'csv')}>CSV</button>
           {isAdmin && <button className="btn-secondary" onClick={() => setImportOpen(true)}><Upload className="h-4 w-4" />Import</button>}
         </div>
       </div>
@@ -80,7 +80,7 @@ export default function Deals() {
             <thead className="bg-slate-50">
               <tr>
                 <SortTh k="site_code">ID</SortTh><SortTh k="record_type">Type</SortTh><SortTh k="name">Site</SortTh><SortTh k="stage_order">Stage</SortTh>
-                <SortTh k="days_in_stage">In stage</SortTh><SortTh k="city">City</SortTh><SortTh k="rent_expectation">Rent</SortTh>
+                <SortTh k="qis">QIS</SortTh><SortTh k="days_in_stage">In stage</SortTh><SortTh k="city">City</SortTh><SortTh k="rent_expectation">Rent</SortTh>
                 <th className="th">Power</th><SortTh k="assigned_to_name">Owner</SortTh><SortTh k="created_at">Created</SortTh>
               </tr>
             </thead>
@@ -91,6 +91,7 @@ export default function Deals() {
                   <td className="td"><Pill className={RECORD_TYPES[d.record_type || 'deal'].cls}>{RECORD_TYPES[d.record_type || 'deal'].label}</Pill></td>
                   <td className="td max-w-[260px]"><div className="truncate font-semibold text-slate-900">{d.name}</div><div className="truncate text-xs text-slate-500">{[d.site_type, d.address].filter(Boolean).join(' · ') || '—'}</div></td>
                   <td className="td"><StageBadge name={d.stage_name} color={d.stage_color} /></td>
+                  <td className="td font-semibold">{d.qis ?? '—'}</td>
                   <td className="td">
                     <span className={d.is_overdue ? 'inline-flex items-center gap-1 font-semibold text-red-600' : ''}>
                       {d.is_overdue && <AlertTriangle className="h-3.5 w-3.5" />}{daysLabel(d.days_in_stage)}
@@ -116,6 +117,8 @@ export default function Deals() {
   )
 }
 
+const flatten = rows => rows.map(r => ({ ...r, ...(r.extra || {}) }))
+
 function Board({ rows, stages }) {
   return (
     <div className="-mx-4 overflow-x-auto px-4 pb-4 sm:-mx-6 sm:px-6">
@@ -128,6 +131,7 @@ function Board({ rows, stages }) {
               <div className="flex items-center gap-2 border-t-4 px-3 py-2.5" style={{ borderColor: s.color, borderTopLeftRadius: 12, borderTopRightRadius: 12 }}>
                 <span className="text-sm font-bold text-slate-800">{s.name}</span>
                 <span className="rounded-full bg-white px-2 text-xs font-bold text-slate-500">{items.length}</span>
+                {items.some(r => r.qis) && <span className="text-xs text-slate-500">{items.reduce((a, r) => a + (r.qis || 0), 0)} QIS</span>}
                 {overdue > 0 && <span className="ml-auto flex items-center gap-1 text-xs font-semibold text-red-600"><AlertTriangle className="h-3 w-3" />{overdue}</span>}
               </div>
               <div className="flex max-h-[calc(100vh-280px)] flex-col gap-2 overflow-y-auto p-2">
@@ -142,7 +146,7 @@ function Board({ rows, stages }) {
                       <span className="truncate">{d.city}{d.site_type ? ` · ${d.site_type}` : ''}</span>
                     </div>
                     <div className="mt-2 flex items-center justify-between text-xs">
-                      <span className="text-slate-600">{d.assigned_to_name || '—'}</span>
+                      <span className="text-slate-600">{d.qis ? <b>{d.qis} QIS · </b> : ''}{d.assigned_to_name || '—'}</span>
                       <span className={`font-semibold ${d.is_overdue ? 'text-red-600' : 'text-slate-500'}`}>{daysLabel(d.days_in_stage)}</span>
                     </div>
                   </Link>

@@ -3,7 +3,7 @@ import { useConfig, stagesFor } from '../lib/config'
 import { useAuth } from '../lib/auth'
 import { Field } from './ui'
 import { LocationPicker, DealMarkers } from './maps'
-import { SITE_TYPES } from '../lib/format'
+import { SITE_TYPES, EXTRA_FIELDS } from '../lib/format'
 import { evaluateFeasibility, validLatLng, VERDICT } from '../lib/geo'
 import { fetchDeals, fetchNetworkPoints } from '../lib/deals'
 
@@ -12,7 +12,7 @@ export const blankDeal = {
   landlord_name: '', landlord_phone: '', landlord_email: '', landlord_notes: '',
   rent_expectation: '', deposit_expectation: '', rent_negotiable: null, observations: '',
   power_available: null, power_phase: '', sanctioned_load_kw: '', power_feasibility: 'unknown', power_notes: '',
-  remarks: '', stage_id: '', assigned_to: '', record_type: 'deal',
+  remarks: '', stage_id: '', assigned_to: '', record_type: 'deal', extra: {},
 }
 
 const NUMS = ['area_sqft', 'rent_expectation', 'deposit_expectation', 'sanctioned_load_kw']
@@ -24,6 +24,13 @@ export function toPayload(f, loc) {
   for (const k of ['power_phase', 'site_type', 'pincode', 'landlord_email', 'assigned_to']) if (p[k] === '') p[k] = null
   p.stage_id = p.stage_id ? Number(p.stage_id) : null
   p.record_type = p.record_type === 'lead' ? 'lead' : 'deal'
+  const extra = { ...(f.extra && typeof f.extra === 'object' ? f.extra : {}) }
+  for (const [k, , type] of EXTRA_FIELDS) {
+    const v = extra[k]
+    if (v === '' || v === null || v === undefined) delete extra[k]
+    else if (type === 'number') extra[k] = Number(v)
+  }
+  p.extra = extra
   if (loc) { p.latitude = loc.lat; p.longitude = loc.lng; p.location_source = loc.source || 'manual'; p.location_accuracy_m = loc.accuracy ?? null }
   return p
 }
@@ -109,6 +116,12 @@ export default function DealForm({ initial, initialLoc, onSubmit, submitting, mo
               </select>
             </Field>
           )}
+          {EXTRA_FIELDS.map(([k, label, type]) => (
+            <Field key={k} label={label}>
+              <input className="input" type={type} min={type === 'number' ? 0 : undefined} value={f.extra?.[k] ?? ''}
+                onChange={e => setF(x => ({ ...x, extra: { ...(x.extra || {}), [k]: e.target.value } }))} />
+            </Field>
+          ))}
           <Field label="Usable area (sq ft)"><input className="input" type="number" min="0" value={f.area_sqft ?? ''} onChange={e => set('area_sqft', e.target.value)} /></Field>
           {mode === 'create' && (
             <Field label="Starting stage">

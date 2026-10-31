@@ -30,6 +30,7 @@ export default function Dashboard() {
     const stageCounts = by(r => r.stage_id)
     const pipeline = stagesFor(stages, filters.siteType).map(s => ({
       id: s.id, name: s.name, color: s.color, sla: s.sla_days, count: stageCounts[s.id] || 0,
+      qis: rows.filter(r => r.stage_id === s.id).reduce((a, r) => a + (Number(r.extra?.qis_count) || 0), 0),
       overdue: rows.filter(r => r.stage_id === s.id && r.is_overdue).length,
       avgDays: avg(rows.filter(r => r.stage_id === s.id).map(r => +r.days_in_stage)),
     }))
@@ -92,6 +93,8 @@ export default function Dashboard() {
       live: rows.filter(r => r.stage_category === 'live').length,
       dropped: rows.filter(r => r.stage_category === 'dropped').length,
       hold: rows.filter(r => r.stage_category === 'hold').length,
+      pipeQis: rows.filter(r => ['active', 'approved'].includes(r.stage_category)).reduce((a, r) => a + (Number(r.extra?.qis_count) || 0), 0),
+      liveQis: rows.filter(r => r.stage_category === 'live').reduce((a, r) => a + (Number(r.extra?.qis_count) || 0), 0),
       overdue: stuck.length,
       pipeline, cityCounts, trend, tat, team, stuck, cycle,
       dropReasons: Object.entries(by(r => r.stage_category === 'dropped' ? r.drop_reason || 'Unspecified' : null)).filter(([k]) => k !== 'null').sort((a, b) => b[1] - a[1]),
@@ -115,9 +118,9 @@ export default function Dashboard() {
         <Stat label="Total sites" value={fmtNum(m.total)} icon={Layers} sub={`${m.leads} leads · ${m.deals} deals`} />
         <Stat label="This week" value={fmtNum(m.week)} icon={CalendarPlus} tone="blue" />
         <Stat label="This month" value={fmtNum(m.month)} icon={CalendarDays} tone="blue" />
-        <Stat label="In pipeline" value={fmtNum(m.active)} icon={Activity} />
+        <Stat label="In pipeline" value={fmtNum(m.active)} icon={Activity} sub={m.pipeQis ? `${fmtNum(m.pipeQis)} QIS` : undefined} />
         <Stat label="Agreement → Energized" value={fmtNum(m.approved)} icon={CheckCircle2} tone="teal" />
-        <Stat label="Live" value={fmtNum(m.live)} icon={Zap} tone="green" />
+        <Stat label="Live" value={fmtNum(m.live)} icon={Zap} tone="green" sub={m.liveQis ? `${fmtNum(m.liveQis)} QIS` : undefined} />
         <Stat label="On hold" value={fmtNum(m.hold)} icon={PauseCircle} tone="amber" />
         <Stat label="Dropped" value={fmtNum(m.dropped)} icon={XCircle} tone="red" />
         <Stat label="Beyond SLA" value={fmtNum(m.overdue)} icon={AlertTriangle} tone={m.overdue ? 'red' : 'slate'} onClick={() => go('overdue=1')} sub="Click to view" />
@@ -154,7 +157,7 @@ export default function Dashboard() {
         <Panel title="Pending at each stage" className="xl:col-span-2">
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
-              <thead><tr className="border-b border-slate-100"><th className="th">Stage</th><th className="th text-right">Deals</th><th className="th text-right">Avg days in stage</th><th className="th text-right">SLA</th><th className="th text-right">Beyond SLA</th><th className="th text-right">Avg TAT (exited)</th></tr></thead>
+              <thead><tr className="border-b border-slate-100"><th className="th">Stage</th><th className="th text-right">Sites</th><th className="th text-right">QIS</th><th className="th text-right">Avg days in stage</th><th className="th text-right">SLA</th><th className="th text-right">Beyond SLA</th><th className="th text-right">Avg TAT (exited)</th></tr></thead>
               <tbody>
                 {m.pipeline.map(p => {
                   const t = m.tat.find(x => x.id === p.id)
@@ -162,6 +165,7 @@ export default function Dashboard() {
                     <tr key={p.id} className="cursor-pointer border-b border-slate-50 hover:bg-slate-50" onClick={() => go(`stage=${p.id}`)}>
                       <td className="td"><StageBadge name={p.name} color={p.color} /></td>
                       <td className="td text-right font-semibold">{p.count}</td>
+                      <td className="td text-right">{p.qis || '—'}</td>
                       <td className="td text-right">{p.count ? daysLabel(p.avgDays) : '—'}</td>
                       <td className="td text-right text-slate-500">{p.sla ? `${p.sla} d` : '—'}</td>
                       <td className={`td text-right font-semibold ${p.overdue ? 'text-red-600' : 'text-slate-300'}`}>{p.overdue}</td>

@@ -10,7 +10,7 @@ import { BaseMap, pinIcon } from '../components/maps'
 import { Marker } from 'react-leaflet'
 import StageChangeModal from '../components/StageChangeModal'
 import DealForm from '../components/DealForm'
-import { fmtDateTime, fmtINR, fmtNum, daysLabel, timeAgo, POWER_FEASIBILITY, RECORD_TYPES } from '../lib/format'
+import { fmtDateTime, fmtDate, fmtINR, fmtNum, daysLabel, timeAgo, POWER_FEASIBILITY, RECORD_TYPES, EXTRA_FIELDS } from '../lib/format'
 
 export default function DealDetail() {
   const { id } = useParams()
@@ -144,6 +144,9 @@ export default function DealDetail() {
         <div className="space-y-4 lg:col-span-2">
           <InfoCard title="Site">
             <Info label="Site type" value={deal.site_type} />
+            {EXTRA_FIELDS.map(([k, label, type]) => (
+              <Info key={k} label={label} value={deal.extra?.[k] === undefined || deal.extra?.[k] === null ? null : type === 'date' ? fmtDate(deal.extra[k]) : type === 'number' ? fmtNum(deal.extra[k]) : String(deal.extra[k])} />
+            ))}
             <Info label="Area" value={deal.area_sqft ? `${fmtNum(deal.area_sqft)} sq ft` : null} />
             <Info label="Coordinates" value={`${deal.latitude.toFixed(6)}, ${deal.longitude.toFixed(6)}`} />
             <Info label="Location source" value={`${deal.location_source}${deal.location_accuracy_m ? ` (±${deal.location_accuracy_m} m)` : ''}`} />
@@ -231,7 +234,7 @@ export default function DealDetail() {
 
       <Modal open={editing} onClose={() => setEditing(false)} title={`Edit ${deal.site_code}`} wide>
         {editing && <DealForm mode="edit" excludeId={deal.id} submitting={saving} onSubmit={saveEdit}
-          initial={Object.fromEntries(Object.entries(deal).map(([k, v]) => [k, v ?? '']).concat([['rent_negotiable', deal.rent_negotiable], ['power_available', deal.power_available]]))}
+          initial={Object.fromEntries(Object.entries(deal).map(([k, v]) => [k, v ?? '']).concat([['rent_negotiable', deal.rent_negotiable], ['power_available', deal.power_available], ['extra', deal.extra || {}]]))}
           initialLoc={{ lat: deal.latitude, lng: deal.longitude, source: deal.location_source, accuracy: deal.location_accuracy_m }} />}
       </Modal>
     </div>
