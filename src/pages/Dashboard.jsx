@@ -190,6 +190,7 @@ export default function Dashboard() {
         }
       })(),
       totalQis: sumQis(open),
+      openPipe: qs(rows.filter(r => !['dropped', 'live'].includes(r.stage_category))),
       weekQis: sumQis(open.filter(r => new Date(r.created_at) >= wk)),
       monthQis: sumQis(open.filter(r => new Date(r.created_at) >= mo)),
       netSites: net.length,
@@ -233,13 +234,11 @@ export default function Dashboard() {
         </div>
       </div>
       <DealFilters value={filters} onChange={setFilters} show={['region', 'city', 'owner', 'type', 'stage', 'siteType']} />
-      <PeriodBar allTime value={period} onChange={setPeriod} label={m.period.label} />
+      <PeriodBar value={period} onChange={setPeriod} label={m.period.label} />
 
-      <div className={`grid grid-cols-2 gap-3 md:grid-cols-3 ${period.kind === 'all' ? 'xl:grid-cols-6' : 'xl:grid-cols-5'}`}>
-        {period.kind === 'all' && (
-        <Stat label="Total QIS in pipeline" value={fmtNum(m.period.pipe.qis)} icon={Boxes} sub={`${fmtNum(m.period.pipe.sites)} sites · Scouting → Handover + Hold · excl. dropped & energized`}
-          onClick={() => goCard('Total QIS in pipeline', { inp: `,${m.period.to}` })} />
-        )}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        <Stat label="Total QIS in pipeline" value={fmtNum(m.openPipe.qis)} icon={Boxes} sub={`${fmtNum(m.openPipe.sites)} sites · as of today · Scouting → Handover + Hold`}
+          onClick={() => goCard('Total QIS in pipeline (as of today)', { inp: ',' })} />
         <Stat label="QIS added" value={fmtNum(m.period.added.qis)} icon={CalendarPlus} tone="blue" sub={`${fmtNum(m.period.added.sites)} sites · ${m.period.label}`}
           onClick={() => goCard(`QIS added ${m.period.label}`, { from: m.period.from, to: m.period.to })} />
         <Stat label="QIS in pipeline" value={fmtNum(m.period.open.qis)} icon={Activity} tone="teal" sub={`${fmtNum(m.period.open.sites)} sites · of those added, still Scouting → Handover`}
@@ -273,33 +272,6 @@ export default function Dashboard() {
       </Modal>
 
 
-      {period.kind === 'all' && (<>
-      <Panel title={<span className="flex flex-wrap items-center gap-2"><span className="mr-auto">Status of the {fmtNum(m.period.pipe.qis)} QIS in pipeline (current stage)</span></span>}>
-        {m.period.status.length === 0 ? <p className="text-sm text-slate-400">Nothing in the pipeline in this period.</p> : (
-          <>
-            <div className="flex h-8 w-full overflow-hidden rounded-lg">
-              {m.period.status.map(f => (
-                <div key={f.id} title={`${f.name}: ${f.qis} QIS`} className="cursor-pointer" onClick={() => goCard(`${f.name} · in pipeline ${m.period.label}`, { inp: `${m.period.from},${m.period.to}`, stage: String(f.id) })}
-                  style={{ width: `${(100 * f.qis) / Math.max(1, m.period.pipe.qis)}%`, background: f.color }} />
-              ))}
-            </div>
-            <table className="mt-3 w-full max-w-2xl text-sm">
-              <thead><tr className="text-left text-xs uppercase text-slate-500"><th className="py-1">Current stage</th><th className="text-right">QIS</th><th className="text-right">Sites</th></tr></thead>
-              <tbody>
-                {m.period.status.map(f => (
-                  <tr key={f.id} className="cursor-pointer border-t border-slate-100 hover:bg-slate-50" onClick={() => goCard(`${f.name} · in pipeline ${m.period.label}`, { inp: `${m.period.from},${m.period.to}`, stage: String(f.id) })}>
-                    <td className="py-1.5"><span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm" style={{ background: f.color }} />{f.name}</span></td>
-                    <td className="text-right font-semibold">{fmtNum(f.qis)}</td><td className="text-right text-slate-500">{f.sites}</td>
-                  </tr>
-                ))}
-                <tr className="border-t-2 border-slate-200 font-bold"><td className="py-1.5">Total</td><td className="text-right">{fmtNum(m.period.pipe.qis)}</td><td className="text-right">{m.period.pipe.sites}</td></tr>
-              </tbody>
-            </table>
-            <p className="mt-2 text-xs text-slate-500">Pipeline = every site that is not Dropped or Energized. Click a row to see the sites.</p>
-          </>
-        )}
-      </Panel>
-      </>)}
 
 
 

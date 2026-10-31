@@ -26,7 +26,7 @@ export default function Deals() {
     ho: params.get('ho') || '', en: params.get('en') || '', openOnly: params.get('open') === '1', inPipe: params.get('inp') || '',
   })
   const fromCard = params.get('card')
-  const [pkind, setPkind] = useState(params.get('from') || params.get('to') || params.get('inp') ? 'custom' : 'all')
+  const [pkind, setPkind] = useState(params.get('from') || params.get('to') || (params.get('inp') && params.get('inp') !== ',') ? 'custom' : 'all')
   const [pmode, setPmode] = useState(params.get('inp') ? 'pipe' : 'added') // added in period | in pipeline during period
   const onPeriod = v => {
     setPkind(v.kind)
@@ -94,7 +94,7 @@ export default function Deals() {
         <div className="mb-3 flex items-center gap-2 rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-800">
           From dashboard: <b>{fromCard}</b>
           {filters.from && <> · added {filters.from} → {filters.to || 'today'}</>}
-          {filters.inPipe && <> · in pipeline {filters.inPipe.replace(",", " → ")}</>}
+          {filters.inPipe && <> · {filters.inPipe === ',' ? 'open pipeline (excl. dropped & energized)' : `in pipeline ${filters.inPipe.replace(',', ' → ')}`}</>}
           {filters.ho && <> · handed over {filters.ho.replace(',', ' → ')}</>}
           {filters.en && <> · energized {filters.en.replace(',', ' → ')}</>}
           {filters.openOnly && <> · excluding dropped</>}
