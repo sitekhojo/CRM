@@ -17,7 +17,7 @@ export function useDeals() {
   return { deals, error, reload, loading: deals === null && !error }
 }
 
-export const EMPTY_FILTERS = { q: '', city: [], recordType: '', stage: [], siteType: [], member: '', from: '', to: '', overdue: false, mine: false, age: '' }
+export const EMPTY_FILTERS = { q: '', city: [], recordType: '', stage: [], siteType: [], member: '', from: '', to: '', overdue: false, mine: false, age: '', ho: '', en: '', openOnly: false }
 
 /** Apply the shared filter bar to a list of deals. */
 export function applyFilters(deals, f, userId) {
@@ -32,6 +32,9 @@ export function applyFilters(deals, f, userId) {
     if (f.member && d.created_by !== f.member && d.assigned_to !== f.member) return false
     if (f.mine && d.assigned_to !== userId && d.created_by !== userId) return false
     if (f.overdue && !d.is_overdue) return false
+    if (f.openOnly && d.stage_category === 'dropped') return false
+    if (f.ho) { const [a, b] = f.ho.split(','); const x = d.extra?.ho_date; if (!x || x < a || x > b) return false }
+    if (f.en) { const [a, b] = f.en.split(','); const x = d.extra?.energized_on; if (!x || x < a || x > b) return false }
     if (f.age) {
       const [lo, hi] = f.age.split('-').map(v => (v === '' ? Infinity : Number(v)))
       if (+d.days_in_stage < lo || +d.days_in_stage > hi) return false

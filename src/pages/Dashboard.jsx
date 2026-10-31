@@ -128,7 +128,7 @@ export default function Dashboard() {
         const flow = {}
         for (const r of added) { const k = r.stage_name; flow[k] = flow[k] || { name: k, color: r.stage_color, order: r.stage_order, qis: 0, sites: 0 }; flow[k].qis += qisOf(r); flow[k].sites++ }
         return {
-          label: periodLabel(period, pStart, pEnd),
+          label: periodLabel(period, pStart, pEnd), from: isoDay(pStart), to: isoDay(pEnd),
           added: qs(added), open: qs(stillOpen), ho: qs(ho),
           en: { qis: trackerEn + sumQis(crmEn), sites: enSites }, crmMatched: crmMatchedIds.size,
           flow: Object.values(flow).sort((a, b) => a.order - b.order),
@@ -158,6 +158,14 @@ export default function Dashboard() {
 
   if (loading || !m) return <PageLoader />
   const go = q => nav(`/app/deals?${q}`)
+  const goCard = (card, extra) => {
+    const p = new URLSearchParams({ card, ...extra })
+    if (filters.city.length) p.set('city', filters.city.join(','))
+    if (filters.siteType.length) p.set('siteType', filters.siteType.join(','))
+    if (filters.recordType) p.set('type', filters.recordType)
+    if (filters.stage.length && !extra.stage) p.set('stage', filters.stage.join(','))
+    nav(`/app/deals?${p}`)
+  }
 
   return (
     <div className="space-y-5 p-4 sm:p-6">
@@ -171,12 +179,18 @@ export default function Dashboard() {
       <PeriodBar value={period} onChange={setPeriod} label={m.period.label} />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <Stat label="Total QIS" value={fmtNum(m.totalQis)} icon={Boxes} sub={`${fmtNum(m.total)} sites · all open, excl. dropped`} />
-        <Stat label="QIS added" value={fmtNum(m.period.added.qis)} icon={CalendarPlus} tone="blue" sub={`${fmtNum(m.period.added.sites)} sites · ${m.period.label}`} />
-        <Stat label="QIS in pipeline" value={fmtNum(m.period.open.qis)} icon={Activity} tone="teal" sub={`${fmtNum(m.period.open.sites)} sites · of those added, still Scouting → Handover`} />
-        <Stat label="QIS handed over" value={fmtNum(m.period.ho.qis)} icon={CalendarDays} tone="amber" sub={`${fmtNum(m.period.ho.sites)} sites · ${m.period.label}`} />
-        <Stat label="QIS energized" value={fmtNum(m.period.en.qis)} icon={Zap} tone="green" sub={`${fmtNum(m.period.en.sites)} sites · ${m.period.label}`} />
-        <Stat label="Energized network" value={fmtNum(m.netQis + m.liveQis)} icon={Network} tone="green" sub={`${fmtNum(m.netSites + m.live)} sites to date · +${fmtNum(m.period.en.qis)} in period`} />
+        <Stat label="Total QIS" value={fmtNum(m.totalQis)} icon={Boxes} sub={`${fmtNum(m.total)} sites · all open, excl. dropped`}
+          onClick={() => goCard('Total QIS', { open: '1' })} />
+        <Stat label="QIS added" value={fmtNum(m.period.added.qis)} icon={CalendarPlus} tone="blue" sub={`${fmtNum(m.period.added.sites)} sites · ${m.period.label}`}
+          onClick={() => goCard(`QIS added ${m.period.label}`, { from: m.period.from, to: m.period.to })} />
+        <Stat label="QIS in pipeline" value={fmtNum(m.period.open.qis)} icon={Activity} tone="teal" sub={`${fmtNum(m.period.open.sites)} sites · of those added, still Scouting → Handover`}
+          onClick={() => goCard(`QIS in pipeline (added ${m.period.label})`, { from: m.period.from, to: m.period.to, stage: stages.filter(s => s.is_active && ['active', 'approved'].includes(s.category)).map(s => s.id).join(',') })} />
+        <Stat label="QIS handed over" value={fmtNum(m.period.ho.qis)} icon={CalendarDays} tone="amber" sub={`${fmtNum(m.period.ho.sites)} sites · ${m.period.label}`}
+          onClick={() => goCard(`QIS handed over ${m.period.label}`, { ho: `${m.period.from},${m.period.to}` })} />
+        <Stat label="QIS energized" value={fmtNum(m.period.en.qis)} icon={Zap} tone="green" sub={`${fmtNum(m.period.en.sites)} sites · ${m.period.label}`}
+          onClick={() => goCard(`Pipeline sites energized ${m.period.label} (QIS-tracker sites are on the Map)`, { en: `${m.period.from},${m.period.to}` })} />
+        <Stat label="Energized network" value={fmtNum(m.netQis + m.liveQis)} icon={Network} tone="green" sub={`${fmtNum(m.netSites + m.live)} sites to date · +${fmtNum(m.period.en.qis)} in period`}
+          onClick={() => nav('/app/map?network=1')} />
       </div>
 
       <Panel title={`Where did the QIS added ${m.period.label} go? (current stage)`}>
@@ -332,6 +346,7 @@ const QS = ({ v, bold, cls = '' }) => (
   <td className={`td text-right ${cls}`}><span className={bold ? 'font-bold' : ''}>{v.qis}</span><span className="block text-[11px] text-slate-400">{v.sites} sites</span></td>
 )
 const qs = rs => ({ qis: rs.reduce((a, r) => a + (Number(r.extra?.qis_count) || 0), 0), sites: rs.length })
+const isoDay = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 function periodRange({ kind, from, to }) {
   const now = new Date(); const end = new Date(now); end.setHours(23, 59, 59, 999)
   if (kind === 'custom') {

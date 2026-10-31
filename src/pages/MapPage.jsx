@@ -18,7 +18,7 @@ export default function MapPage() {
   const [filters, setFilters] = useState(EMPTY_FILTERS)
   const [view, setView] = useState('map')
   const [network, setNetwork] = useState([])
-  const [showNet, setShowNet] = useState(false)
+  const [showNet, setShowNet] = useState(() => new URLSearchParams(window.location.search).get('network') === '1')
 
   useEffect(() => { fetchNetworkPoints().then(setNetwork).catch(() => {}) }, [])
   const rows = useMemo(() => (deals ? applyFilters(deals, filters, user?.id) : []), [deals, filters, user])

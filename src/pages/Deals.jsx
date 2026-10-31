@@ -16,7 +16,13 @@ export default function Deals() {
   const { stages = [] } = useConfig()
   const { user, isAdmin } = useAuth()
   const [params] = useSearchParams()
-  const [filters, setFilters] = useState({ ...EMPTY_FILTERS, q: params.get('q') || '', overdue: params.get('overdue') === '1', stage: params.get('stage') ? params.get('stage').split(',') : [], city: params.get('city') ? params.get('city').split(',') : [], recordType: params.get('type') || '', age: params.get('age') || '' })
+  const list = k => (params.get(k) ? params.get(k).split(',') : [])
+  const [filters, setFilters] = useState({
+    ...EMPTY_FILTERS, q: params.get('q') || '', overdue: params.get('overdue') === '1', stage: list('stage'), city: list('city'), siteType: list('siteType'),
+    recordType: params.get('type') || '', age: params.get('age') || '', from: params.get('from') || '', to: params.get('to') || '',
+    ho: params.get('ho') || '', en: params.get('en') || '', openOnly: params.get('open') === '1',
+  })
+  const fromCard = params.get('card')
   const [view, setView] = useState(() => localStorage.getItem('dealsView') || 'table')
   const [sort, setSort] = useState({ key: 'created_at', dir: 'desc' })
   const [importOpen, setImportOpen] = useState(false)
@@ -66,6 +72,16 @@ export default function Deals() {
         </div>
       </div>
 
+      {fromCard && (
+        <div className="mb-3 flex items-center gap-2 rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-800">
+          From dashboard: <b>{fromCard}</b>
+          {filters.from && <> · added {filters.from} → {filters.to || 'today'}</>}
+          {filters.ho && <> · handed over {filters.ho.replace(',', ' → ')}</>}
+          {filters.en && <> · energized {filters.en.replace(',', ' → ')}</>}
+          {filters.openOnly && <> · excluding dropped</>}
+          <button className="ml-auto font-semibold underline" onClick={() => setFilters(EMPTY_FILTERS)}>Show all</button>
+        </div>
+      )}
       {filters.age && (
         <div className="mb-3 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
           Showing sites pending <b>{filters.age.replace('-', '–').replace(/–$/, '+')} days</b> in their current stage
