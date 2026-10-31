@@ -136,8 +136,8 @@ export default function Dashboard() {
         <Stat label="QIS added this week" value={fmtNum(m.weekQis)} icon={CalendarPlus} tone="blue" sub={`${fmtNum(m.week)} sites`} />
         <Stat label="QIS added this month" value={fmtNum(m.monthQis)} icon={CalendarDays} tone="blue" sub={`${fmtNum(m.month)} sites`} />
         <Stat label="QIS in pipeline" value={fmtNum(m.pipeQis)} icon={Activity} tone="teal" sub={`${fmtNum(m.active)} sites · Scouting → Handover`} />
-        <Stat label="QIS energized (pipeline)" value={fmtNum(m.liveQis)} icon={Zap} tone="green" sub={`${fmtNum(m.live)} sites`} />
-        <Stat label="Energized network" value={fmtNum(m.netQis + m.liveQis)} icon={Network} tone="green" sub={`${fmtNum(m.netSites + m.live)} sites · QIS tracker + energized deals`} />
+        <Stat label="Energized via pipeline" value={fmtNum(m.liveQis)} icon={Zap} tone="green" sub={`${fmtNum(m.live)} sites · already inside the network total →`} />
+        <Stat label="Energized network" value={fmtNum(m.netQis + m.liveQis)} icon={Network} tone="green" sub={`${fmtNum(m.netSites + m.live)} sites · QIS tracker, each site counted once`} />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-3">
