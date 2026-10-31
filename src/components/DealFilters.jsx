@@ -1,5 +1,5 @@
 import { X } from 'lucide-react'
-import { useConfig } from '../lib/config'
+import { useConfig, stagesFor } from '../lib/config'
 import { EMPTY_FILTERS } from '../lib/deals'
 import { SITE_TYPES } from '../lib/format'
 
@@ -27,7 +27,7 @@ export default function DealFilters({ value, onChange, show = ['q', 'city', 'typ
       {show.includes('stage') && (
         <select className="input w-auto" value={value.stage} onChange={e => set('stage', e.target.value)}>
           <option value="">All stages</option>
-          {stages.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          {stagesFor(stages, value.siteType).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
       )}
       {show.includes('siteType') && (

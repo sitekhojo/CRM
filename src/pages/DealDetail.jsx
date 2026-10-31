@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Pencil, ArrowRightLeft, Trash2, MapPin, Phone, Mail, AlertTriangle, MessageSquare, History, ExternalLink, Radar, Check } from 'lucide-react'
 import { supabase, errMsg } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
-import { useConfig } from '../lib/config'
+import { useConfig, stagesFor } from '../lib/config'
 import { permissions } from '../lib/deals'
 import { StageBadge, PageLoader, Empty, Pill, Modal, useToast } from '../components/ui'
 import { BaseMap, pinIcon } from '../components/maps'
@@ -40,7 +40,7 @@ export default function DealDetail() {
   if (deal === null) return <div className="p-6"><Empty title="Deal not found"><Link className="text-brand-700" to="/app/deals">Back to deals</Link></Empty></div>
 
   const perm = permissions(deal, profile)
-  const activeStages = stages.filter(s => s.is_active && s.category !== 'dropped')
+  const activeStages = stagesFor(stages, deal.site_type).filter(s => s.category !== 'dropped')
   const curIdx = activeStages.findIndex(s => s.id === deal.stage_id)
 
   const update = async (patch, msg) => {

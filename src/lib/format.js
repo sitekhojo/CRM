@@ -22,7 +22,15 @@ export const POWER_FEASIBILITY = {
   unknown: { label: 'Unknown', cls: 'bg-slate-100 text-slate-600' },
 }
 
-export const SITE_TYPES = ['Franchise', 'Pvt', 'SPP', 'IOCL', 'Railways']
+export const SITE_TYPES = ['Franchise', 'Private', 'SPP', 'IOCL', 'Railways']
+
+/** Match free text (e.g. from Excel) to a known site type. */
+export function normaliseSiteType(v) {
+  const s = String(v ?? '').trim().toLowerCase()
+  if (!s) return null
+  if (s === 'pvt') return 'Private'
+  return SITE_TYPES.find(t => t.toLowerCase() === s) || String(v).trim()
+}
 
 export const RECORD_TYPES = {
   lead: { label: 'Lead', cls: 'bg-sky-100 text-sky-700' },

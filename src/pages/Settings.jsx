@@ -5,6 +5,7 @@ import { useConfig, DEFAULT_RULES } from '../lib/config'
 import { useToast, Field, StageBadge } from '../components/ui'
 import { readSheet, normaliseRow, toNum, downloadTemplate, exportRows } from '../lib/excel'
 import { NETWORK_TYPES } from './Planning'
+import { SITE_TYPES } from '../lib/format'
 
 const TABS = [['stages', 'Pipeline stages'], ['cities', 'Cities'], ['drops', 'Drop reasons'], ['rules', 'Feasibility rules'], ['network', 'Network data']]
 
@@ -44,7 +45,7 @@ function Stages() {
   const persist = async () => {
     for (const s of rows) {
       const { id, ...rest } = s
-      const ok = await save(supabase.from('stages').update({ ...rest, sla_days: rest.sla_days === '' || rest.sla_days === null ? null : Number(rest.sla_days), sort_order: Number(rest.sort_order) }).eq('id', id), 'Stages saved')
+      const ok = await save(supabase.from('stages').update({ ...rest, site_types: rest.site_types?.length ? rest.site_types : null, sla_days: rest.sla_days === '' || rest.sla_days === null ? null : Number(rest.sla_days), sort_order: Number(rest.sort_order) }).eq('id', id), 'Stages saved')
       if (!ok) return
     }
   }
@@ -52,9 +53,9 @@ function Stages() {
 
   return (
     <div className="card overflow-x-auto p-4">
-      <p className="mb-3 text-sm text-slate-500">Order, rename, colour and set SLA days for each stage. <b>Admin only</b> = only admins can move a deal into that stage. Deals beyond SLA are flagged on the dashboard. Deactivate instead of deleting stages that have history.</p>
+      <p className="mb-3 text-sm text-slate-500">Order, rename, colour and set SLA days for each stage. <b>Admin only</b> = only admins can move a deal into that stage. <b>Applies to</b> = which site types use this stage (none ticked = all). Deals beyond SLA are flagged on the dashboard. Deactivate instead of deleting stages that have history.</p>
       <table className="min-w-full text-sm">
-        <thead><tr><th className="th">Order</th><th className="th">Name</th><th className="th">Colour</th><th className="th">SLA (days)</th><th className="th">Type</th><th className="th">Admin only</th><th className="th">Active</th><th className="th">Preview</th></tr></thead>
+        <thead><tr><th className="th">Order</th><th className="th">Name</th><th className="th">Colour</th><th className="th">SLA (days)</th><th className="th">Type</th><th className="th">Applies to</th><th className="th">Admin only</th><th className="th">Active</th><th className="th">Preview</th></tr></thead>
         <tbody>
           {rows.map((s, i) => (
             <tr key={s.id} className="border-t border-slate-100">
@@ -63,7 +64,18 @@ function Stages() {
               <td className="td"><input type="color" className="h-8 w-12 cursor-pointer rounded border border-slate-300" value={s.color} onChange={e => set(i, 'color', e.target.value)} /></td>
               <td className="td"><input className="input w-20 py-1" type="number" min="1" placeholder="none" value={s.sla_days ?? ''} onChange={e => set(i, 'sla_days', e.target.value)} /></td>
               <td className="td"><select className="input w-auto py-1" value={s.category} onChange={e => set(i, 'category', e.target.value)}>
-                <option value="active">Pipeline</option><option value="approved">Approved</option><option value="live">Live</option><option value="dropped">Dropped</option></select></td>
+                <option value="active">Pipeline</option><option value="approved">Signed (post-agreement)</option><option value="live">Live</option><option value="dropped">Dropped</option></select></td>
+              <td className="td">
+                <div className="flex flex-wrap gap-x-2 gap-y-1">
+                  {SITE_TYPES.map(t => (
+                    <label key={t} className="flex items-center gap-1 text-xs">
+                      <input type="checkbox" className="accent-brand-600" checked={!!s.site_types?.includes(t)}
+                        onChange={e => set(i, 'site_types', e.target.checked ? [...(s.site_types || []), t] : (s.site_types || []).filter(x => x !== t))} />{t}
+                    </label>
+                  ))}
+                </div>
+                {!s.site_types?.length && <span className="text-[11px] text-slate-400">All site types</span>}
+              </td>
               <td className="td text-center"><input type="checkbox" className="accent-brand-600" checked={s.admin_only} onChange={e => set(i, 'admin_only', e.target.checked)} /></td>
               <td className="td text-center"><input type="checkbox" className="accent-brand-600" checked={s.is_active} onChange={e => set(i, 'is_active', e.target.checked)} /></td>
               <td className="td"><StageBadge name={s.name} color={s.color} /></td>

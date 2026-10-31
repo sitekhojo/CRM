@@ -4,7 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 import { Layers, CalendarPlus, CalendarDays, AlertTriangle, CheckCircle2, Zap, XCircle, Activity } from 'lucide-react'
 import { useDeals, applyFilters, EMPTY_FILTERS } from '../lib/deals'
 import { supabase, fetchAll } from '../lib/supabase'
-import { useConfig } from '../lib/config'
+import { useConfig, stagesFor } from '../lib/config'
 import DealFilters from '../components/DealFilters'
 import { Stat, StageBadge, PageLoader } from '../components/ui'
 import { fmtNum, daysLabel, startOfWeek, startOfMonth, fmtDate } from '../lib/format'
@@ -28,7 +28,7 @@ export default function Dashboard() {
     const by = (fn) => rows.reduce((acc, r) => { const k = fn(r); acc[k] = (acc[k] || 0) + 1; return acc }, {})
 
     const stageCounts = by(r => r.stage_id)
-    const pipeline = stages.filter(s => s.is_active).map(s => ({
+    const pipeline = stagesFor(stages, filters.siteType).map(s => ({
       id: s.id, name: s.name, color: s.color, sla: s.sla_days, count: stageCounts[s.id] || 0,
       overdue: rows.filter(r => r.stage_id === s.id && r.is_overdue).length,
       avgDays: avg(rows.filter(r => r.stage_id === s.id).map(r => +r.days_in_stage)),
@@ -46,7 +46,7 @@ export default function Dashboard() {
     // TAT between stages, restricted to the filtered deals
     const ids = new Set(rows.map(r => r.id))
     const h = (history || []).filter(x => ids.has(x.site_id) && x.from_stage_id && x.days_in_from_stage !== null)
-    const tat = stages.filter(s => s.category === 'active').map(s => {
+    const tat = stages.filter(s => ['active', 'approved'].includes(s.category)).map(s => {
       const xs = h.filter(x => x.from_stage_id === s.id).map(x => +x.days_in_from_stage)
       return { id: s.id, name: s.name, color: s.color, sla: s.sla_days, avg: avg(xs), n: xs.length }
     }).filter(x => x.n > 0)
@@ -115,8 +115,8 @@ export default function Dashboard() {
         <Stat label="This week" value={fmtNum(m.week)} icon={CalendarPlus} tone="blue" />
         <Stat label="This month" value={fmtNum(m.month)} icon={CalendarDays} tone="blue" />
         <Stat label="In pipeline" value={fmtNum(m.active)} icon={Activity} />
-        <Stat label="Approved" value={fmtNum(m.approved)} icon={CheckCircle2} tone="teal" />
-        <Stat label="Live" value={fmtNum(m.live)} icon={Zap} tone="green" />
+        <Stat label="Signed → HO" value={fmtNum(m.approved)} icon={CheckCircle2} tone="teal" sub="Agreement signed, not live" />
+        <Stat label="Live" value={fmtNum(m.live)} icon={Zap} tone="green" sub="Energized & commercialized" />
         <Stat label="Dropped" value={fmtNum(m.dropped)} icon={XCircle} tone="red" />
         <Stat label="Beyond SLA" value={fmtNum(m.overdue)} icon={AlertTriangle} tone={m.overdue ? 'red' : 'slate'} onClick={() => go('overdue=1')} sub="Click to view" />
       </div>

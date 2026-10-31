@@ -4,6 +4,7 @@ import { Modal } from './ui'
 import { useConfig } from '../lib/config'
 import { supabase, errMsg } from '../lib/supabase'
 import { readSheet, normaliseRow, IMPORT_FIELDS, toBool, toNum, downloadTemplate } from '../lib/excel'
+import { normaliseSiteType } from '../lib/format'
 import { useToast } from './ui'
 
 /** Admin bulk import of deals from Excel / CSV. */
@@ -36,7 +37,7 @@ export default function ImportDealsModal({ open, onClose, onDone }) {
         line: i + 2, errors,
         payload: {
           name: o.name, city: cityBy[String(o.city || '').toLowerCase()] || o.city, address: o.address || null, pincode: o.pincode ? String(o.pincode) : null,
-          latitude: lat, longitude: lng, location_source: 'import', site_type: o.site_type || null, area_sqft: toNum(o.area_sqft),
+          latitude: lat, longitude: lng, location_source: 'import', site_type: normaliseSiteType(o.site_type), area_sqft: toNum(o.area_sqft),
           landlord_name: o.landlord_name || null, landlord_phone: o.landlord_phone ? String(o.landlord_phone) : null, landlord_email: o.landlord_email || null,
           rent_expectation: toNum(o.rent_expectation), deposit_expectation: toNum(o.deposit_expectation),
           power_available: toBool(o.power_available), power_phase: ['single', 'three'].includes(String(o.power_phase).toLowerCase()) ? String(o.power_phase).toLowerCase() : null,
@@ -81,7 +82,7 @@ export default function ImportDealsModal({ open, onClose, onDone }) {
         {rows && !result && <button className="btn-primary" disabled={busy || rows.length === bad.length} onClick={run}>{busy ? 'Importing…' : `Import ${rows.length - bad.length} deals`}</button>}
       </>}>
       <div className="space-y-4 text-sm">
-        <p className="text-slate-600">Required columns: <b>Site name, City, Latitude, Longitude</b>. Optional: Type (Lead / Deal — default Deal), Site type (Franchise, Pvt, SPP, IOCL, Railways), Stage (by name), Owner email and all other fields.
+        <p className="text-slate-600">Required columns: <b>Site name, City, Latitude, Longitude</b>. Optional: Type (Lead / Deal — default Deal), Site type (Franchise, Private, SPP, IOCL, Railways), Stage (by name), Owner email and all other fields.
           <button className="ml-1 font-semibold text-brand-700 hover:underline" onClick={() => downloadTemplate(IMPORT_FIELDS, 'sitekhojo-import-template')}>Download template</button></p>
         <label className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-slate-300 p-6 text-slate-500 hover:border-brand-500">
           <FileSpreadsheet className="h-8 w-8" />Choose .xlsx or .csv file

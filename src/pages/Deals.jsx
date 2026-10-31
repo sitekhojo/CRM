@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Table2, Columns3, Download, Upload, Plus, AlertTriangle, Handshake, ArrowUpDown } from 'lucide-react'
 import { useDeals, applyFilters, EMPTY_FILTERS } from '../lib/deals'
 import { useAuth } from '../lib/auth'
-import { useConfig } from '../lib/config'
+import { useConfig, stagesFor } from '../lib/config'
 import DealFilters from '../components/DealFilters'
 import { StageBadge, PageLoader, Empty, Pill } from '../components/ui'
 import { fmtDate, fmtINR, daysLabel, POWER_FEASIBILITY, RECORD_TYPES } from '../lib/format'
@@ -109,7 +109,7 @@ export default function Deals() {
           {rows.length === 0 && <Empty title="No deals match these filters" />}
         </div>
       ) : (
-        <Board rows={rows} stages={stages} />
+        <Board rows={rows} stages={stagesFor(stages, filters.siteType)} />
       )}
       <ImportDealsModal open={importOpen} onClose={() => setImportOpen(false)} onDone={reload} />
     </div>
@@ -120,7 +120,7 @@ function Board({ rows, stages }) {
   return (
     <div className="-mx-4 overflow-x-auto px-4 pb-4 sm:-mx-6 sm:px-6">
       <div className="flex gap-3">
-        {stages.filter(s => s.is_active).map(s => {
+        {stages.map(s => {
           const items = rows.filter(r => r.stage_id === s.id)
           const overdue = items.filter(r => r.is_overdue).length
           return (

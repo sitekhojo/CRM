@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Modal, Field } from './ui'
-import { useConfig } from '../lib/config'
+import { useConfig, stagesFor } from '../lib/config'
 import { useAuth } from '../lib/auth'
 
 /** Move a deal to another stage, with a note and (when dropping) a required reason. */
@@ -17,7 +17,7 @@ export default function StageChangeModal({ open, onClose, deal, onSave, presetSt
 
   const target = stages.find(s => String(s.id) === String(stageId))
   const isDrop = target?.category === 'dropped'
-  const options = stages.filter(s => s.is_active && s.id !== deal?.stage_id)
+  const options = stagesFor(stages, deal?.site_type).filter(s => s.id !== deal?.stage_id)
 
   const save = async () => {
     setBusy(true)

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useConfig } from '../lib/config'
+import { useConfig, stagesFor } from '../lib/config'
 import { useAuth } from '../lib/auth'
 import { Field } from './ui'
 import { LocationPicker, DealMarkers } from './maps'
@@ -56,8 +56,11 @@ export default function DealForm({ initial, initialLoc, onSubmit, submitting, mo
 
   useEffect(() => { Promise.all([fetchDeals(), fetchNetworkPoints()]).then(([d, n]) => setCtx({ deals: d, network: n })).catch(() => {}) }, [])
 
-  const startStages = stages.filter(s => s.is_active && (isAdmin || !s.admin_only) && s.category !== 'dropped')
-  useEffect(() => { if (!f.stage_id && startStages[0] && mode === 'create') set('stage_id', startStages[0].id) }, [stages]) // eslint-disable-line
+  const startStages = stagesFor(stages, f.site_type).filter(s => (isAdmin || !s.admin_only) && s.category !== 'dropped')
+  useEffect(() => {
+    if (mode !== 'create' || !startStages.length) return
+    if (!startStages.some(s => String(s.id) === String(f.stage_id))) set('stage_id', startStages[0].id)
+  }, [stages, f.site_type]) // eslint-disable-line
 
   const check = useMemo(() => (ctx && rules && validLatLng(loc.lat, loc.lng))
     ? evaluateFeasibility({ lat: loc.lat, lng: loc.lng }, ctx.deals, ctx.network, rules, excludeId) : null, [ctx, rules, loc, excludeId])
@@ -93,8 +96,8 @@ export default function DealForm({ initial, initialLoc, onSubmit, submitting, mo
             </select>
           </Field>
           <Field label="Pincode"><input className="input" inputMode="numeric" pattern="[0-9]{6}" title="6-digit pincode" value={f.pincode || ''} onChange={e => set('pincode', e.target.value)} /></Field>
-          <Field label="Site type">
-            <select className="input" value={f.site_type || ''} onChange={e => set('site_type', e.target.value)}>
+          <Field label="Site type *" hint="Decides which pipeline stages apply">
+            <select className="input" required value={f.site_type || ''} onChange={e => set('site_type', e.target.value)}>
               <option value="">Select</option>{SITE_TYPES.map(t => <option key={t}>{t}</option>)}
               {f.site_type && !SITE_TYPES.includes(f.site_type) && <option>{f.site_type}</option>}
             </select>
