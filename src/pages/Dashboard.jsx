@@ -4,7 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 import { Layers, CalendarPlus, CalendarDays, Zap, Activity, Boxes, Network } from 'lucide-react'
 import { useDeals, applyFilters, EMPTY_FILTERS, fetchNetworkPoints } from '../lib/deals'
 import { supabase, fetchAll } from '../lib/supabase'
-import { useConfig, stagesFor } from '../lib/config'
+import { useConfig, stagesFor, REGIONS } from '../lib/config'
 import DealFilters from '../components/DealFilters'
 import { Stat, StageBadge, PageLoader, Modal } from '../components/ui'
 import { fmtNum, daysLabel, startOfWeek, startOfMonth, fmtDate } from '../lib/format'
@@ -12,7 +12,7 @@ import { haversine, hasLoc } from '../lib/geo'
 
 export default function Dashboard() {
   const { deals, loading } = useDeals()
-  const { stages = [], users = [] } = useConfig()
+  const { stages = [], users = [], team = [] } = useConfig()
   const [history, setHistory] = useState(null)
   const [filters, setFilters] = useState(EMPTY_FILTERS)
   const [period, setPeriod] = useState({ kind: 'month', from: '', to: '' })
@@ -84,23 +84,25 @@ export default function Dashboard() {
     }
     const cycle = avg(Object.keys(liveAt).filter(k => firstAt[k]).map(k => (liveAt[k] - firstAt[k]) / 864e5))
 
-    // team performance
-    const team = users.map(u => {
-      const mine = rows.filter(r => r.created_by === u.id)
-      const owned = rows.filter(r => r.assigned_to === u.id)
-      const moves = h.filter(x => x.changed_by === u.id)
+    // team performance, by site owner (team roster, grouped by region)
+    const regionRank = r => { const i = REGIONS.indexOf(r); return i < 0 ? 99 : i }
+    const names = [...new Set([...team.filter(t => t.is_active).map(t => t.name), ...rows.map(r => r.owner).filter(Boolean)])]
+    const teamRows = [...names.map(n => ({ name: n, t: team.find(x => x.name === n) })), { name: null, t: null }].map(({ name, t }) => {
+      const owned = rows.filter(r => (r.owner || null) === name)
       return {
-        id: u.id, name: u.full_name || u.email, active: u.is_active,
-        scouted: qs(mine),
-        week: qs(mine.filter(r => new Date(r.created_at) >= wk)),
-        month: qs(mine.filter(r => new Date(r.created_at) >= mo)),
+        id: name || '_none', name: name || 'Unassigned', region: t?.region || owned[0]?.region || '—', lead: !!t?.is_lead, active: t ? t.is_active : !!name,
+        total: qs(owned.filter(r => r.stage_category !== 'dropped')),
+        week: qs(owned.filter(r => new Date(r.created_at) >= wk)),
+        month: qs(owned.filter(r => new Date(r.created_at) >= mo)),
         owned: qs(owned.filter(r => ['active', 'approved'].includes(r.stage_category))),
+        hold: qs(owned.filter(r => r.stage_category === 'hold')),
+        ho: qs(owned.filter(r => inP(hoDate(r)))),
         won: qs(owned.filter(r => r.stage_category === 'live')),
         dropped: qs(owned.filter(r => r.stage_category === 'dropped')),
         overdue: owned.filter(r => r.is_overdue).length,
-        moves: moves.length,
       }
-    }).filter(t => t.scouted.sites || t.owned.sites || t.moves || t.active).sort((a, b) => b.scouted.qis - a.scouted.qis)
+    }).filter(x => x.total.sites || x.dropped.sites || (x.active && x.id !== '_none'))
+      .sort((a, b) => regionRank(a.region) - regionRank(b.region) || b.lead - a.lead || b.total.qis - a.total.qis)
 
     const stuck = rows.filter(r => r.is_overdue).sort((a, b) => (b.days_in_stage - b.stage_sla_days) - (a.days_in_stage - a.stage_sla_days))
 
@@ -162,10 +164,10 @@ export default function Dashboard() {
       pipeQis: rows.filter(r => ['active', 'approved'].includes(r.stage_category)).reduce((a, r) => a + (Number(r.extra?.qis_count) || 0), 0),
       liveQis: rows.filter(r => r.stage_category === 'live').reduce((a, r) => a + (Number(r.extra?.qis_count) || 0), 0),
       overdue: stuck.length,
-      pipeline, cityCounts, trend, tat, team, stuck, cycle,
+      pipeline, cityCounts, trend, tat, team: teamRows, stuck, cycle,
       dropReasons: Object.entries(by(r => r.stage_category === 'dropped' ? r.drop_reason || 'Unspecified' : null)).filter(([k]) => k !== 'null').sort((a, b) => b[1] - a[1]),
     }
-  }, [deals, filters, stages, users, history, network, metric, period])
+  }, [deals, filters, stages, users, team, history, network, metric, period])
 
   if (loading || !m) return <PageLoader />
   const go = q => nav(`/app/deals?${q}`)
@@ -173,6 +175,8 @@ export default function Dashboard() {
     const p = new URLSearchParams({ card, ...extra })
     if (filters.city.length) p.set('city', filters.city.join(','))
     if (filters.siteType.length) p.set('siteType', filters.siteType.join(','))
+    if (filters.region.length && !extra.region) p.set('region', filters.region.join(','))
+    if (filters.owner.length && !extra.owner) p.set('owner', filters.owner.join(','))
     if (filters.recordType) p.set('type', filters.recordType)
     if (filters.stage.length && !extra.stage) p.set('stage', filters.stage.join(','))
     nav(`/app/deals?${p}`)
@@ -186,7 +190,7 @@ export default function Dashboard() {
           <p className="text-sm text-slate-500">Network expansion at a glance{filters.from || filters.to ? ' · date filter applies to deal creation date' : ''}</p>
         </div>
       </div>
-      <DealFilters value={filters} onChange={setFilters} show={['city', 'type', 'stage', 'siteType']} />
+      <DealFilters value={filters} onChange={setFilters} show={['region', 'city', 'owner', 'type', 'stage', 'siteType']} />
       <PeriodBar value={period} onChange={setPeriod} label={m.period.label} />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
@@ -329,7 +333,7 @@ export default function Dashboard() {
                       <td className="td"><Link className="font-semibold text-slate-900 hover:text-brand-700" to={`/app/deals/${d.id}`}>{d.name}</Link><div className="font-mono text-[10px] text-slate-400">{d.site_code}</div></td>
                       <td className="td"><StageBadge name={d.stage_name} color={d.stage_color} /></td>
                       <td className="td">{d.city}</td>
-                      <td className="td">{d.assigned_to_name || '—'}</td>
+                      <td className="td">{d.owner || '—'}</td>
                       <td className="td text-right font-semibold text-red-600">{fmtNum(d.days_in_stage, 1)} / {d.stage_sla_days}</td>
                     </tr>
                   ))}
@@ -345,26 +349,31 @@ export default function Dashboard() {
         </Panel>
       </div>
 
-      <Panel title="Team performance">
+      <Panel title="Team performance · by site owner">
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead><tr className="border-b border-slate-100">
-              <th className="th">Team member</th><th className="th text-right">QIS scouted</th><th className="th text-right">This week</th><th className="th text-right">This month</th>
-              <th className="th text-right">QIS in pipeline (owned)</th><th className="th text-right">QIS energized</th><th className="th text-right">QIS dropped</th><th className="th text-right">Beyond SLA</th><th className="th text-right">Stage moves</th>
+              <th className="th">Owner</th><th className="th">Region</th><th className="th text-right">QIS owned (excl. dropped)</th><th className="th text-right">Added this week</th><th className="th text-right">Added this month</th>
+              <th className="th text-right">In pipeline</th><th className="th text-right">On hold</th><th className="th text-right">Handed over · {m.period.label}</th><th className="th text-right">Energized</th><th className="th text-right">Dropped</th><th className="th text-right">Beyond SLA</th>
             </tr></thead>
             <tbody>
-              {m.team.map(t => (
-                <tr key={t.id} className="border-b border-slate-50 hover:bg-slate-50">
-                  <td className="td font-semibold">{t.name}{!t.active && <span className="ml-1 text-xs text-slate-400">(inactive)</span>}</td>
-                  <QS v={t.scouted} bold /><QS v={t.week} /><QS v={t.month} />
-                  <QS v={t.owned} /><QS v={t.won} cls="text-emerald-700" /><QS v={t.dropped} cls="text-slate-500" />
-                  <td className={`td text-right ${t.overdue ? 'font-semibold text-red-600' : 'text-slate-300'}`}>{t.overdue}</td><td className="td text-right">{t.moves}</td>
+              {m.team.map((t, i) => (
+                <tr key={t.id} className={`hover:bg-slate-50 ${i && m.team[i - 1].region !== t.region ? 'border-t-2 border-slate-200' : 'border-b border-slate-50'}`}>
+                  <td className="td font-semibold">
+                    <button className="hover:underline" onClick={() => t.id !== '_none' && goCard(`Sites owned by ${t.name}`, { owner: t.name })}>{t.name}</button>
+                    {t.lead && <span className="ml-1 rounded bg-brand-50 px-1 text-[10px] font-semibold text-brand-700">lead</span>}
+                    {!t.active && t.id !== '_none' && <span className="ml-1 text-xs text-slate-400">(inactive)</span>}
+                  </td>
+                  <td className="td text-slate-500">{t.region}</td>
+                  <QS v={t.total} bold /><QS v={t.week} /><QS v={t.month} />
+                  <QS v={t.owned} /><QS v={t.hold} cls="text-slate-500" /><QS v={t.ho} cls="text-amber-700" /><QS v={t.won} cls="text-emerald-700" /><QS v={t.dropped} cls="text-slate-500" />
+                  <td className={`td text-right ${t.overdue ? 'font-semibold text-red-600' : 'text-slate-300'}`}>{t.overdue}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <p className="mt-2 text-xs text-slate-500">Data as of {fmtDate(new Date())}.</p>
+        <p className="mt-2 text-xs text-slate-500">Click a name to see their sites. Reassign owners from the Owner column in Leads &amp; Deals. Data as of {fmtDate(new Date())}.</p>
       </Panel>
     </div>
   )

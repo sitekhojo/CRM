@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Plus, Upload, Trash2, Save, Download } from 'lucide-react'
 import { supabase, errMsg, fetchAll } from '../lib/supabase'
-import { useConfig, DEFAULT_RULES } from '../lib/config'
+import { useConfig, DEFAULT_RULES, REGIONS } from '../lib/config'
 import { useToast, Field, StageBadge } from '../components/ui'
 import { readSheet, normaliseRow, toNum, downloadTemplate, exportRows } from '../lib/excel'
 import { NETWORK_TYPES } from './Planning'
 import { SITE_TYPES, normaliseSiteType } from '../lib/format'
 
-const TABS = [['stages', 'Pipeline stages'], ['cities', 'Cities'], ['drops', 'Drop reasons'], ['rules', 'Feasibility rules'], ['network', 'Network data']]
+const TABS = [['stages', 'Pipeline stages'], ['team', 'Team & regions'], ['cities', 'Cities'], ['drops', 'Drop reasons'], ['rules', 'Feasibility rules'], ['network', 'Network data']]
 
 export default function Settings() {
   const [tab, setTab] = useState('stages')
@@ -18,7 +18,8 @@ export default function Settings() {
         {TABS.map(([k, l]) => <button key={k} onClick={() => setTab(k)} className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm font-semibold ${tab === k ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>{l}</button>)}
       </div>
       {tab === 'stages' && <Stages />}
-      {tab === 'cities' && <SimpleList table="cities" col="name" extra="state" title="Cities" />}
+      {tab === 'team' && <Team />}
+      {tab === 'cities' && <Cities />}
       {tab === 'drops' && <SimpleList table="drop_reasons" col="label" title="Drop reasons" />}
       {tab === 'rules' && <Rules />}
       {tab === 'network' && <Network />}
@@ -87,6 +88,77 @@ function Stages() {
       </table>
       <div className="mt-3 flex gap-2"><button className="btn-primary" onClick={persist}><Save className="h-4 w-4" />Save stages</button><button className="btn-secondary" onClick={add}><Plus className="h-4 w-4" />Add stage</button>
         {retired > 0 && <button className="btn-ghost" onClick={() => setShowRetired(v => !v)}>{showRetired ? 'Hide' : 'Show'} {retired} retired stages</button>}</div>
+    </div>
+  )
+}
+
+function Team() {
+  const { team = [] } = useConfig()
+  const save = useSave()
+  const [n, setN] = useState(''); const [r, setR] = useState('North')
+  return (
+    <div className="card max-w-3xl p-4">
+      <p className="mb-3 text-sm text-slate-500">Site owners. Everyone shares one login, so ownership is by name. The <b>lead</b> is the default owner for their region's cities (set per city in the Cities tab).</p>
+      <form className="mb-4 flex flex-wrap gap-2" onSubmit={async e => { e.preventDefault(); if (await save(supabase.from('team_members').insert({ name: n.trim(), region: r }), 'Added')) setN('') }}>
+        <input className="input w-56" required placeholder="Name" value={n} onChange={e => setN(e.target.value)} />
+        <select className="input w-36" value={r} onChange={e => setR(e.target.value)}>{REGIONS.map(x => <option key={x}>{x}</option>)}</select>
+        <button className="btn-primary"><Plus className="h-4 w-4" />Add member</button>
+      </form>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {REGIONS.map(reg => (
+          <div key={reg} className="rounded-lg border border-slate-200 p-3">
+            <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">{reg}</h4>
+            <ul className="divide-y divide-slate-100">
+              {team.filter(t => t.region === reg).map(t => (
+                <li key={t.id} className="flex items-center gap-2 py-1.5 text-sm">
+                  <span className={`mr-auto ${t.is_active ? 'font-medium' : 'text-slate-400 line-through'}`}>{t.name}{t.is_lead && <span className="ml-1 rounded bg-brand-50 px-1 text-[10px] font-semibold text-brand-700">lead</span>}</span>
+                  <select className="input w-24 py-0.5 text-xs" value={t.region} onChange={e => save(supabase.from('team_members').update({ region: e.target.value }).eq('id', t.id), 'Moved')}>{REGIONS.map(x => <option key={x}>{x}</option>)}</select>
+                  <button className="btn-ghost py-0.5 text-xs" onClick={() => save(supabase.from('team_members').update({ is_lead: !t.is_lead }).eq('id', t.id))}>{t.is_lead ? 'Unset lead' : 'Make lead'}</button>
+                  <button className="btn-ghost py-0.5 text-xs" onClick={() => save(supabase.from('team_members').update({ is_active: !t.is_active }).eq('id', t.id))}>{t.is_active ? 'Hide' : 'Restore'}</button>
+                </li>
+              ))}
+              {!team.some(t => t.region === reg) && <li className="py-1.5 text-xs text-slate-400">No one yet</li>}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function Cities() {
+  const { cities = [], team = [] } = useConfig()
+  const save = useSave()
+  const [v, setV] = useState(''); const [st, setSt] = useState(''); const [rg, setRg] = useState('North')
+  const [showHidden, setShowHidden] = useState(false)
+  const list = cities.filter(c => showHidden || c.is_active).sort((a, b) => (REGIONS.indexOf(a.region) + 1 || 99) - (REGIONS.indexOf(b.region) + 1 || 99) || a.name.localeCompare(b.name))
+  return (
+    <div className="card max-w-3xl p-4">
+      <p className="mb-3 text-sm text-slate-500">Cities we operate in. Each city has a region and a default owner — new sites in that city are assigned to them automatically.</p>
+      <form className="mb-4 flex flex-wrap gap-2" onSubmit={async e => { e.preventDefault(); if (await save(supabase.from('cities').insert({ name: v.trim(), state: st || null, region: rg, owner: team.find(t => t.region === rg && t.is_lead)?.name || null }), 'Added')) { setV(''); setSt('') } }}>
+        <input className="input w-44" required placeholder="New city" value={v} onChange={e => setV(e.target.value)} />
+        <input className="input w-40" placeholder="State" value={st} onChange={e => setSt(e.target.value)} />
+        <select className="input w-32" value={rg} onChange={e => setRg(e.target.value)}>{REGIONS.map(x => <option key={x}>{x}</option>)}</select>
+        <button className="btn-primary"><Plus className="h-4 w-4" />Add</button>
+      </form>
+      <table className="w-full text-sm">
+        <thead><tr className="border-b border-slate-100 text-left"><th className="th">City</th><th className="th">Region</th><th className="th">Default owner</th><th className="th" /></tr></thead>
+        <tbody>
+          {list.map(c => (
+            <tr key={c.id} className="border-b border-slate-50">
+              <td className={`td ${c.is_active ? 'font-medium' : 'text-slate-400 line-through'}`}>{c.name}{c.state && <span className="text-xs text-slate-400"> · {c.state}</span>}</td>
+              <td className="td"><select className="input w-28 py-1" value={c.region || ''} onChange={e => save(supabase.from('cities').update({ region: e.target.value || null }).eq('id', c.id))}><option value="">—</option>{REGIONS.map(x => <option key={x}>{x}</option>)}</select></td>
+              <td className="td"><select className="input w-44 py-1" value={c.owner || ''} onChange={e => save(supabase.from('cities').update({ owner: e.target.value || null }).eq('id', c.id), 'Default owner updated')}>
+                <option value="">None</option>
+                {team.filter(t => t.is_active && (!c.region || t.region === c.region) || t.name === c.owner).map(t => <option key={t.id}>{t.name}</option>)}
+              </select></td>
+              <td className="td text-right"><button className="btn-ghost py-1 text-xs" onClick={() => save(supabase.from('cities').update({ is_active: !c.is_active }).eq('id', c.id))}>{c.is_active ? 'Hide' : 'Restore'}</button></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <label className="mt-3 flex items-center gap-2 text-xs text-slate-500"><input type="checkbox" checked={showHidden} onChange={e => setShowHidden(e.target.checked)} /> Show hidden cities</label>
+      <p className="mt-2 text-xs text-slate-400">Changing a default owner only affects new sites. To move existing sites, filter Leads &amp; Deals by city and change the Owner column.</p>
     </div>
   )
 }

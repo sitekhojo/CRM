@@ -1,20 +1,30 @@
 import { X } from 'lucide-react'
-import { useConfig, stagesFor } from '../lib/config'
+import { useConfig, stagesFor, REGIONS } from '../lib/config'
 import { EMPTY_FILTERS } from '../lib/deals'
 import { SITE_TYPES } from '../lib/format'
 import MultiSelect from './MultiSelect'
 
 /** Shared filter bar: search, city, lead/deal, stage, site type, date range, beyond-SLA. */
-export default function DealFilters({ value, onChange, show = ['q', 'city', 'type', 'stage', 'siteType', 'date', 'overdue'], extra }) {
-  const { cities = [], stages = [] } = useConfig()
+export default function DealFilters({ value, onChange, show = ['q', 'region', 'city', 'owner', 'type', 'stage', 'siteType', 'date', 'overdue'], extra }) {
+  const { cities = [], stages = [], team = [] } = useConfig()
+  const cityOpts = cities.filter(c => c.is_active && (!value.region?.length || value.region.includes(c.region)))
+  const ownerOpts = team.filter(t => t.is_active && (!value.region?.length || value.region.includes(t.region)))
   const set = (k, v) => onChange({ ...value, [k]: v })
   const active = Object.entries(value).some(([k, v]) => Array.isArray(v) ? v.length > 0 : v && v !== EMPTY_FILTERS[k])
   return (
     <div className="flex flex-wrap items-end gap-2">
       {show.includes('q') && <input className="input w-full sm:w-56" placeholder="Search…" value={value.q} onChange={e => set('q', e.target.value)} />}
+      {show.includes('region') && (
+        <MultiSelect allLabel="All regions" noun="regions" value={value.region || []} onChange={v => set('region', v)}
+          options={REGIONS.map(r => ({ value: r, label: r }))} />
+      )}
       {show.includes('city') && (
         <MultiSelect allLabel="All cities" noun="cities" value={value.city} onChange={v => set('city', v)}
-          options={cities.map(c => ({ value: c.name, label: c.name }))} />
+          options={cityOpts.map(c => ({ value: c.name, label: c.name }))} />
+      )}
+      {show.includes('owner') && (
+        <MultiSelect allLabel="All owners" noun="owners" value={value.owner || []} onChange={v => set('owner', v)}
+          options={ownerOpts.map(t => ({ value: t.name, label: `${t.name} · ${t.region}` }))} />
       )}
       {show.includes('type') && (
         <select className="input w-auto" value={value.recordType} onChange={e => set('recordType', e.target.value)}>

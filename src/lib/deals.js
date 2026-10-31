@@ -17,7 +17,7 @@ export function useDeals() {
   return { deals, error, reload, loading: deals === null && !error }
 }
 
-export const EMPTY_FILTERS = { q: '', city: [], recordType: '', stage: [], siteType: [], member: '', from: '', to: '', overdue: false, mine: false, age: '', ho: '', en: '', openOnly: false }
+export const EMPTY_FILTERS = { q: '', city: [], recordType: '', stage: [], siteType: [], region: [], owner: [], member: '', from: '', to: '', overdue: false, mine: false, age: '', ho: '', en: '', openOnly: false }
 
 /** Apply the shared filter bar to a list of deals. */
 export function applyFilters(deals, f, userId) {
@@ -29,6 +29,8 @@ export function applyFilters(deals, f, userId) {
     if (f.recordType && (d.record_type || 'deal') !== f.recordType) return false
     if (f.siteType?.length && !f.siteType.includes(d.site_type)) return false
     if (f.stage?.length && !f.stage.map(String).includes(String(d.stage_id))) return false
+    if (f.region?.length && !f.region.includes(d.region || '')) return false
+    if (f.owner?.length && !f.owner.includes(d.owner || '')) return false
     if (f.member && d.created_by !== f.member && d.assigned_to !== f.member) return false
     if (f.mine && d.assigned_to !== userId && d.created_by !== userId) return false
     if (f.overdue && !d.is_overdue) return false
@@ -42,7 +44,7 @@ export function applyFilters(deals, f, userId) {
     const c = new Date(d.created_at)
     if (from && c < from) return false
     if (to && c > to) return false
-    if (q && ![d.name, d.site_code, d.address, d.city, d.pincode, d.landlord_name, d.landlord_phone, d.created_by_name, d.assigned_to_name]
+    if (q && ![d.name, d.site_code, d.address, d.city, d.pincode, d.landlord_name, d.landlord_phone, d.created_by_name, d.assigned_to_name, d.owner]
       .some(v => v && String(v).toLowerCase().includes(q))) return false
     return true
   })

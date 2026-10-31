@@ -12,7 +12,7 @@ export const DEAL_COLUMNS = [
   ['remarks', 'Remarks'], ['drop_reason', 'Drop reason'], ['drop_notes', 'Drop notes'],
   ['qis_count', 'No. of QIS'], ['expected_ho', 'Expected HO date'], ['priority_zone', 'Priority zone (P0/P1)'], ['probability', 'Probability %'],
   ['ho_date', 'Handover date'], ['energized_on', 'Energization date'],
-  ['assigned_to_name', 'Owner'], ['created_by_name', 'Scouted by'], ['created_at', 'Created at'], ['stage_entered_at', 'Stage since'],
+  ['region', 'Region'], ['owner', 'Owner'], ['created_by_name', 'Scouted by'], ['created_at', 'Created at'], ['stage_entered_at', 'Stage since'],
 ]
 
 // Columns accepted on import (header text is matched case-insensitively against key OR label)
@@ -22,7 +22,7 @@ export const IMPORT_FIELDS = [
   ['landlord_name', 'Landlord name'], ['landlord_phone', 'Landlord phone'], ['landlord_email', 'Landlord email'],
   ['rent_expectation', 'Rent / month (INR)'], ['deposit_expectation', 'Deposit (INR)'], ['power_available', 'Power available'],
   ['power_phase', 'Power phase'], ['sanctioned_load_kw', 'Sanctioned load (kW)'], ['power_feasibility', 'Power feasibility'],
-  ['observations', 'Observations'], ['remarks', 'Remarks'], ['stage', 'Stage'], ['owner_email', 'Owner email'],
+  ['observations', 'Observations'], ['remarks', 'Remarks'], ['stage', 'Stage'], ['owner', 'Owner'],
   ['record_type', 'Type'], ['drop_reason', 'Drop reason'],
   ['qis_count', 'No. of QIS'], ['expected_ho', 'Expected HO date'], ['priority_zone', 'Priority zone (P0/P1)'], ['probability', 'Probability %'],
   ['ho_date', 'Handover date'], ['energized_on', 'Energization date'],

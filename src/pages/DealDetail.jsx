@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import OwnerCell from '../components/OwnerCell'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Pencil, ArrowRightLeft, Trash2, MapPin, Phone, Mail, AlertTriangle, MessageSquare, History, ExternalLink, Radar, Check } from 'lucide-react'
 import { supabase, errMsg } from '../lib/supabase'
@@ -220,12 +221,8 @@ export default function DealDetail() {
           )}
           <div className="card space-y-3 p-4 text-sm">
             <Meta label="Owner">
-              {perm.canReassign ? (
-                <select className="input py-1" value={deal.assigned_to || ''} onChange={e => update({ assigned_to: e.target.value || null }, 'Owner updated')}>
-                  <option value="">Unassigned</option>
-                  {users.filter(u => u.is_active || u.id === deal.assigned_to).map(u => <option key={u.id} value={u.id}>{u.full_name || u.email}</option>)}
-                </select>
-              ) : (deal.assigned_to_name || '—')}
+              <OwnerCell deal={deal} onChanged={load} className="font-semibold" />
+              {deal.region && <span className="ml-2 text-xs text-slate-400">{deal.region}</span>}
             </Meta>
             <Meta label="Scouted by">{deal.created_by_name || '—'}</Meta>
             <Meta label="Created">{fmtDateTime(deal.created_at)}</Meta>

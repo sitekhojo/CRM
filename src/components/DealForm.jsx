@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useConfig, stagesFor } from '../lib/config'
+import { useConfig, stagesFor, ownerOptions, regionOf } from '../lib/config'
 import { useAuth } from '../lib/auth'
 import { Field } from './ui'
 import { LocationPicker, DealMarkers } from './maps'
@@ -12,7 +12,7 @@ export const blankDeal = {
   landlord_name: '', landlord_phone: '', landlord_email: '', landlord_notes: '',
   rent_expectation: '', deposit_expectation: '', rent_negotiable: null, observations: '',
   power_available: null, power_phase: '', sanctioned_load_kw: '', power_feasibility: 'unknown', power_notes: '',
-  remarks: '', stage_id: '', assigned_to: '', record_type: 'deal', extra: {},
+  remarks: '', stage_id: '', assigned_to: '', owner: '', record_type: 'deal', extra: {},
 }
 
 const NUMS = ['area_sqft', 'rent_expectation', 'deposit_expectation', 'sanctioned_load_kw']
@@ -21,7 +21,7 @@ const NUMS = ['area_sqft', 'rent_expectation', 'deposit_expectation', 'sanctione
 export function toPayload(f, loc) {
   const p = Object.fromEntries(Object.keys(blankDeal).map(k => [k, f[k] ?? blankDeal[k]]))
   for (const k of NUMS) p[k] = p[k] === '' || p[k] === null ? null : Number(p[k])
-  for (const k of ['power_phase', 'site_type', 'pincode', 'landlord_email', 'assigned_to']) if (p[k] === '') p[k] = null
+  for (const k of ['power_phase', 'site_type', 'pincode', 'landlord_email', 'assigned_to', 'owner']) if (p[k] === '') p[k] = null
   p.stage_id = p.stage_id ? Number(p.stage_id) : null
   p.record_type = p.record_type === 'lead' ? 'lead' : 'deal'
   const extra = { ...(f.extra && typeof f.extra === 'object' ? f.extra : {}) }
@@ -58,7 +58,8 @@ function YesNo({ value, onChange }) {
 }
 
 export default function DealForm({ initial, initialLoc, onSubmit, submitting, mode = 'create', excludeId, submitLabel }) {
-  const { stages = [], cities = [], users = [], rules } = useConfig()
+  const { stages = [], cities = [], users = [], team = [], rules } = useConfig()
+  const cityOwner = c => cities.find(x => x.name === c)?.owner || ''
   const { isAdmin } = useAuth()
   const [f, setF] = useState({ ...blankDeal, ...initial })
   const [loc, setLoc] = useState(initialLoc || { lat: null, lng: null, source: 'gps' })
@@ -101,7 +102,7 @@ export default function DealForm({ initial, initialLoc, onSubmit, submitting, mo
           <Field label="Site name *" className="sm:col-span-2"><input className="input" required value={f.name} onChange={e => set('name', e.target.value)} placeholder="e.g. HP Petrol Pump, Sohna Road" /></Field>
           <Field label="Address" className="sm:col-span-2"><textarea className="input" rows={2} value={f.address || ''} onChange={e => set('address', e.target.value)} /></Field>
           <Field label="City *">
-            <select className="input" required value={f.city} onChange={e => set('city', e.target.value)}>
+            <select className="input" required value={f.city} onChange={e => { const c = e.target.value; setF(x => ({ ...x, city: c, owner: !x.owner || x.owner === cityOwner(x.city) ? cityOwner(c) : x.owner })) }}>
               <option value="">Select city</option>
               {cities.filter(c => c.is_active || c.name === f.city).map(c => <option key={c.id}>{c.name}</option>)}
             </select>
@@ -134,14 +135,14 @@ export default function DealForm({ initial, initialLoc, onSubmit, submitting, mo
               </select>
             </Field>
           )}
-          {isAdmin && (
-            <Field label="Deal owner">
-              <select className="input" value={f.assigned_to || ''} onChange={e => set('assigned_to', e.target.value)}>
-                <option value="">{mode === 'create' ? 'Me' : 'Unassigned'}</option>
-                {users.filter(u => u.is_active).map(u => <option key={u.id} value={u.id}>{u.full_name || u.email}</option>)}
-              </select>
-            </Field>
-          )}
+          <Field label="Owner" hint={f.city ? `Defaults to the ${regionOf(cities, f.city) || ''} lead for ${f.city}` : 'Pick a city first'}>
+            <select className="input" value={f.owner || ''} onChange={e => set('owner', e.target.value)}>
+              <option value="">Unassigned</option>
+              {ownerOptions(team, regionOf(cities, f.city), f.owner).map(g => (
+                <optgroup key={g.region} label={g.region}>{g.members.map(t => <option key={t.name} value={t.name}>{t.name}</option>)}</optgroup>
+              ))}
+            </select>
+          </Field>
         </div>
       </Section>
 

@@ -15,7 +15,7 @@ const toDateStr = v => {
 }
 
 export default function ImportDealsModal({ open, onClose, onDone }) {
-  const { stages = [], users = [], cities = [] } = useConfig()
+  const { stages = [], cities = [], team = [] } = useConfig()
   const toast = useToast()
   const [rows, setRows] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -25,7 +25,7 @@ export default function ImportDealsModal({ open, onClose, onDone }) {
     setResult(null)
     const raw = await readSheet(file)
     const stageBy = Object.fromEntries(stages.map(s => [s.name.toLowerCase(), s.id]))
-    const userBy = Object.fromEntries(users.map(u => [String(u.email).toLowerCase(), u.id]))
+    const teamBy = Object.fromEntries(team.map(t => [t.name.toLowerCase(), t.name]))
     const cityBy = Object.fromEntries(cities.map(c => [c.name.toLowerCase(), c.name]))
     setRows(raw.map((r, i) => {
       const o = normaliseRow(r, IMPORT_FIELDS)
@@ -36,8 +36,8 @@ export default function ImportDealsModal({ open, onClose, onDone }) {
       if ((lat === null) !== (lng === null) || (lat !== null && (Math.abs(lat) > 90 || Math.abs(lng) > 180))) errors.push('bad lat/long')
       const stage_id = o.stage ? stageBy[String(o.stage).toLowerCase()] : null
       if (o.stage && !stage_id) errors.push(`unknown stage "${o.stage}"`)
-      const assigned_to = o.owner_email ? userBy[String(o.owner_email).toLowerCase()] : null
-      if (o.owner_email && !assigned_to) errors.push(`unknown owner "${o.owner_email}"`)
+      const owner = o.owner ? teamBy[String(o.owner).trim().toLowerCase()] : null
+      if (o.owner && !owner) errors.push(`unknown owner "${o.owner}" (add them in Settings → Team)`)
       const pf = String(o.power_feasibility || 'unknown').toLowerCase().replace(/\s+/g, '_')
       return {
         line: i + 2, errors,
@@ -56,7 +56,7 @@ export default function ImportDealsModal({ open, onClose, onDone }) {
             ['qis_count', toNum(o.qis_count)], ['probability', toNum(o.probability)],
             ['expected_ho', toDateStr(o.expected_ho)], ['ho_date', toDateStr(o.ho_date)], ['energized_on', toDateStr(o.energized_on)], ['priority_zone', o.priority_zone ? String(o.priority_zone) : null],
           ].filter(([, v]) => v !== null && v !== '')),
-          ...(stage_id ? { stage_id } : {}), ...(assigned_to ? { assigned_to } : {}),
+          ...(stage_id ? { stage_id } : {}), ...(owner ? { owner } : {}),
           stage_note: 'Imported',
         },
       }
@@ -93,7 +93,7 @@ export default function ImportDealsModal({ open, onClose, onDone }) {
         {rows && !result && <button className="btn-primary" disabled={busy || rows.length === bad.length} onClick={run}>{busy ? 'Importing…' : `Import ${rows.length - bad.length} deals`}</button>}
       </>}>
       <div className="space-y-4 text-sm">
-        <p className="text-slate-600">Required columns: <b>Site name, City</b>. Latitude/Longitude recommended (sites without them won't show on the map). Optional: Type (Lead / Deal — default Deal), Site type (Franchise, Private, SPP, IOCL, Railways), Stage (by name), Owner email and all other fields.
+        <p className="text-slate-600">Required columns: <b>Site name, City</b>. Latitude/Longitude recommended (sites without them won't show on the map). Optional: Type (Lead / Deal — default Deal), Site type (Franchise, Private, SPP, IOCL, Metro &amp; Railways), Stage (by name), Owner (team member name — blank = the city's default owner) and all other fields.
           <button className="ml-1 font-semibold text-brand-700 hover:underline" onClick={() => downloadTemplate(IMPORT_FIELDS, 'sitekhojo-import-template')}>Download template</button></p>
         <label className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-slate-300 p-6 text-slate-500 hover:border-brand-500">
           <FileSpreadsheet className="h-8 w-8" />Choose .xlsx or .csv file

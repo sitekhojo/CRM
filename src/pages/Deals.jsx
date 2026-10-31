@@ -11,6 +11,7 @@ import { exportRows, DEAL_COLUMNS } from '../lib/excel'
 import ImportDealsModal from '../components/ImportDealsModal'
 import StageCell from '../components/StageCell'
 import TypeCell from '../components/TypeCell'
+import OwnerCell from '../components/OwnerCell'
 
 export default function Deals() {
   const { deals, loading, reload } = useDeals()
@@ -19,7 +20,7 @@ export default function Deals() {
   const [params] = useSearchParams()
   const list = k => (params.get(k) ? params.get(k).split(',') : [])
   const [filters, setFilters] = useState({
-    ...EMPTY_FILTERS, q: params.get('q') || '', overdue: params.get('overdue') === '1', stage: list('stage'), city: list('city'), siteType: list('siteType'),
+    ...EMPTY_FILTERS, q: params.get('q') || '', overdue: params.get('overdue') === '1', stage: list('stage'), city: list('city'), siteType: list('siteType'), region: list('region'), owner: list('owner'),
     recordType: params.get('type') || '', age: params.get('age') || '', from: params.get('from') || '', to: params.get('to') || '',
     ho: params.get('ho') || '', en: params.get('en') || '', openOnly: params.get('open') === '1',
   })
@@ -90,9 +91,7 @@ export default function Deals() {
         </div>
       )}
       <div className="mb-4">
-        <DealFilters value={filters} onChange={setFilters}
-          extra={<label className="flex h-[38px] items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-sm">
-            <input type="checkbox" checked={filters.mine} onChange={e => setFilters({ ...filters, mine: e.target.checked })} className="accent-brand-600" /> My deals</label>} />
+        <DealFilters value={filters} onChange={setFilters} />
       </div>
 
       {deals.length === 0 ? (
@@ -105,7 +104,7 @@ export default function Deals() {
               <tr>
                 <SortTh k="site_code">ID</SortTh><SortTh k="record_type">Type</SortTh><SortTh k="name">Site</SortTh><SortTh k="stage_order">Stage</SortTh>
                 <SortTh k="qis">QIS</SortTh><SortTh k="days_in_stage">In stage</SortTh><SortTh k="city">City</SortTh><SortTh k="rent_expectation">Rent</SortTh>
-                <th className="th">Power</th><SortTh k="ho_sort">HO date</SortTh><SortTh k="en_sort">Energized</SortTh><SortTh k="assigned_to_name">Owner</SortTh><SortTh k="created_at">Created</SortTh>
+                <th className="th">Power</th><SortTh k="ho_sort">HO date</SortTh><SortTh k="en_sort">Energized</SortTh><SortTh k="owner">Owner</SortTh><SortTh k="created_at">Created</SortTh>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -122,12 +121,12 @@ export default function Deals() {
                     </span>
                     {d.stage_sla_days && <span className="text-xs text-slate-400"> / {d.stage_sla_days}d</span>}
                   </td>
-                  <td className="td">{d.city}</td>
+                  <td className="td">{d.city}{d.region && <div className="text-[10px] text-slate-400">{d.region}</div>}</td>
                   <td className="td">{fmtINR(d.rent_expectation)}</td>
                   <td className="td"><Pill className={POWER_FEASIBILITY[d.power_feasibility]?.cls}>{POWER_FEASIBILITY[d.power_feasibility]?.label}</Pill></td>
                   <td className="td text-slate-600">{d.extra?.ho_date ? fmtDate(d.extra.ho_date) : '—'}</td>
                   <td className="td text-slate-600">{d.extra?.energized_on ? fmtDate(d.extra.energized_on) : '—'}</td>
-                  <td className="td">{d.assigned_to_name || '—'}</td>
+                  <td className="td whitespace-nowrap" onClick={e => e.stopPropagation()}><OwnerCell deal={d} onChanged={reload} /></td>
                   <td className="td text-slate-500">{fmtDate(d.created_at)}</td>
                 </tr>
               ))}
@@ -172,7 +171,7 @@ function Board({ rows, stages }) {
                       <span className="truncate">{d.city}{d.site_type ? ` · ${d.site_type}` : ''}</span>
                     </div>
                     <div className="mt-2 flex items-center justify-between text-xs">
-                      <span className="text-slate-600">{d.qis ? <b>{d.qis} QIS · </b> : ''}{d.assigned_to_name || '—'}</span>
+                      <span className="text-slate-600">{d.qis ? <b>{d.qis} QIS · </b> : ''}{d.owner || '—'}</span>
                       <span className={`font-semibold ${d.is_overdue ? 'text-red-600' : 'text-slate-500'}`}>{daysLabel(d.days_in_stage)}</span>
                     </div>
                   </Link>
