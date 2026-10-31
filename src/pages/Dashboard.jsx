@@ -104,6 +104,20 @@ export default function Dashboard() {
 
     return {
       total: open.length,
+      pending: (() => {
+        const open = rows.filter(r => ['active', 'approved', 'hold'].includes(r.stage_category))
+        const rowsOut = stages.filter(st => st.is_active && ['active', 'approved', 'hold'].includes(st.category)).map(st => {
+          const xs = open.filter(r => r.stage_id === st.id)
+          const days = xs.map(r => +r.days_in_stage)
+          return {
+            id: st.id, name: st.name, color: st.color, sla: st.sla_days, sites: xs.length, qis: sumQis(xs),
+            avg: avg(days), max: days.length ? Math.max(...days) : null,
+            items: xs.map(r => ({ id: r.id, name: r.name, city: r.city, days: +r.days_in_stage, qis: qisOf(r) })),
+          }
+        }).filter(x => x.sites > 0)
+        const maxDays = Math.max(30, ...rowsOut.map(x => x.max || 0))
+        return { rows: rowsOut, scale: Math.min(90, Math.ceil(maxDays / 10) * 10) }
+      })(),
       ageing: (() => {
         const open = rows.filter(r => ['active', 'approved', 'hold'].includes(r.stage_category))
         return stages.filter(st => st.is_active && ['active', 'approved', 'hold'].includes(st.category)).map(st => {
@@ -114,31 +128,6 @@ export default function Dashboard() {
           })
           return { id: st.id, name: st.name, color: st.color, sla: st.sla_days, qis: sumQis(xs), sites: xs.length, overdueQis: sumQis(xs.filter(r => r.is_overdue)), cells }
         }).filter(x => x.sites > 0)
-      })(),
-      milestones: (() => {
-        const dates = r => ({
-          added: r.created_at,
-          loi: firstEntry(r.id, keyId.loi_signed),
-          agreement: firstEntry(r.id, keyId.agreement_signed) || firstEntry(r.id, keyId.agreement_registered),
-          ho: hoDate(r),
-          energized: enDate(r),
-        })
-        const all = rows.map(r => ({ r, d: dates(r) }))
-        const seg = (from, to, label) => {
-          const xs = all.filter(({ d }) => d[from] && d[to] && inP(d[to]))
-            .map(({ r, d }) => ({ r, days: (new Date(d[to]) - new Date(d[from])) / 864e5 }))
-            .filter(x => x.days >= 0)
-          const ds = xs.map(x => x.days).sort((a, b) => a - b)
-          return { label, n: xs.length, qis: sumQis(xs.map(x => x.r)), avg: avg(ds), median: ds.length ? ds[Math.floor(ds.length / 2)] : null, max: ds.length ? ds[ds.length - 1] : null }
-        }
-        return [
-          seg('added', 'loi', 'Added → LOI signed'),
-          seg('loi', 'agreement', 'LOI → Agreement signed'),
-          seg('agreement', 'ho', 'Agreement → Handover'),
-          seg('loi', 'ho', 'LOI → Handover'),
-          seg('ho', 'energized', 'Handover → Energized'),
-          seg('added', 'energized', 'Added → Energized (end to end)'),
-        ]
       })(),
       period: (() => {
         const added = rows.filter(r => inP(r.created_at))
@@ -221,23 +210,37 @@ export default function Dashboard() {
         )}
       </Panel>
 
-      <Panel title={`Milestone TAT — milestones reached ${m.period.label}`}>
-        <div className="space-y-3">
-          {m.milestones.map(t => {
-            const maxAvg = Math.max(1, ...m.milestones.map(x => x.avg || 0))
-            return (
-              <div key={t.label} className="grid grid-cols-12 items-center gap-3 text-sm">
-                <span className="col-span-4 font-medium text-slate-700 sm:col-span-3">{t.label}</span>
-                <div className="col-span-5 h-6 rounded-md bg-slate-100 sm:col-span-6">
-                  {t.n > 0 && <div className="flex h-6 items-center rounded-md bg-brand-500 px-2 text-xs font-bold text-white" style={{ width: `${Math.max(8, (100 * t.avg) / maxAvg)}%` }}>{fmtNum(t.avg, 1)} d</div>}
-                </div>
-                <span className="col-span-3 text-xs text-slate-500">{t.n ? <>median <b>{fmtNum(t.median, 1)} d</b> · max {fmtNum(t.max, 0)} d · {t.n} sites / {t.qis} QIS</> : 'no sites reached this in the period'}</span>
+      <Panel title="Pending right now — how long sites have been waiting in each stage">
+        <div className="space-y-1">
+          <div className="hidden grid-cols-12 gap-3 px-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400 md:grid">
+            <span className="col-span-2">Stage</span><span className="col-span-1 text-right">QIS</span><span className="col-span-1 text-right">Avg wait</span><span className="col-span-1 text-right">Oldest</span>
+            <span className="col-span-7 flex justify-between"><span>each dot = a site (size = QIS) · days in stage →</span><span>{m.pending.scale}+ d</span></span>
+          </div>
+          {m.pending.rows.map(p => (
+            <div key={p.id} className="grid grid-cols-12 items-center gap-3 rounded-lg px-1 py-2 hover:bg-slate-50">
+              <span className="col-span-12 md:col-span-2"><StageBadge name={p.name} color={p.color} /></span>
+              <span className="col-span-4 text-right md:col-span-1"><b className="text-lg">{p.qis}</b><span className="block text-[11px] text-slate-400">{p.sites} sites</span></span>
+              <span className={`col-span-4 text-right md:col-span-1 ${p.sla && p.avg > p.sla ? 'text-red-600' : ''}`}><b className="text-lg">{fmtNum(p.avg, 0)}</b> d<span className="block text-[11px] text-slate-400">avg</span></span>
+              <span className={`col-span-4 text-right md:col-span-1 ${p.sla && p.max > p.sla ? 'text-red-600' : ''}`}><b className="text-lg">{fmtNum(p.max, 0)}</b> d<span className="block text-[11px] text-slate-400">oldest</span></span>
+              <div className="relative col-span-12 h-9 rounded-md bg-slate-100 md:col-span-7">
+                {p.sla && p.sla < m.pending.scale && (
+                  <div className="absolute inset-y-0 z-0 border-l-2 border-dashed border-red-400" style={{ left: `${(100 * p.sla) / m.pending.scale}%` }} title={`SLA ${p.sla} days`}>
+                    <span className="absolute -top-0.5 left-1 text-[9px] font-bold text-red-500">SLA {p.sla}d</span>
+                  </div>
+                )}
+                {p.items.map(x => (
+                  <button key={x.id} onClick={() => nav(`/app/deals/${x.id}`)} title={`${x.name} · ${x.city} · ${fmtNum(x.days, 0)} days · ${x.qis} QIS`}
+                    className={`absolute top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow transition hover:z-20 hover:scale-150 ${p.sla && x.days > p.sla ? 'bg-red-500' : p.sla && x.days > p.sla * 0.7 ? 'bg-amber-400' : 'bg-emerald-500'}`}
+                    style={{ left: `${Math.min(98, Math.max(2, (100 * Math.min(x.days, m.pending.scale)) / m.pending.scale))}%`, width: 10 + Math.min(10, x.qis * 1.2), height: 10 + Math.min(10, x.qis * 1.2) }} />
+                ))}
               </div>
-            )
-          })}
+            </div>
+          ))}
+          {m.pending.rows.length === 0 && <p className="py-4 text-center text-sm text-slate-400">Nothing pending.</p>}
         </div>
-        <p className="mt-3 text-xs text-slate-500">Each stage change is time-stamped automatically. TAT = days between the two milestones for sites that reached the second one in the selected period. Imported sites only have dates from the sheet, so early numbers are based on few sites.</p>
+        <p className="mt-2 text-xs text-slate-500">Days counted from the date the site entered its current stage (e.g. LOI signed on 1 Jan → on 20 Jan it shows 20 days in LOI Signed). <span className="text-emerald-600">●</span> on track · <span className="text-amber-500">●</span> nearing SLA · <span className="text-red-500">●</span> beyond SLA. Hover a dot for the site, click to open it.</p>
       </Panel>
+
 
       <div className="grid gap-4 xl:grid-cols-3">
         <Panel title={<span className="flex items-center justify-between">Stage-wise pipeline<Toggle value={metric} onChange={setMetric} /></span>} className="xl:col-span-2">
