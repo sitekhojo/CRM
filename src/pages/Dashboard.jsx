@@ -40,7 +40,7 @@ export default function Dashboard() {
     const by = (fn) => rows.reduce((acc, r) => { const k = fn(r); acc[k] = (acc[k] || 0) + 1; return acc }, {})
 
     const stageCounts = by(r => r.stage_id)
-    const pipeline = stagesFor(stages, filters.siteType).map(s => ({
+    const pipeline = stagesFor(stages, filters.siteType).filter(s => s.category !== 'dropped').map(s => ({
       id: s.id, name: s.name, color: s.color, sla: s.sla_days, count: stageCounts[s.id] || 0, sites: stageCounts[s.id] || 0,
       qis: rows.filter(r => r.stage_id === s.id).reduce((a, r) => a + qisOf(r), 0),
       overdue: rows.filter(r => r.stage_id === s.id && r.is_overdue).length,
