@@ -43,16 +43,16 @@ export default function Dashboard() {
     const wk = startOfWeek(), mo = startOfMonth()
     const by = (fn) => rows.reduce((acc, r) => { const k = fn(r); acc[k] = (acc[k] || 0) + 1; return acc }, {})
 
-    const stageCounts = by(r => r.stage_id)
-    const pipeline = stagesFor(stages, filters.siteType).filter(s => s.category !== 'dropped').map(s => ({
-      id: s.id, name: s.name, color: s.color, sla: s.sla_days, count: stageCounts[s.id] || 0, sites: stageCounts[s.id] || 0,
-      qis: rows.filter(r => r.stage_id === s.id).reduce((a, r) => a + qisOf(r), 0),
-      overdue: rows.filter(r => r.stage_id === s.id && r.is_overdue).length,
-      avgDays: avg(rows.filter(r => r.stage_id === s.id).map(r => +r.days_in_stage)),
-    }))
+    // stage-wise & city-wise follow the period: All time = every site; otherwise sites added in the period
+    const scoped = period.kind === 'all' ? rows : rows.filter(r => inP(r.created_at))
+    const pipeline = stagesFor(stages, filters.siteType).filter(s => s.category !== 'dropped').map(s => {
+      const xs = scoped.filter(r => r.stage_id === s.id)
+      return { id: s.id, name: s.name, color: s.color, sla: s.sla_days, count: xs.length, sites: xs.length, qis: sumQis(xs),
+        overdue: xs.filter(r => r.is_overdue).length, avgDays: avg(xs.map(r => +r.days_in_stage)) }
+    })
 
     const open = rows.filter(r => r.stage_category !== 'dropped')
-    const cityCounts = Object.values(open.reduce((acc, r) => {
+    const cityCounts = Object.values(scoped.filter(r => r.stage_category !== 'dropped').reduce((acc, r) => {
       const c = acc[r.city] || (acc[r.city] = { city: r.city, sites: 0, qis: 0 })
       c.sites += 1; c.qis += qisOf(r); return acc
     }, {})).sort((a, b) => b[metric] - a[metric] || b.sites - a.sites)
@@ -304,24 +304,24 @@ export default function Dashboard() {
 
 
       <div className="grid gap-4 xl:grid-cols-3">
-        <Panel title={<span className="flex items-center justify-between">Stage-wise pipeline<Toggle value={metric} onChange={setMetric} /></span>} className="xl:col-span-2">
+        <Panel title={<span className="flex items-center justify-between">{period.kind === 'all' ? 'Stage-wise pipeline' : `Stage-wise · QIS added ${m.period.label} (current stage)`}<Toggle value={metric} onChange={setMetric} /></span>} className="xl:col-span-2">
           <ResponsiveContainer width="100%" height={280}>
             <BarChart data={m.pipeline} margin={{ left: -20, right: 8 }}>
               <CartesianGrid vertical={false} stroke="#f1f5f9" />
               <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-25} textAnchor="end" height={70} />
               <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
               <Tooltip cursor={{ fill: '#f8fafc' }} />
-              <Bar dataKey={metric} name={metric === 'qis' ? 'QIS' : 'Sites'} radius={[6, 6, 0, 0]} onClick={d => go(`stage=${d.id}`)} className="cursor-pointer">
+              <Bar dataKey={metric} name={metric === 'qis' ? 'QIS' : 'Sites'} radius={[6, 6, 0, 0]} onClick={d => go(`stage=${d.id}${period.kind === 'all' ? '' : `&from=${m.period.from}&to=${m.period.to}`}`)} className="cursor-pointer">
                 {m.pipeline.map(p => <Cell key={p.id} fill={p.color} />)}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         </Panel>
-        <Panel title={`City-wise ${metric === 'qis' ? 'QIS' : 'sites'} (excl. dropped)`}>
+        <Panel title={`City-wise ${metric === 'qis' ? 'QIS' : 'sites'}${period.kind === 'all' ? '' : ` added ${m.period.label}`} (excl. dropped)`}>
           <div className="max-h-[280px] space-y-2 overflow-auto pr-1">
             {m.cityCounts.length === 0 && <p className="text-sm text-slate-400">No data</p>}
             {m.cityCounts.map(c => (
-              <button key={c.city} onClick={() => go(`city=${encodeURIComponent(c.city)}`)} className="block w-full text-left">
+              <button key={c.city} onClick={() => go(`city=${encodeURIComponent(c.city)}&open=1${period.kind === 'all' ? '' : `&from=${m.period.from}&to=${m.period.to}`}`)} className="block w-full text-left">
                 <div className="flex justify-between text-sm"><span className="font-medium">{c.city}</span>
                   <span><b>{fmtNum(c[metric])}</b> <span className="text-xs text-slate-400">{metric === 'qis' ? `QIS · ${c.sites} sites` : `sites · ${c.qis} QIS`}</span></span></div>
                 <div className="mt-1 h-2 rounded-full bg-slate-100"><div className="h-2 rounded-full bg-brand-500" style={{ width: `${(100 * c[metric]) / Math.max(1, m.cityCounts[0][metric])}%` }} /></div>
