@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts'
-import { Layers, CalendarPlus, CalendarDays, AlertTriangle, CheckCircle2, Zap, XCircle, Activity, PauseCircle } from 'lucide-react'
-import { useDeals, applyFilters, EMPTY_FILTERS } from '../lib/deals'
+import { Layers, CalendarPlus, CalendarDays, Zap, Activity, Boxes, Network } from 'lucide-react'
+import { useDeals, applyFilters, EMPTY_FILTERS, fetchNetworkPoints } from '../lib/deals'
 import { supabase, fetchAll } from '../lib/supabase'
 import { useConfig, stagesFor } from '../lib/config'
 import DealFilters from '../components/DealFilters'
@@ -14,7 +14,11 @@ export default function Dashboard() {
   const { stages = [], users = [] } = useConfig()
   const [history, setHistory] = useState(null)
   const [filters, setFilters] = useState(EMPTY_FILTERS)
+  const [network, setNetwork] = useState([])
+  const [metric, setMetric] = useState('qis') // chart unit: 'qis' | 'sites'
   const nav = useNavigate()
+
+  useEffect(() => { fetchNetworkPoints().then(setNetwork).catch(() => {}) }, [])
 
   useEffect(() => {
     fetchAll(() => supabase.from('stage_history_overview').select('id,site_id,from_stage_id,to_stage_id,from_stage_name,to_stage_name,days_in_from_stage,changed_at,changed_by,city,site_created_by').order('id'))
@@ -29,13 +33,18 @@ export default function Dashboard() {
 
     const stageCounts = by(r => r.stage_id)
     const pipeline = stagesFor(stages, filters.siteType).map(s => ({
-      id: s.id, name: s.name, color: s.color, sla: s.sla_days, count: stageCounts[s.id] || 0,
-      qis: rows.filter(r => r.stage_id === s.id).reduce((a, r) => a + (Number(r.extra?.qis_count) || 0), 0),
+      id: s.id, name: s.name, color: s.color, sla: s.sla_days, count: stageCounts[s.id] || 0, sites: stageCounts[s.id] || 0,
+      qis: rows.filter(r => r.stage_id === s.id).reduce((a, r) => a + qisOf(r), 0),
       overdue: rows.filter(r => r.stage_id === s.id && r.is_overdue).length,
       avgDays: avg(rows.filter(r => r.stage_id === s.id).map(r => +r.days_in_stage)),
     }))
 
-    const cityCounts = Object.entries(by(r => r.city)).map(([city, count]) => ({ city, count })).sort((a, b) => b.count - a.count)
+    const open = rows.filter(r => r.stage_category !== 'dropped')
+    const cityCounts = Object.values(open.reduce((acc, r) => {
+      const c = acc[r.city] || (acc[r.city] = { city: r.city, sites: 0, qis: 0 })
+      c.sites += 1; c.qis += qisOf(r); return acc
+    }, {})).sort((a, b) => b[metric] - a[metric] || b.sites - a.sites)
+    const net = network.filter(n => n.point_type === 'own_station' && (!filters.city || n.city === filters.city))
 
     // weekly trend (last 12 weeks)
     const weeks = Array.from({ length: 12 }, (_, i) => { const d = startOfWeek(); d.setDate(d.getDate() - 7 * (11 - i)); return d })
@@ -83,12 +92,17 @@ export default function Dashboard() {
     const stuck = rows.filter(r => r.is_overdue).sort((a, b) => (b.days_in_stage - b.stage_sla_days) - (a.days_in_stage - a.stage_sla_days))
 
     return {
-      total: rows.length,
-      leads: rows.filter(r => r.record_type === 'lead').length,
-      deals: rows.filter(r => r.record_type !== 'lead').length,
-      week: rows.filter(r => new Date(r.created_at) >= wk).length,
-      month: rows.filter(r => new Date(r.created_at) >= mo).length,
-      active: rows.filter(r => r.stage_category === 'active').length,
+      total: open.length,
+      totalQis: sumQis(open),
+      weekQis: sumQis(open.filter(r => new Date(r.created_at) >= wk)),
+      monthQis: sumQis(open.filter(r => new Date(r.created_at) >= mo)),
+      netSites: net.length,
+      netQis: net.reduce((a, n) => a + (Number(n.weight) || 0), 0),
+      leads: open.filter(r => r.record_type === 'lead').length,
+      deals: open.filter(r => r.record_type !== 'lead').length,
+      week: open.filter(r => new Date(r.created_at) >= wk).length,
+      month: open.filter(r => new Date(r.created_at) >= mo).length,
+      active: rows.filter(r => ['active', 'approved'].includes(r.stage_category)).length,
       approved: rows.filter(r => r.stage_category === 'approved').length,
       live: rows.filter(r => r.stage_category === 'live').length,
       dropped: rows.filter(r => r.stage_category === 'dropped').length,
@@ -99,7 +113,7 @@ export default function Dashboard() {
       pipeline, cityCounts, trend, tat, team, stuck, cycle,
       dropReasons: Object.entries(by(r => r.stage_category === 'dropped' ? r.drop_reason || 'Unspecified' : null)).filter(([k]) => k !== 'null').sort((a, b) => b[1] - a[1]),
     }
-  }, [deals, filters, stages, users, history])
+  }, [deals, filters, stages, users, history, network, metric])
 
   if (loading || !m) return <PageLoader />
   const go = q => nav(`/app/deals?${q}`)
@@ -114,39 +128,38 @@ export default function Dashboard() {
       </div>
       <DealFilters value={filters} onChange={setFilters} show={['city', 'type', 'stage', 'siteType', 'date']} />
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-5 xl:grid-cols-9">
-        <Stat label="Total sites" value={fmtNum(m.total)} icon={Layers} sub={`${m.leads} leads · ${m.deals} deals`} />
-        <Stat label="This week" value={fmtNum(m.week)} icon={CalendarPlus} tone="blue" />
-        <Stat label="This month" value={fmtNum(m.month)} icon={CalendarDays} tone="blue" />
-        <Stat label="In pipeline" value={fmtNum(m.active)} icon={Activity} sub={m.pipeQis ? `${fmtNum(m.pipeQis)} QIS` : undefined} />
-        <Stat label="Agreement → Energized" value={fmtNum(m.approved)} icon={CheckCircle2} tone="teal" />
-        <Stat label="Live" value={fmtNum(m.live)} icon={Zap} tone="green" sub={m.liveQis ? `${fmtNum(m.liveQis)} QIS` : undefined} />
-        <Stat label="On hold" value={fmtNum(m.hold)} icon={PauseCircle} tone="amber" />
-        <Stat label="Dropped" value={fmtNum(m.dropped)} icon={XCircle} tone="red" />
-        <Stat label="Beyond SLA" value={fmtNum(m.overdue)} icon={AlertTriangle} tone={m.overdue ? 'red' : 'slate'} onClick={() => go('overdue=1')} sub="Click to view" />
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-7">
+        <Stat label="Total sites" value={fmtNum(m.total)} icon={Layers} sub={`${m.leads} leads · ${m.deals} deals · excl. dropped`} />
+        <Stat label="Total QIS" value={fmtNum(m.totalQis)} icon={Boxes} tone="teal" sub="across those sites" />
+        <Stat label="This week" value={fmtNum(m.week)} icon={CalendarPlus} tone="blue" sub={`${fmtNum(m.weekQis)} QIS`} />
+        <Stat label="This month" value={fmtNum(m.month)} icon={CalendarDays} tone="blue" sub={`${fmtNum(m.monthQis)} QIS`} />
+        <Stat label="In pipeline" value={fmtNum(m.active)} icon={Activity} sub={`${fmtNum(m.pipeQis)} QIS`} />
+        <Stat label="Live (from pipeline)" value={fmtNum(m.live)} icon={Zap} tone="green" sub={`${fmtNum(m.liveQis)} QIS`} />
+        <Stat label="Live network" value={`${fmtNum(m.netQis + m.liveQis)} QIS`} icon={Network} tone="green" sub={`${fmtNum(m.netSites + m.live)} sites (network data + live deals)`} />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-3">
-        <Panel title="Stage-wise pipeline" className="xl:col-span-2">
+        <Panel title={<span className="flex items-center justify-between">Stage-wise pipeline<Toggle value={metric} onChange={setMetric} /></span>} className="xl:col-span-2">
           <ResponsiveContainer width="100%" height={280}>
             <BarChart data={m.pipeline} margin={{ left: -20, right: 8 }}>
               <CartesianGrid vertical={false} stroke="#f1f5f9" />
               <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-25} textAnchor="end" height={70} />
               <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
               <Tooltip cursor={{ fill: '#f8fafc' }} />
-              <Bar dataKey="count" name="Deals" radius={[6, 6, 0, 0]} onClick={d => go(`stage=${d.id}`)} className="cursor-pointer">
+              <Bar dataKey={metric} name={metric === 'qis' ? 'QIS' : 'Sites'} radius={[6, 6, 0, 0]} onClick={d => go(`stage=${d.id}`)} className="cursor-pointer">
                 {m.pipeline.map(p => <Cell key={p.id} fill={p.color} />)}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         </Panel>
-        <Panel title="City-wise distribution">
+        <Panel title={`City-wise ${metric === 'qis' ? 'QIS' : 'sites'} (excl. dropped)`}>
           <div className="max-h-[280px] space-y-2 overflow-auto pr-1">
             {m.cityCounts.length === 0 && <p className="text-sm text-slate-400">No data</p>}
             {m.cityCounts.map(c => (
               <button key={c.city} onClick={() => go(`city=${encodeURIComponent(c.city)}`)} className="block w-full text-left">
-                <div className="flex justify-between text-sm"><span className="font-medium">{c.city}</span><span className="font-bold">{c.count}</span></div>
-                <div className="mt-1 h-2 rounded-full bg-slate-100"><div className="h-2 rounded-full bg-brand-500" style={{ width: `${(100 * c.count) / m.cityCounts[0].count}%` }} /></div>
+                <div className="flex justify-between text-sm"><span className="font-medium">{c.city}</span>
+                  <span><b>{fmtNum(c[metric])}</b> <span className="text-xs text-slate-400">{metric === 'qis' ? `QIS · ${c.sites} sites` : `sites · ${c.qis} QIS`}</span></span></div>
+                <div className="mt-1 h-2 rounded-full bg-slate-100"><div className="h-2 rounded-full bg-brand-500" style={{ width: `${(100 * c[metric]) / Math.max(1, m.cityCounts[0][metric])}%` }} /></div>
               </button>
             ))}
           </div>
@@ -246,5 +259,14 @@ export default function Dashboard() {
 
 const Panel = ({ title, children, className = '' }) => (
   <div className={`card p-4 sm:p-5 ${className}`}><h3 className="mb-3 text-sm font-bold text-slate-900">{title}</h3>{children}</div>
+)
+const qisOf = r => Number(r.extra?.qis_count) || 0
+const sumQis = rs => rs.reduce((a, r) => a + qisOf(r), 0)
+const Toggle = ({ value, onChange }) => (
+  <span className="flex rounded-lg border border-slate-300 p-0.5 text-xs font-semibold">
+    {[['qis', 'QIS'], ['sites', 'Sites']].map(([v, l]) => (
+      <button key={v} onClick={() => onChange(v)} className={`rounded-md px-2.5 py-1 ${value === v ? 'bg-navy-900 text-white' : 'text-slate-600'}`}>{l}</button>
+    ))}
+  </span>
 )
 const avg = xs => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null)
