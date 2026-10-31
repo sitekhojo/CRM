@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom'
 import { Crosshair, Loader2 } from 'lucide-react'
 import { StageBadge } from './ui'
 import { daysLabel, fmtINR } from '../lib/format'
-import { parseLatLng, validLatLng } from '../lib/geo'
+import { parseLatLng, validLatLng, hasLoc } from '../lib/geo'
 
 export const INDIA_CENTER = [22.5, 79]
 
@@ -55,7 +55,7 @@ export function DealPopup({ d }) {
 }
 
 export function DealMarkers({ deals, radius = 8 }) {
-  return deals.map(d => (
+  return deals.filter(hasLoc).map(d => (
     <CircleMarker key={d.id} center={[d.latitude, d.longitude]} radius={radius}
       pathOptions={{ color: '#fff', weight: 2, fillColor: d.stage_color, fillOpacity: 0.95 }}>
       <Popup><DealPopup d={d} /></Popup>

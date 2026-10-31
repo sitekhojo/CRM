@@ -8,6 +8,7 @@ import { permissions } from '../lib/deals'
 import { StageBadge, PageLoader, Empty, Pill, Modal, useToast } from '../components/ui'
 import { BaseMap, pinIcon } from '../components/maps'
 import { Marker } from 'react-leaflet'
+import { hasLoc } from '../lib/geo'
 import StageChangeModal from '../components/StageChangeModal'
 import DealForm from '../components/DealForm'
 import { fmtDateTime, fmtDate, fmtINR, fmtNum, daysLabel, timeAgo, POWER_FEASIBILITY, RECORD_TYPES, EXTRA_FIELDS } from '../lib/format'
@@ -104,7 +105,7 @@ export default function DealDetail() {
             {perm.canEdit && deal.record_type === 'lead' && <button className="btn-secondary !border-violet-300 !text-violet-700" onClick={() => update({ record_type: 'deal' }, 'Converted to deal')}>Convert to deal</button>}
             {perm.canChangeStage && <button className="btn-primary" onClick={() => setStageModal({})}><ArrowRightLeft className="h-4 w-4" />Change stage</button>}
             {perm.canEdit && <button className="btn-secondary" onClick={() => setEditing(true)}><Pencil className="h-4 w-4" />Edit</button>}
-            <Link className="btn-secondary" to={`/app/planning?lat=${deal.latitude}&lng=${deal.longitude}&deal=${deal.id}`}><Radar className="h-4 w-4" />Feasibility</Link>
+            {hasLoc(deal) && <Link className="btn-secondary" to={`/app/planning?lat=${deal.latitude}&lng=${deal.longitude}&deal=${deal.id}`}><Radar className="h-4 w-4" />Feasibility</Link>}
             {perm.canDelete && <button className="btn-ghost text-red-600" onClick={remove} title="Delete"><Trash2 className="h-4 w-4" /></button>}
           </div>
         </div>
@@ -148,7 +149,7 @@ export default function DealDetail() {
               <Info key={k} label={label} value={deal.extra?.[k] === undefined || deal.extra?.[k] === null ? null : type === 'date' ? fmtDate(deal.extra[k]) : type === 'number' ? fmtNum(deal.extra[k]) : String(deal.extra[k])} />
             ))}
             <Info label="Area" value={deal.area_sqft ? `${fmtNum(deal.area_sqft)} sq ft` : null} />
-            <Info label="Coordinates" value={`${deal.latitude.toFixed(6)}, ${deal.longitude.toFixed(6)}`} />
+            <Info label="Coordinates" value={hasLoc(deal) ? `${deal.latitude.toFixed(6)}, ${deal.longitude.toFixed(6)}` : <span className="font-semibold text-amber-600">No location yet — use Edit to pin it</span>} />
             <Info label="Location source" value={`${deal.location_source}${deal.location_accuracy_m ? ` (±${deal.location_accuracy_m} m)` : ''}`} />
             <Info label="Observations" value={deal.observations} wide />
           </InfoCard>
@@ -205,11 +206,18 @@ export default function DealDetail() {
 
         {/* Right: map + meta */}
         <div className="space-y-4">
+          {hasLoc(deal) ? (
           <div className="card overflow-hidden">
             <div className="h-64"><BaseMap center={[deal.latitude, deal.longitude]} zoom={16}><Marker position={[deal.latitude, deal.longitude]} icon={pinIcon(deal.stage_color)} /></BaseMap></div>
             <a className="flex items-center justify-center gap-1 border-t border-slate-100 py-2.5 text-sm font-semibold text-brand-700 hover:bg-slate-50" target="_blank" rel="noreferrer"
               href={`https://www.google.com/maps/search/?api=1&query=${deal.latitude},${deal.longitude}`}>Open in Google Maps <ExternalLink className="h-3.5 w-3.5" /></a>
           </div>
+          ) : (
+            <div className="card flex h-40 flex-col items-center justify-center gap-2 p-4 text-center text-sm text-slate-500">
+              <span className="font-semibold text-amber-600">No location yet</span>
+              {perm.canEdit && <button className="btn-secondary" onClick={() => setEditing(true)}>Add location</button>}
+            </div>
+          )}
           <div className="card space-y-3 p-4 text-sm">
             <Meta label="Owner">
               {perm.canReassign ? (

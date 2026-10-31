@@ -21,6 +21,9 @@ export function parseLatLng(text) {
   return validLatLng(lat, lng) ? { lat, lng } : null
 }
 
+/** Does a site/deal row have a usable location? */
+export const hasLoc = d => d && d.latitude !== null && d.latitude !== undefined && d.longitude !== null && d.longitude !== undefined
+
 export const validLatLng = (lat, lng) =>
   Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180
 
@@ -37,6 +40,7 @@ export function evaluateFeasibility(point, deals, network, rules, excludeId) {
     .map(x => ({ ...x, distance: haversine(point.lat, point.lng, x[latK], x[lngK]) }))
     .sort((a, b) => a.distance - b.distance)
 
+  deals = deals.filter(hasLoc)
   const liveDeals = deals.filter(d => d.stage_category === 'live' && d.id !== excludeId)
     .map(d => ({ id: d.id, name: d.name, city: d.city, latitude: d.latitude, longitude: d.longitude, point_type: 'own_station', source: 'deal' }))
   const ownStations = withDist([...network.filter(n => n.point_type === 'own_station'), ...liveDeals], 'latitude', 'longitude')

@@ -10,6 +10,7 @@ import { BaseMap, DealMarkers, FitBounds } from '../components/maps'
 import { PageLoader, StageBadge } from '../components/ui'
 import { daysLabel } from '../lib/format'
 import { NETWORK_TYPES } from './Planning'
+import { hasLoc } from '../lib/geo'
 
 export default function MapPage() {
   const { deals, loading } = useDeals()
@@ -32,7 +33,7 @@ export default function MapPage() {
       <div className="space-y-3 border-b border-slate-200 bg-white p-3 sm:px-5">
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="mr-2 text-xl font-extrabold text-navy-900">Map</h1>
-          <span className="text-sm text-slate-500">{rows.length} sites</span>
+          <span className="text-sm text-slate-500">{rows.filter(hasLoc).length} sites on map{rows.some(r => !hasLoc(r)) ? ` · ${rows.filter(r => !hasLoc(r)).length} without location` : ''}</span>
           <div className="flex-1" />
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="accent-brand-600" checked={showNet} onChange={e => setShowNet(e.target.checked)} />Show network layers</label>
           <div className="flex rounded-lg border border-slate-300 bg-white p-0.5">
@@ -47,7 +48,7 @@ export default function MapPage() {
       {view === 'map' ? (
         <div className="relative min-h-[420px] flex-1">
           <BaseMap>
-            <FitBounds points={rows.map(r => [r.latitude, r.longitude])} fitKey={fitKey} />
+            <FitBounds points={rows.filter(hasLoc).map(r => [r.latitude, r.longitude])} fitKey={fitKey} />
             {showNet && network.filter(p => !filters.siteType.length || p.point_type !== 'own_station' || filters.siteType.includes(p.site_type)).filter(p => !filters.city.length || filters.city.includes(p.city)).map(p => (
               <CircleMarker key={'n' + p.id} center={[p.latitude, p.longitude]} radius={5}
                 pathOptions={{ color: NETWORK_TYPES[p.point_type].color, weight: 2, fillColor: '#fff', fillOpacity: 1 }}>
@@ -74,7 +75,7 @@ export default function MapPage() {
             {rows.map(d => (
               <Link key={d.id} to={`/app/deals/${d.id}`} className="card block p-4 transition hover:border-brand-500">
                 <div className="flex justify-between gap-2"><b className="text-slate-900">{d.name}</b><span className="font-mono text-[10px] text-slate-400">{d.site_code}</span></div>
-                <p className="text-xs text-slate-500">{d.city} · {d.latitude.toFixed(5)}, {d.longitude.toFixed(5)}</p>
+                <p className="text-xs text-slate-500">{d.city} · {hasLoc(d) ? `${d.latitude.toFixed(5)}, ${d.longitude.toFixed(5)}` : 'no location'}</p>
                 <div className="mt-2 flex items-center justify-between"><StageBadge name={d.stage_name} color={d.stage_color} />
                   <span className={`text-xs font-semibold ${d.is_overdue ? 'text-red-600' : 'text-slate-500'}`}>{daysLabel(d.days_in_stage)}</span></div>
               </Link>

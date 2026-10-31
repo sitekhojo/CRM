@@ -31,7 +31,11 @@ export function toPayload(f, loc) {
     else if (type === 'number') extra[k] = Number(v)
   }
   p.extra = extra
-  if (loc) { p.latitude = loc.lat; p.longitude = loc.lng; p.location_source = loc.source || 'manual'; p.location_accuracy_m = loc.accuracy ?? null }
+  if (loc) {
+    const ok = validLatLng(loc.lat, loc.lng)
+    p.latitude = ok ? loc.lat : null; p.longitude = ok ? loc.lng : null
+    p.location_source = ok ? (loc.source === 'link' ? 'manual' : loc.source || 'manual') : 'none'; p.location_accuracy_m = ok ? loc.accuracy ?? null : null
+  }
   return p
 }
 
@@ -183,8 +187,8 @@ export default function DealForm({ initial, initialLoc, onSubmit, submitting, mo
       </Section>
 
       <div className="sticky bottom-0 -mx-4 flex justify-end gap-2 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-xl sm:border">
-        {!locOk && <span className="mr-auto self-center text-sm text-amber-600">Pin the location to continue</span>}
-        <button className="btn-primary min-w-32" disabled={submitting || !locOk}>{submitting ? 'Saving…' : mode === 'create' ? (submitLabel || 'Create deal') : 'Save changes'}</button>
+        {!locOk && <span className="mr-auto self-center text-sm text-amber-600">No location pinned — it won't show on the map until you add one</span>}
+        <button className="btn-primary min-w-32" disabled={submitting}>{submitting ? 'Saving…' : mode === 'create' ? (submitLabel || 'Create deal') : 'Save changes'}</button>
       </div>
     </form>
   )

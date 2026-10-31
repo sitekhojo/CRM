@@ -8,7 +8,7 @@ import { useConfig, stagesFor } from '../lib/config'
 import DealFilters from '../components/DealFilters'
 import { Stat, StageBadge, PageLoader } from '../components/ui'
 import { fmtNum, daysLabel, startOfWeek, startOfMonth, fmtDate } from '../lib/format'
-import { haversine } from '../lib/geo'
+import { haversine, hasLoc } from '../lib/geo'
 
 export default function Dashboard() {
   const { deals, loading } = useDeals()
@@ -53,9 +53,10 @@ export default function Dashboard() {
       c.sites += 1; c.qis += qisOf(r); return acc
     }, {})).sort((a, b) => b[metric] - a[metric] || b.sites - a.sites)
     const energizedDeals = rows.filter(r => r.stage_category === 'live')
+    const near = (d, n) => hasLoc(d) && haversine(d.latitude, d.longitude, n.latitude, n.longitude) <= 100
     const netAll = network.filter(n => n.point_type === 'own_station' && (!filters.city.length || filters.city.includes(n.city)) && (!filters.siteType.length || filters.siteType.includes(n.site_type)))
     const net = network.filter(n => n.point_type === 'own_station' && (!filters.city.length || filters.city.includes(n.city)) && (!filters.siteType.length || filters.siteType.includes(n.site_type)))
-      .filter(n => !energizedDeals.some(d => haversine(d.latitude, d.longitude, n.latitude, n.longitude) <= 100)) // already counted as a deal
+      .filter(n => !energizedDeals.some(d => near(d, n))) // already counted as a deal
 
     // weekly trend (last 12 weeks)
     const weeks = Array.from({ length: 12 }, (_, i) => { const d = startOfWeek(); d.setDate(d.getDate() - 7 * (11 - i)); return d })
@@ -121,7 +122,7 @@ export default function Dashboard() {
         const ho = rows.filter(r => inP(hoDate(r)))
         // energized in period: QIS-tracker dates + CRM energized sites that are not in the tracker
         const trackerEn = netAll.reduce((a, n) => a + Object.entries(n.energized_dates || {}).reduce((b, [d, c]) => b + (inP(d + 'T12:00:00') ? c : 0), 0), 0)
-        const crmOnly = energizedDeals.filter(d => !netAll.some(n => haversine(d.latitude, d.longitude, n.latitude, n.longitude) <= 100))
+        const crmOnly = energizedDeals.filter(d => !netAll.some(n => near(d, n)))
         const crmEn = crmOnly.filter(r => inP(enDate(r)))
         const crmMatchedIds = new Set(energizedDeals.filter(d => !crmOnly.includes(d)).map(d => d.id))
         const enSites = netAll.filter(n => Object.keys(n.energized_dates || {}).some(d => inP(d + 'T12:00:00'))).length + crmEn.length
