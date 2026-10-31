@@ -5,6 +5,7 @@ import { useDeals, applyFilters, EMPTY_FILTERS } from '../lib/deals'
 import { useAuth } from '../lib/auth'
 import { useConfig, stagesFor } from '../lib/config'
 import DealFilters from '../components/DealFilters'
+import PeriodBar, { periodRange, periodLabel, isoDay } from '../components/PeriodBar'
 import { StageBadge, PageLoader, Empty, Pill } from '../components/ui'
 import { fmtDate, fmtINR, daysLabel, POWER_FEASIBILITY, RECORD_TYPES } from '../lib/format'
 import { exportRows, DEAL_COLUMNS } from '../lib/excel'
@@ -25,6 +26,15 @@ export default function Deals() {
     ho: params.get('ho') || '', en: params.get('en') || '', openOnly: params.get('open') === '1',
   })
   const fromCard = params.get('card')
+  const [pkind, setPkind] = useState(params.get('from') || params.get('to') ? 'custom' : 'all')
+  const onPeriod = v => {
+    setPkind(v.kind)
+    if (v.kind === 'custom') return setFilters(f => ({ ...f, from: v.from, to: v.to }))
+    if (v.kind === 'all') return setFilters(f => ({ ...f, from: '', to: '' }))
+    const [a, b] = periodRange(v); setFilters(f => ({ ...f, from: isoDay(a), to: isoDay(b) }))
+  }
+  useEffect(() => { if (!filters.from && !filters.to && !['all', 'custom'].includes(pkind)) setPkind('all') }, [filters.from, filters.to]) // eslint-disable-line
+  const pLabel = periodLabel({ kind: pkind }, ...periodRange({ kind: pkind, from: filters.from, to: filters.to }))
   const [view, setView] = useState(() => localStorage.getItem('dealsView') || 'table')
   const [sort, setSort] = useState({ key: 'created_at', dir: 'desc' })
   const [importOpen, setImportOpen] = useState(false)
@@ -59,7 +69,7 @@ export default function Deals() {
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div>
           <h1 className="text-xl font-extrabold text-navy-900">Leads & Deals</h1>
-          <p className="text-sm text-slate-500">{rows.length} of {deals.length} sites</p>
+          <p className="text-sm text-slate-500">{rows.length} of {deals.length} sites · <b className="text-slate-700">{rows.reduce((a, r) => a + (Number(r.qis) || 0), 0)} QIS</b></p>
         </div>
         <div className="flex-1" />
         <div className="flex rounded-lg border border-slate-300 bg-white p-0.5">
@@ -91,7 +101,8 @@ export default function Deals() {
         </div>
       )}
       <div className="mb-4">
-        <DealFilters value={filters} onChange={setFilters} />
+        <DealFilters value={filters} onChange={setFilters} show={['q', 'region', 'city', 'owner', 'type', 'stage', 'siteType', 'overdue']} />
+        <div className="mt-2"><PeriodBar allTime value={{ kind: pkind, from: filters.from, to: filters.to }} onChange={onPeriod} label={pLabel} prefix="Sites added" /></div>
       </div>
 
       {deals.length === 0 ? (
