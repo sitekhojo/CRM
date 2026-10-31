@@ -10,6 +10,7 @@ import { fmtDate, fmtINR, daysLabel, POWER_FEASIBILITY, RECORD_TYPES } from '../
 import { exportRows, DEAL_COLUMNS } from '../lib/excel'
 import ImportDealsModal from '../components/ImportDealsModal'
 import StageCell from '../components/StageCell'
+import TypeCell from '../components/TypeCell'
 
 export default function Deals() {
   const { deals, loading, reload } = useDeals()
@@ -111,7 +112,7 @@ export default function Deals() {
               {rows.map(d => (
                 <tr key={d.id} className="cursor-pointer hover:bg-slate-50" onClick={() => nav(`/app/deals/${d.id}`)}>
                   <td className="td font-mono text-xs text-slate-500">{d.site_code}</td>
-                  <td className="td"><Pill className={RECORD_TYPES[d.record_type || 'deal'].cls}>{RECORD_TYPES[d.record_type || 'deal'].label}</Pill></td>
+                  <td className="td" onClick={e => e.stopPropagation()}><TypeCell deal={d} onChanged={reload} /></td>
                   <td className="td max-w-[260px]"><div className="truncate font-semibold text-slate-900">{d.name}</div><div className="truncate text-xs text-slate-500">{[d.site_type, d.address].filter(Boolean).join(' · ') || '—'}</div></td>
                   <td className="td" onClick={e => e.stopPropagation()}><StageCell deal={d} onChanged={reload} /></td>
                   <td className="td font-semibold">{d.qis ?? '—'}</td>
