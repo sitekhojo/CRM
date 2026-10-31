@@ -12,7 +12,7 @@ export const blankDeal = {
   landlord_name: '', landlord_phone: '', landlord_email: '', landlord_notes: '',
   rent_expectation: '', deposit_expectation: '', rent_negotiable: null, observations: '',
   power_available: null, power_phase: '', sanctioned_load_kw: '', power_feasibility: 'unknown', power_notes: '',
-  remarks: '', stage_id: '', assigned_to: '',
+  remarks: '', stage_id: '', assigned_to: '', record_type: 'deal',
 }
 
 const NUMS = ['area_sqft', 'rent_expectation', 'deposit_expectation', 'sanctioned_load_kw']
@@ -23,6 +23,7 @@ export function toPayload(f, loc) {
   for (const k of NUMS) p[k] = p[k] === '' || p[k] === null ? null : Number(p[k])
   for (const k of ['power_phase', 'site_type', 'pincode', 'landlord_email', 'assigned_to']) if (p[k] === '') p[k] = null
   p.stage_id = p.stage_id ? Number(p.stage_id) : null
+  p.record_type = p.record_type === 'lead' ? 'lead' : 'deal'
   if (loc) { p.latitude = loc.lat; p.longitude = loc.lng; p.location_source = loc.source || 'manual'; p.location_accuracy_m = loc.accuracy ?? null }
   return p
 }
@@ -45,7 +46,7 @@ function YesNo({ value, onChange }) {
   return <div className="flex gap-2">{opt(true, 'Yes')}{opt(false, 'No')}</div>
 }
 
-export default function DealForm({ initial, initialLoc, onSubmit, submitting, mode = 'create', excludeId }) {
+export default function DealForm({ initial, initialLoc, onSubmit, submitting, mode = 'create', excludeId, submitLabel }) {
   const { stages = [], cities = [], users = [], rules } = useConfig()
   const { isAdmin } = useAuth()
   const [f, setF] = useState({ ...blankDeal, ...initial })
@@ -95,8 +96,16 @@ export default function DealForm({ initial, initialLoc, onSubmit, submitting, mo
           <Field label="Site type">
             <select className="input" value={f.site_type || ''} onChange={e => set('site_type', e.target.value)}>
               <option value="">Select</option>{SITE_TYPES.map(t => <option key={t}>{t}</option>)}
+              {f.site_type && !SITE_TYPES.includes(f.site_type) && <option>{f.site_type}</option>}
             </select>
           </Field>
+          {mode === 'edit' && (
+            <Field label="Lead / Deal">
+              <select className="input" value={f.record_type || 'deal'} onChange={e => set('record_type', e.target.value)}>
+                <option value="lead">Lead</option><option value="deal">Deal</option>
+              </select>
+            </Field>
+          )}
           <Field label="Usable area (sq ft)"><input className="input" type="number" min="0" value={f.area_sqft ?? ''} onChange={e => set('area_sqft', e.target.value)} /></Field>
           {mode === 'create' && (
             <Field label="Starting stage">
@@ -159,7 +168,7 @@ export default function DealForm({ initial, initialLoc, onSubmit, submitting, mo
 
       <div className="sticky bottom-0 -mx-4 flex justify-end gap-2 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-xl sm:border">
         {!locOk && <span className="mr-auto self-center text-sm text-amber-600">Pin the location to continue</span>}
-        <button className="btn-primary min-w-32" disabled={submitting || !locOk}>{submitting ? 'Saving…' : mode === 'create' ? 'Create deal' : 'Save changes'}</button>
+        <button className="btn-primary min-w-32" disabled={submitting || !locOk}>{submitting ? 'Saving…' : mode === 'create' ? (submitLabel || 'Create deal') : 'Save changes'}</button>
       </div>
     </form>
   )

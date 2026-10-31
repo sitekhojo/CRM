@@ -17,7 +17,7 @@ export function useDeals() {
   return { deals, error, reload, loading: deals === null && !error }
 }
 
-export const EMPTY_FILTERS = { q: '', city: '', stage: '', member: '', from: '', to: '', overdue: false, mine: false }
+export const EMPTY_FILTERS = { q: '', city: '', recordType: '', stage: '', siteType: '', member: '', from: '', to: '', overdue: false, mine: false }
 
 /** Apply the shared filter bar to a list of deals. */
 export function applyFilters(deals, f, userId) {
@@ -26,6 +26,8 @@ export function applyFilters(deals, f, userId) {
   const to = f.to ? new Date(f.to + 'T23:59:59') : null
   return deals.filter(d => {
     if (f.city && d.city !== f.city) return false
+    if (f.recordType && (d.record_type || 'deal') !== f.recordType) return false
+    if (f.siteType && d.site_type !== f.siteType) return false
     if (f.stage && String(d.stage_id) !== String(f.stage)) return false
     if (f.member && d.created_by !== f.member && d.assigned_to !== f.member) return false
     if (f.mine && d.assigned_to !== userId && d.created_by !== userId) return false

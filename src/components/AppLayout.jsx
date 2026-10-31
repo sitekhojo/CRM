@@ -7,7 +7,7 @@ import { Modal, Field, useToast } from './ui'
 
 const NAV = [
   { to: '/app/dashboard', label: 'Dashboard', icon: LayoutDashboard, admin: true },
-  { to: '/app/deals', label: 'Deals', icon: Handshake },
+  { to: '/app/deals', label: 'Leads & Deals', icon: Handshake },
   { to: '/app/map', label: 'Map', icon: MapIcon },
   { to: '/app/planning', label: 'Network Planning', icon: Radar },
 ]
@@ -82,7 +82,8 @@ export default function AppLayout() {
             <input className="input bg-slate-50 pl-9" placeholder="Search deals, landlords, pincodes…" value={q} onChange={e => setQ(e.target.value)} />
           </form>
           <div className="flex-1" />
-          <Link to="/app/deals/new" className="btn-primary"><Plus className="h-4 w-4" /><span className="hidden sm:inline">Create deal</span></Link>
+          <Link to="/app/deals/new?type=lead" className="btn-secondary"><Plus className="h-4 w-4" /><span className="hidden sm:inline">Create lead</span><span className="sm:hidden">Lead</span></Link>
+          <Link to="/app/deals/new" className="btn-primary"><Plus className="h-4 w-4" /><span className="hidden sm:inline">Create deal</span><span className="sm:hidden">Deal</span></Link>
         </header>
         <main className="min-h-0 flex-1 overflow-auto">
           <Outlet />

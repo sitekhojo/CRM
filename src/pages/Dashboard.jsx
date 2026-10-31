@@ -83,6 +83,8 @@ export default function Dashboard() {
 
     return {
       total: rows.length,
+      leads: rows.filter(r => r.record_type === 'lead').length,
+      deals: rows.filter(r => r.record_type !== 'lead').length,
       week: rows.filter(r => new Date(r.created_at) >= wk).length,
       month: rows.filter(r => new Date(r.created_at) >= mo).length,
       active: rows.filter(r => r.stage_category === 'active').length,
@@ -106,10 +108,10 @@ export default function Dashboard() {
           <p className="text-sm text-slate-500">Network expansion at a glance{filters.from || filters.to ? ' · date filter applies to deal creation date' : ''}</p>
         </div>
       </div>
-      <DealFilters value={filters} onChange={setFilters} show={['city', 'stage', 'member', 'date']} />
+      <DealFilters value={filters} onChange={setFilters} show={['city', 'type', 'stage', 'siteType', 'date']} />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
-        <Stat label="Total sites" value={fmtNum(m.total)} icon={Layers} />
+        <Stat label="Total sites" value={fmtNum(m.total)} icon={Layers} sub={`${m.leads} leads · ${m.deals} deals`} />
         <Stat label="This week" value={fmtNum(m.week)} icon={CalendarPlus} tone="blue" />
         <Stat label="This month" value={fmtNum(m.month)} icon={CalendarDays} tone="blue" />
         <Stat label="In pipeline" value={fmtNum(m.active)} icon={Activity} />
@@ -220,7 +222,7 @@ export default function Dashboard() {
             </tr></thead>
             <tbody>
               {m.team.map(t => (
-                <tr key={t.id} className="cursor-pointer border-b border-slate-50 hover:bg-slate-50" onClick={() => setFilters({ ...filters, member: t.id })}>
+                <tr key={t.id} className="border-b border-slate-50 hover:bg-slate-50">
                   <td className="td font-semibold">{t.name}{!t.active && <span className="ml-1 text-xs text-slate-400">(inactive)</span>}</td>
                   <td className="td text-right font-bold">{t.scouted}</td><td className="td text-right">{t.week}</td><td className="td text-right">{t.month}</td>
                   <td className="td text-right">{t.owned}</td><td className="td text-right text-emerald-700">{t.won}</td><td className="td text-right text-slate-500">{t.dropped}</td>
@@ -230,7 +232,7 @@ export default function Dashboard() {
             </tbody>
           </table>
         </div>
-        <p className="mt-2 text-xs text-slate-500">Data as of {fmtDate(new Date())}. Click a row to filter the dashboard by that person.</p>
+        <p className="mt-2 text-xs text-slate-500">Data as of {fmtDate(new Date())}.</p>
       </Panel>
     </div>
   )

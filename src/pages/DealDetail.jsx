@@ -10,7 +10,7 @@ import { BaseMap, pinIcon } from '../components/maps'
 import { Marker } from 'react-leaflet'
 import StageChangeModal from '../components/StageChangeModal'
 import DealForm from '../components/DealForm'
-import { fmtDateTime, fmtINR, fmtNum, daysLabel, timeAgo, POWER_FEASIBILITY } from '../lib/format'
+import { fmtDateTime, fmtINR, fmtNum, daysLabel, timeAgo, POWER_FEASIBILITY, RECORD_TYPES } from '../lib/format'
 
 export default function DealDetail() {
   const { id } = useParams()
@@ -81,7 +81,7 @@ export default function DealDetail() {
 
   return (
     <div className="p-4 sm:p-6">
-      <Link to="/app/deals" className="mb-2 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"><ArrowLeft className="h-4 w-4" />Deals</Link>
+      <Link to="/app/deals" className="mb-2 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"><ArrowLeft className="h-4 w-4" />Leads & Deals</Link>
 
       {/* Header */}
       <div className="card mb-4 p-4 sm:p-5">
@@ -91,6 +91,8 @@ export default function DealDetail() {
             <h1 className="text-2xl font-extrabold text-navy-900">{deal.name}</h1>
             <p className="mt-0.5 flex items-center gap-1 text-sm text-slate-500"><MapPin className="h-3.5 w-3.5" />{[deal.address, deal.city, deal.pincode].filter(Boolean).join(', ')}</p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
+              <Pill className={RECORD_TYPES[deal.record_type || 'deal'].cls}>{RECORD_TYPES[deal.record_type || 'deal'].label}</Pill>
+              {deal.site_type && <Pill className="bg-slate-100 text-slate-700">{deal.site_type}</Pill>}
               <StageBadge name={deal.stage_name} color={deal.stage_color} />
               <span className={`text-sm ${deal.is_overdue ? 'font-semibold text-red-600' : 'text-slate-600'}`}>
                 {deal.is_overdue && <AlertTriangle className="mr-1 inline h-3.5 w-3.5" />}
@@ -99,6 +101,7 @@ export default function DealDetail() {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
+            {perm.canEdit && deal.record_type === 'lead' && <button className="btn-secondary !border-violet-300 !text-violet-700" onClick={() => update({ record_type: 'deal' }, 'Converted to deal')}>Convert to deal</button>}
             {perm.canChangeStage && <button className="btn-primary" onClick={() => setStageModal({})}><ArrowRightLeft className="h-4 w-4" />Change stage</button>}
             {perm.canEdit && <button className="btn-secondary" onClick={() => setEditing(true)}><Pencil className="h-4 w-4" />Edit</button>}
             <Link className="btn-secondary" to={`/app/planning?lat=${deal.latitude}&lng=${deal.longitude}&deal=${deal.id}`}><Radar className="h-4 w-4" />Feasibility</Link>

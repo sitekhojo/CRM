@@ -22,7 +22,7 @@ export default function MapPage() {
 
   useEffect(() => { fetchNetworkPoints().then(setNetwork).catch(() => {}) }, [])
   const rows = useMemo(() => (deals ? applyFilters(deals, filters, user?.id) : []), [deals, filters, user])
-  const fitKey = `${filters.city}|${filters.stage}|${filters.member}|${rows.length}`
+  const fitKey = `${filters.city}|${filters.stage}|${filters.recordType}|${filters.siteType}|${rows.length}`
 
   if (loading) return <PageLoader />
   const counts = stages.map(s => ({ ...s, n: rows.filter(r => r.stage_id === s.id).length })).filter(s => s.n)
@@ -41,7 +41,7 @@ export default function MapPage() {
             ))}
           </div>
         </div>
-        <DealFilters value={filters} onChange={setFilters} show={['q', 'city', 'stage', 'member', 'overdue']} />
+        <DealFilters value={filters} onChange={setFilters} show={['q', 'city', 'type', 'stage', 'siteType', 'overdue']} />
       </div>
 
       {view === 'map' ? (

@@ -1,10 +1,11 @@
 import { X } from 'lucide-react'
 import { useConfig } from '../lib/config'
 import { EMPTY_FILTERS } from '../lib/deals'
+import { SITE_TYPES } from '../lib/format'
 
-/** Shared filter bar: search, city, stage, team member, date range, beyond-SLA. */
-export default function DealFilters({ value, onChange, show = ['q', 'city', 'stage', 'member', 'date', 'overdue'], extra }) {
-  const { cities = [], stages = [], users = [] } = useConfig()
+/** Shared filter bar: search, city, lead/deal, stage, site type, date range, beyond-SLA. */
+export default function DealFilters({ value, onChange, show = ['q', 'city', 'type', 'stage', 'siteType', 'date', 'overdue'], extra }) {
+  const { cities = [], stages = [] } = useConfig()
   const set = (k, v) => onChange({ ...value, [k]: v })
   const active = Object.entries(value).some(([k, v]) => v && v !== EMPTY_FILTERS[k])
   return (
@@ -16,16 +17,23 @@ export default function DealFilters({ value, onChange, show = ['q', 'city', 'sta
           {cities.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
         </select>
       )}
+      {show.includes('type') && (
+        <select className="input w-auto" value={value.recordType} onChange={e => set('recordType', e.target.value)}>
+          <option value="">Leads & deals</option>
+          <option value="lead">Leads only</option>
+          <option value="deal">Deals only</option>
+        </select>
+      )}
       {show.includes('stage') && (
         <select className="input w-auto" value={value.stage} onChange={e => set('stage', e.target.value)}>
           <option value="">All stages</option>
           {stages.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
       )}
-      {show.includes('member') && (
-        <select className="input w-auto" value={value.member} onChange={e => set('member', e.target.value)}>
-          <option value="">All team members</option>
-          {users.map(u => <option key={u.id} value={u.id}>{u.full_name || u.email}</option>)}
+      {show.includes('siteType') && (
+        <select className="input w-auto" value={value.siteType} onChange={e => set('siteType', e.target.value)}>
+          <option value="">All site types</option>
+          {SITE_TYPES.map(t => <option key={t}>{t}</option>)}
         </select>
       )}
       {show.includes('date') && (

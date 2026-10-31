@@ -43,6 +43,7 @@ export default function ImportDealsModal({ open, onClose, onDone }) {
           sanctioned_load_kw: toNum(o.sanctioned_load_kw),
           power_feasibility: ['feasible', 'upgrade_required', 'not_feasible', 'unknown'].includes(pf) ? pf : 'unknown',
           observations: o.observations || null, remarks: o.remarks || null,
+          record_type: String(o.record_type || '').trim().toLowerCase() === 'lead' ? 'lead' : 'deal',
           ...(stage_id ? { stage_id } : {}), ...(assigned_to ? { assigned_to } : {}),
           stage_note: 'Imported',
         },
@@ -80,7 +81,7 @@ export default function ImportDealsModal({ open, onClose, onDone }) {
         {rows && !result && <button className="btn-primary" disabled={busy || rows.length === bad.length} onClick={run}>{busy ? 'Importing…' : `Import ${rows.length - bad.length} deals`}</button>}
       </>}>
       <div className="space-y-4 text-sm">
-        <p className="text-slate-600">Required columns: <b>Site name, City, Latitude, Longitude</b>. Optional: Stage (by name), Owner email and all other deal fields.
+        <p className="text-slate-600">Required columns: <b>Site name, City, Latitude, Longitude</b>. Optional: Type (Lead / Deal — default Deal), Site type (Franchise, Pvt, SPP, IOCL, Railways), Stage (by name), Owner email and all other fields.
           <button className="ml-1 font-semibold text-brand-700 hover:underline" onClick={() => downloadTemplate(IMPORT_FIELDS, 'sitekhojo-import-template')}>Download template</button></p>
         <label className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-slate-300 p-6 text-slate-500 hover:border-brand-500">
           <FileSpreadsheet className="h-8 w-8" />Choose .xlsx or .csv file

@@ -6,7 +6,7 @@ import { useAuth } from '../lib/auth'
 import { useConfig } from '../lib/config'
 import DealFilters from '../components/DealFilters'
 import { StageBadge, PageLoader, Empty, Pill } from '../components/ui'
-import { fmtDate, fmtINR, daysLabel, POWER_FEASIBILITY } from '../lib/format'
+import { fmtDate, fmtINR, daysLabel, POWER_FEASIBILITY, RECORD_TYPES } from '../lib/format'
 import { exportRows, DEAL_COLUMNS } from '../lib/excel'
 import ImportDealsModal from '../components/ImportDealsModal'
 
@@ -15,7 +15,7 @@ export default function Deals() {
   const { stages = [] } = useConfig()
   const { user, isAdmin } = useAuth()
   const [params] = useSearchParams()
-  const [filters, setFilters] = useState({ ...EMPTY_FILTERS, q: params.get('q') || '', overdue: params.get('overdue') === '1', stage: params.get('stage') || '', city: params.get('city') || '' })
+  const [filters, setFilters] = useState({ ...EMPTY_FILTERS, q: params.get('q') || '', overdue: params.get('overdue') === '1', stage: params.get('stage') || '', city: params.get('city') || '', recordType: params.get('type') || '' })
   const [view, setView] = useState(() => localStorage.getItem('dealsView') || 'table')
   const [sort, setSort] = useState({ key: 'created_at', dir: 'desc' })
   const [importOpen, setImportOpen] = useState(false)
@@ -49,7 +49,7 @@ export default function Deals() {
     <div className="p-4 sm:p-6">
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div>
-          <h1 className="text-xl font-extrabold text-navy-900">Deals</h1>
+          <h1 className="text-xl font-extrabold text-navy-900">Leads & Deals</h1>
           <p className="text-sm text-slate-500">{rows.length} of {deals.length} sites</p>
         </div>
         <div className="flex-1" />
@@ -72,14 +72,14 @@ export default function Deals() {
       </div>
 
       {deals.length === 0 ? (
-        <div className="card"><Empty icon={Handshake} title="No deals yet">
+        <div className="card"><Empty icon={Handshake} title="No leads or deals yet">
           <Link to="/app/deals/new" className="btn-primary mt-3"><Plus className="h-4 w-4" />Create your first deal</Link></Empty></div>
       ) : view === 'table' ? (
         <div className="card overflow-x-auto">
           <table className="min-w-full divide-y divide-slate-100">
             <thead className="bg-slate-50">
               <tr>
-                <SortTh k="site_code">ID</SortTh><SortTh k="name">Site</SortTh><SortTh k="stage_order">Stage</SortTh>
+                <SortTh k="site_code">ID</SortTh><SortTh k="record_type">Type</SortTh><SortTh k="name">Site</SortTh><SortTh k="stage_order">Stage</SortTh>
                 <SortTh k="days_in_stage">In stage</SortTh><SortTh k="city">City</SortTh><SortTh k="rent_expectation">Rent</SortTh>
                 <th className="th">Power</th><SortTh k="assigned_to_name">Owner</SortTh><SortTh k="created_at">Created</SortTh>
               </tr>
@@ -88,7 +88,8 @@ export default function Deals() {
               {rows.map(d => (
                 <tr key={d.id} className="cursor-pointer hover:bg-slate-50" onClick={() => nav(`/app/deals/${d.id}`)}>
                   <td className="td font-mono text-xs text-slate-500">{d.site_code}</td>
-                  <td className="td max-w-[260px]"><div className="truncate font-semibold text-slate-900">{d.name}</div><div className="truncate text-xs text-slate-500">{d.address || '—'}</div></td>
+                  <td className="td"><Pill className={RECORD_TYPES[d.record_type || 'deal'].cls}>{RECORD_TYPES[d.record_type || 'deal'].label}</Pill></td>
+                  <td className="td max-w-[260px]"><div className="truncate font-semibold text-slate-900">{d.name}</div><div className="truncate text-xs text-slate-500">{[d.site_type, d.address].filter(Boolean).join(' · ') || '—'}</div></td>
                   <td className="td"><StageBadge name={d.stage_name} color={d.stage_color} /></td>
                   <td className="td">
                     <span className={d.is_overdue ? 'inline-flex items-center gap-1 font-semibold text-red-600' : ''}>
@@ -136,7 +137,10 @@ function Board({ rows, stages }) {
                       <span className="font-semibold leading-snug text-slate-900">{d.name}</span>
                       <span className="shrink-0 whitespace-nowrap font-mono text-[10px] text-slate-400">{d.site_code}</span>
                     </div>
-                    <div className="mt-1 text-xs text-slate-500">{d.city}{d.pincode ? ` · ${d.pincode}` : ''}</div>
+                    <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
+                      <Pill className={RECORD_TYPES[d.record_type || 'deal'].cls}>{RECORD_TYPES[d.record_type || 'deal'].label}</Pill>
+                      <span className="truncate">{d.city}{d.site_type ? ` · ${d.site_type}` : ''}</span>
+                    </div>
                     <div className="mt-2 flex items-center justify-between text-xs">
                       <span className="text-slate-600">{d.assigned_to_name || '—'}</span>
                       <span className={`font-semibold ${d.is_overdue ? 'text-red-600' : 'text-slate-500'}`}>{daysLabel(d.days_in_stage)}</span>

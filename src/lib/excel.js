@@ -2,7 +2,7 @@
 import Papa from 'papaparse'
 
 export const DEAL_COLUMNS = [
-  ['site_code', 'Deal ID'], ['name', 'Site name'], ['stage_name', 'Stage'], ['days_in_stage', 'Days in stage'],
+  ['site_code', 'ID'], ['record_type', 'Type'], ['name', 'Site name'], ['stage_name', 'Stage'], ['days_in_stage', 'Days in stage'],
   ['is_overdue', 'Beyond SLA'], ['city', 'City'], ['address', 'Address'], ['pincode', 'Pincode'],
   ['latitude', 'Latitude'], ['longitude', 'Longitude'], ['site_type', 'Site type'], ['area_sqft', 'Area (sq ft)'],
   ['landlord_name', 'Landlord name'], ['landlord_phone', 'Landlord phone'], ['landlord_email', 'Landlord email'],
@@ -21,6 +21,7 @@ export const IMPORT_FIELDS = [
   ['rent_expectation', 'Rent / month (INR)'], ['deposit_expectation', 'Deposit (INR)'], ['power_available', 'Power available'],
   ['power_phase', 'Power phase'], ['sanctioned_load_kw', 'Sanctioned load (kW)'], ['power_feasibility', 'Power feasibility'],
   ['observations', 'Observations'], ['remarks', 'Remarks'], ['stage', 'Stage'], ['owner_email', 'Owner email'],
+  ['record_type', 'Type'],
 ]
 
 const cell = v => (v === null || v === undefined ? '' : typeof v === 'boolean' ? (v ? 'Yes' : 'No') : v)

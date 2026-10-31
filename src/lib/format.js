@@ -22,7 +22,12 @@ export const POWER_FEASIBILITY = {
   unknown: { label: 'Unknown', cls: 'bg-slate-100 text-slate-600' },
 }
 
-export const SITE_TYPES = ['Petrol pump', 'Parking lot', 'Shop front', 'Open plot', 'Mall / Commercial complex', 'Metro / Transit hub', 'Residential society', 'Dhaba / Restaurant', 'Other']
+export const SITE_TYPES = ['Franchise', 'Pvt', 'SPP', 'IOCL', 'Railways']
+
+export const RECORD_TYPES = {
+  lead: { label: 'Lead', cls: 'bg-sky-100 text-sky-700' },
+  deal: { label: 'Deal', cls: 'bg-violet-100 text-violet-700' },
+}
 
 export function startOfWeek(d = new Date()) {
   const x = new Date(d); const day = (x.getDay() + 6) % 7 // Monday start
