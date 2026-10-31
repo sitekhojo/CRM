@@ -6,7 +6,7 @@ import { useDeals, applyFilters, EMPTY_FILTERS, fetchNetworkPoints } from '../li
 import { supabase, fetchAll } from '../lib/supabase'
 import { useConfig, stagesFor } from '../lib/config'
 import DealFilters from '../components/DealFilters'
-import { Stat, StageBadge, PageLoader } from '../components/ui'
+import { Stat, StageBadge, PageLoader, Modal } from '../components/ui'
 import { fmtNum, daysLabel, startOfWeek, startOfMonth, fmtDate } from '../lib/format'
 import { haversine, hasLoc } from '../lib/geo'
 
@@ -18,6 +18,7 @@ export default function Dashboard() {
   const [period, setPeriod] = useState({ kind: 'month', from: '', to: '' })
   const [network, setNetwork] = useState([])
   const [metric, setMetric] = useState('qis') // chart unit: 'qis' | 'sites'
+  const [enOpen, setEnOpen] = useState(false)
   const nav = useNavigate()
 
   useEffect(() => { fetchNetworkPoints().then(setNetwork).catch(() => {}) }, [])
@@ -126,12 +127,21 @@ export default function Dashboard() {
         const crmEn = crmOnly.filter(r => inP(enDate(r)))
         const crmMatchedIds = new Set(energizedDeals.filter(d => !crmOnly.includes(d)).map(d => d.id))
         const enSites = netAll.filter(n => Object.keys(n.energized_dates || {}).some(d => inP(d + 'T12:00:00'))).length + crmEn.length
+        const enList = [
+          ...netAll.flatMap(n => {
+            const ds = Object.entries(n.energized_dates || {}).filter(([d]) => inP(d + 'T12:00:00'))
+            if (!ds.length) return []
+            const deal = energizedDeals.find(d => near(d, n))
+            return [{ key: 'n' + n.id, name: n.name, city: n.city, siteType: n.site_type, qis: ds.reduce((a, [, c]) => a + (Number(c) || 0), 0), date: ds.map(([d]) => d).sort().pop(), source: 'QIS tracker', dealId: deal?.id }]
+          }),
+          ...crmEn.map(r => ({ key: 's' + r.id, name: r.name, city: r.city, siteType: r.site_type, qis: qisOf(r), date: String(enDate(r) || '').slice(0, 10), source: 'Pipeline', dealId: r.id })),
+        ].sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.qis - a.qis)
         const flow = {}
         for (const r of added) { const k = r.stage_name; flow[k] = flow[k] || { name: k, color: r.stage_color, order: r.stage_order, qis: 0, sites: 0 }; flow[k].qis += qisOf(r); flow[k].sites++ }
         return {
           label: periodLabel(period, pStart, pEnd), from: isoDay(pStart), to: isoDay(pEnd),
           added: qs(added), open: qs(stillOpen), ho: qs(ho),
-          en: { qis: trackerEn + sumQis(crmEn), sites: enSites }, crmMatched: crmMatchedIds.size,
+          en: { qis: trackerEn + sumQis(crmEn), sites: enSites, list: enList }, crmMatched: crmMatchedIds.size,
           flow: Object.values(flow).sort((a, b) => a.order - b.order),
         }
       })(),
@@ -189,10 +199,30 @@ export default function Dashboard() {
         <Stat label="QIS handed over" value={fmtNum(m.period.ho.qis)} icon={CalendarDays} tone="amber" sub={`${fmtNum(m.period.ho.sites)} sites · ${m.period.label}`}
           onClick={() => goCard(`QIS handed over ${m.period.label}`, { ho: `${m.period.from},${m.period.to}` })} />
         <Stat label="QIS energized" value={fmtNum(m.period.en.qis)} icon={Zap} tone="green" sub={`${fmtNum(m.period.en.sites)} sites · ${m.period.label}`}
-          onClick={() => goCard(`Pipeline sites energized ${m.period.label} (QIS-tracker sites are on the Map)`, { en: `${m.period.from},${m.period.to}` })} />
+          onClick={() => setEnOpen(true)} />
         <Stat label="Energized network" value={fmtNum(m.netQis + m.liveQis)} icon={Network} tone="green" sub={`${fmtNum(m.netSites + m.live)} sites to date · +${fmtNum(m.period.en.qis)} in period`}
           onClick={() => nav('/app/map?network=1')} />
       </div>
+
+      <Modal open={enOpen} onClose={() => setEnOpen(false)} wide title={`Energized ${m.period.label} · ${fmtNum(m.period.en.qis)} QIS · ${fmtNum(m.period.en.sites)} sites`}
+        footer={<><button className="btn btn-ghost" onClick={() => nav('/app/map?network=1')}>Open on map</button><button className="btn btn-ghost" onClick={() => goCard(`Pipeline sites energized ${m.period.label}`, { en: `${m.period.from},${m.period.to}` })}>Pipeline sites only</button><button className="btn btn-primary" onClick={() => setEnOpen(false)}>Close</button></>}>
+        {m.period.en.list.length === 0 ? <p className="text-sm text-slate-400">Nothing energized in this period.</p> : (
+          <div className="max-h-[60vh] overflow-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="text-left text-xs uppercase text-slate-500"><th className="py-2 pr-2">Site</th><th className="pr-2">City</th><th className="pr-2">Type</th><th className="pr-2 text-right">QIS</th><th className="pr-2">Energized on</th><th>Source</th></tr></thead>
+              <tbody>
+                {m.period.en.list.map(x => (
+                  <tr key={x.key} className={`border-t border-slate-100 ${x.dealId ? 'cursor-pointer hover:bg-slate-50' : ''}`} onClick={() => x.dealId && nav(`/app/deals/${x.dealId}`)}>
+                    <td className="py-2 pr-2 font-medium text-navy-900">{x.name}</td><td className="pr-2">{x.city}</td><td className="pr-2">{x.siteType || '—'}</td>
+                    <td className="pr-2 text-right font-semibold">{fmtNum(x.qis)}</td><td className="whitespace-nowrap pr-2">{x.date ? fmtDate(x.date) : '—'}</td>
+                    <td><span className={`rounded-full px-2 py-0.5 text-xs ${x.source === 'Pipeline' || x.dealId ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{x.dealId && x.source !== 'Pipeline' ? 'Tracker + Pipeline' : x.source}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Modal>
 
       <Panel title={`Where did the QIS added ${m.period.label} go? (current stage)`}>
         {m.period.flow.length === 0 ? <p className="text-sm text-slate-400">No QIS added in this period.</p> : (
