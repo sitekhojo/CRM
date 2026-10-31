@@ -40,7 +40,7 @@ export default function DealDetail() {
   if (deal === null) return <div className="p-6"><Empty title="Deal not found"><Link className="text-brand-700" to="/app/deals">Back to deals</Link></Empty></div>
 
   const perm = permissions(deal, profile)
-  const activeStages = stagesFor(stages, deal.site_type).filter(s => s.category !== 'dropped')
+  const activeStages = stagesFor(stages, deal.site_type).filter(s => !['dropped', 'hold'].includes(s.category))
   const curIdx = activeStages.findIndex(s => s.id === deal.stage_id)
 
   const update = async (patch, msg) => {
@@ -126,7 +126,13 @@ export default function DealDetail() {
               )
             })}
           </div>
-        ) : (
+        ) : null}
+        {deal.stage_category === 'hold' && (
+          <div className="mt-3 rounded-lg border border-slate-300 bg-slate-100 p-3 text-sm text-slate-700">
+            <b>On hold</b> since {fmtDateTime(deal.stage_entered_at)}{deal.stage_note ? ` — ${deal.stage_note}` : ''}. SLA clock is paused.
+          </div>
+        )}
+        {deal.stage_category === 'dropped' && (
           <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
             <b>Dropped:</b> {deal.drop_reason}{deal.drop_notes ? ` — ${deal.drop_notes}` : ''}
           </div>

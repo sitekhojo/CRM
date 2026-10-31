@@ -1,36 +1,47 @@
 -- =====================================================================
--- Site Khojo CRM — v1.2: pipelines per acquisition (site) type
---   Private  : Scouting → Deployment Feasibility → Agreement Signed → Agreement Registered
---              → HO Done → Energized → Energized & Commercialized   (+ Dropped)
---   Franchise: same, with LOI Signed after Deployment Feasibility
--- Stages with site_types = NULL apply to every site type.
+-- Site Khojo CRM — v1.2: simplified common pipeline (all site types)
+--   Scouting → Deployment Feasibility → LOI Signed → Agreement Signed → Agreement Registered
+--   → Handover Done → Energized → Live          + Hold, Dropped (any time)
+-- Teams can move to ANY stage in any order (e.g. North: agreement after Live).
+-- stages.site_types lets a stage be limited to some site types later (NULL = all).
 -- Safe to re-run.
 -- =====================================================================
 
--- 1. Stages can be limited to some site types
+-- 1. Stage options
 alter table public.stages add column if not exists site_types text[];
+alter table public.stages drop constraint if exists stages_category_check;
+alter table public.stages add constraint stages_category_check
+  check (category in ('active', 'approved', 'live', 'hold', 'dropped'));
 
 -- 2. Rename site type Pvt → Private
 update public.sites set site_type = 'Private' where site_type in ('Pvt', 'pvt', 'PVT', 'private');
 
--- 3. New stage set
-insert into public.stages (key, name, sort_order, color, sla_days, category, admin_only, site_types) values
-  ('scouting',                 'Scouting',                   1, '#3b82f6', 3,    'active',   false, null),
-  ('deployment_feasibility',   'Deployment Feasibility',     2, '#8b5cf6', 7,    'active',   false, null),
-  ('loi_signed',               'LOI Signed',                 3, '#eab308', 10,   'active',   false, '{Franchise}'),
-  ('agreement_signed',         'Agreement Signed',           4, '#f97316', 15,   'approved', true,  null),
-  ('agreement_registered',     'Agreement Registered',       5, '#ec4899', 10,   'approved', false, null),
-  ('ho_done',                  'HO Done',                    6, '#06b6d4', 15,   'approved', false, null),
-  ('energized',                'Energized',                  7, '#14b8a6', 30,   'approved', false, null),
-  ('energized_commercialized', 'Energized & Commercialized', 8, '#22c55e', null, 'live',     true,  null)
+-- 3. The stage list
+insert into public.stages (key, name, sort_order, color, sla_days, category, admin_only) values
+  ('scouting',               'Scouting',               1,  '#3b82f6', 3,    'active',   false),
+  ('deployment_feasibility', 'Deployment Feasibility', 2,  '#8b5cf6', 7,    'active',   false),
+  ('loi_signed',             'LOI Signed',             3,  '#eab308', 10,   'active',   false),
+  ('agreement_signed',       'Agreement Signed',       4,  '#f97316', 15,   'approved', false),
+  ('agreement_registered',   'Agreement Registered',   5,  '#ec4899', 10,   'approved', false),
+  ('ho_done',                'Handover Done',          6,  '#06b6d4', 15,   'approved', false),
+  ('energized',              'Energized',              7,  '#14b8a6', 15,   'approved', false),
+  ('live',                   'Live',                   8,  '#22c55e', null, 'live',     false),
+  ('hold',                   'Hold',                   9,  '#64748b', null, 'hold',     false),
+  ('dropped',                'Dropped',                10, '#ef4444', null, 'dropped',  false)
 on conflict (key) do nothing;
 
-update public.stages set name = 'LOI Signed', sort_order = 3, site_types = '{Franchise}', is_active = true,
-       category = 'active', color = '#eab308', sla_days = coalesce(sla_days, 10)
- where key = 'loi_signed';
-update public.stages set sort_order = 9, is_active = true where key = 'dropped';
+update public.stages t set
+  name = v.name, sort_order = v.ord, category = v.cat, is_active = true, admin_only = false, site_types = null
+from (values
+  ('scouting', 'Scouting', 1, 'active'), ('deployment_feasibility', 'Deployment Feasibility', 2, 'active'),
+  ('loi_signed', 'LOI Signed', 3, 'active'), ('agreement_signed', 'Agreement Signed', 4, 'approved'),
+  ('agreement_registered', 'Agreement Registered', 5, 'approved'), ('ho_done', 'Handover Done', 6, 'approved'),
+  ('energized', 'Energized', 7, 'approved'), ('live', 'Live', 8, 'live'), ('hold', 'Hold', 9, 'hold'),
+  ('dropped', 'Dropped', 10, 'dropped')
+) as v(key, name, ord, cat)
+where t.key = v.key;
 
--- 4. Move existing records off the old stages (writes a history entry for each), then retire them
+-- 4. Move existing records off retired stages (writes a history entry for each), then retire them
 create temp table stage_map (old_key text, new_key text) on commit drop;
 insert into stage_map values
   ('new_lead', 'scouting'), ('scouted', 'scouting'),
@@ -38,7 +49,7 @@ insert into stage_map values
   ('tech_feasibility', 'deployment_feasibility'), ('commercial', 'deployment_feasibility'),
   ('documentation', 'deployment_feasibility'), ('internal_approval', 'deployment_feasibility'),
   ('approved', 'agreement_signed'), ('deployment_ho', 'ho_done'), ('deployment', 'ho_done'),
-  ('live', 'energized_commercialized');
+  ('energized_commercialized', 'live');
 
 update public.sites s
    set stage_id = ns.id, stage_note = 'Moved to new pipeline (was ' || os.name || ')'
@@ -46,13 +57,6 @@ update public.sites s
   join public.stages os on os.key = m.old_key
   join public.stages ns on ns.key = m.new_key
  where s.stage_id = os.id;
-
--- Franchise-only stage on a non-franchise site → Deployment Feasibility
-update public.sites s
-   set stage_id = (select id from public.stages where key = 'deployment_feasibility'),
-       stage_note = 'LOI Signed applies to Franchise only'
- where s.stage_id = (select id from public.stages where key = 'loi_signed')
-   and s.site_type is distinct from 'Franchise';
 
 update public.stages set is_active = false
  where key in (select old_key from stage_map);
@@ -159,7 +163,7 @@ begin
   return new;
 end $$;
 
--- 6. SLA applies to every open stage (pipeline + post-agreement), not just "active"
+-- 6. SLA applies to every open stage (not Hold / Live / Dropped)
 drop view if exists public.site_overview;
 create view public.site_overview with (security_invoker = true) as
 select

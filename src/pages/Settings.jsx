@@ -64,7 +64,7 @@ function Stages() {
               <td className="td"><input type="color" className="h-8 w-12 cursor-pointer rounded border border-slate-300" value={s.color} onChange={e => set(i, 'color', e.target.value)} /></td>
               <td className="td"><input className="input w-20 py-1" type="number" min="1" placeholder="none" value={s.sla_days ?? ''} onChange={e => set(i, 'sla_days', e.target.value)} /></td>
               <td className="td"><select className="input w-auto py-1" value={s.category} onChange={e => set(i, 'category', e.target.value)}>
-                <option value="active">Pipeline</option><option value="approved">Signed (post-agreement)</option><option value="live">Live</option><option value="dropped">Dropped</option></select></td>
+                <option value="active">Pipeline</option><option value="approved">Post-agreement</option><option value="live">Live</option><option value="hold">Hold</option><option value="dropped">Dropped</option></select></td>
               <td className="td">
                 <div className="flex flex-wrap gap-x-2 gap-y-1">
                   {SITE_TYPES.map(t => (

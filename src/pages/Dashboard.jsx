@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts'
-import { Layers, CalendarPlus, CalendarDays, AlertTriangle, CheckCircle2, Zap, XCircle, Activity } from 'lucide-react'
+import { Layers, CalendarPlus, CalendarDays, AlertTriangle, CheckCircle2, Zap, XCircle, Activity, PauseCircle } from 'lucide-react'
 import { useDeals, applyFilters, EMPTY_FILTERS } from '../lib/deals'
 import { supabase, fetchAll } from '../lib/supabase'
 import { useConfig, stagesFor } from '../lib/config'
@@ -91,6 +91,7 @@ export default function Dashboard() {
       approved: rows.filter(r => r.stage_category === 'approved').length,
       live: rows.filter(r => r.stage_category === 'live').length,
       dropped: rows.filter(r => r.stage_category === 'dropped').length,
+      hold: rows.filter(r => r.stage_category === 'hold').length,
       overdue: stuck.length,
       pipeline, cityCounts, trend, tat, team, stuck, cycle,
       dropReasons: Object.entries(by(r => r.stage_category === 'dropped' ? r.drop_reason || 'Unspecified' : null)).filter(([k]) => k !== 'null').sort((a, b) => b[1] - a[1]),
@@ -110,13 +111,14 @@ export default function Dashboard() {
       </div>
       <DealFilters value={filters} onChange={setFilters} show={['city', 'type', 'stage', 'siteType', 'date']} />
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5 xl:grid-cols-9">
         <Stat label="Total sites" value={fmtNum(m.total)} icon={Layers} sub={`${m.leads} leads · ${m.deals} deals`} />
         <Stat label="This week" value={fmtNum(m.week)} icon={CalendarPlus} tone="blue" />
         <Stat label="This month" value={fmtNum(m.month)} icon={CalendarDays} tone="blue" />
         <Stat label="In pipeline" value={fmtNum(m.active)} icon={Activity} />
-        <Stat label="Signed → HO" value={fmtNum(m.approved)} icon={CheckCircle2} tone="teal" sub="Agreement signed, not live" />
-        <Stat label="Live" value={fmtNum(m.live)} icon={Zap} tone="green" sub="Energized & commercialized" />
+        <Stat label="Agreement → Energized" value={fmtNum(m.approved)} icon={CheckCircle2} tone="teal" />
+        <Stat label="Live" value={fmtNum(m.live)} icon={Zap} tone="green" />
+        <Stat label="On hold" value={fmtNum(m.hold)} icon={PauseCircle} tone="amber" />
         <Stat label="Dropped" value={fmtNum(m.dropped)} icon={XCircle} tone="red" />
         <Stat label="Beyond SLA" value={fmtNum(m.overdue)} icon={AlertTriangle} tone={m.overdue ? 'red' : 'slate'} onClick={() => go('overdue=1')} sub="Click to view" />
       </div>
