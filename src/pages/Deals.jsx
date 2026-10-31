@@ -23,18 +23,24 @@ export default function Deals() {
   const [filters, setFilters] = useState({
     ...EMPTY_FILTERS, q: params.get('q') || '', overdue: params.get('overdue') === '1', stage: list('stage'), city: list('city'), siteType: list('siteType'), region: list('region'), owner: list('owner'),
     recordType: params.get('type') || '', age: params.get('age') || '', from: params.get('from') || '', to: params.get('to') || '',
-    ho: params.get('ho') || '', en: params.get('en') || '', openOnly: params.get('open') === '1',
+    ho: params.get('ho') || '', en: params.get('en') || '', openOnly: params.get('open') === '1', inPipe: params.get('inp') || '',
   })
   const fromCard = params.get('card')
-  const [pkind, setPkind] = useState(params.get('from') || params.get('to') ? 'custom' : 'all')
+  const [pkind, setPkind] = useState(params.get('from') || params.get('to') || params.get('inp') ? 'custom' : 'all')
+  const [pmode, setPmode] = useState(params.get('inp') ? 'pipe' : 'added') // added in period | in pipeline during period
   const onPeriod = v => {
     setPkind(v.kind)
-    if (v.kind === 'custom') return setFilters(f => ({ ...f, from: v.from, to: v.to }))
-    if (v.kind === 'all') return setFilters(f => ({ ...f, from: '', to: '' }))
-    const [a, b] = periodRange(v); setFilters(f => ({ ...f, from: isoDay(a), to: isoDay(b) }))
+    applyPeriod(v.kind, v.from, v.to, pmode)
   }
-  useEffect(() => { if (!filters.from && !filters.to && !['all', 'custom'].includes(pkind)) setPkind('all') }, [filters.from, filters.to]) // eslint-disable-line
-  const pLabel = periodLabel({ kind: pkind }, ...periodRange({ kind: pkind, from: filters.from, to: filters.to }))
+  const curRange = () => { const [a = '', b = ''] = (filters.inPipe || '').split(','); return filters.inPipe ? [a, b] : [filters.from, filters.to] }
+  const applyPeriod = (kind, from, to, mode) => {
+    let a = '', b = ''
+    if (kind === 'custom') { a = from || ''; b = to || '' } else if (kind !== 'all') { const [x, y] = periodRange({ kind }); a = isoDay(x); b = isoDay(y) }
+    setFilters(f => (mode === 'pipe' && kind !== 'all' ? { ...f, from: '', to: '', inPipe: `${a},${b}` } : { ...f, from: a, to: b, inPipe: '' }))
+  }
+  useEffect(() => { if (!filters.from && !filters.to && !filters.inPipe && !['all', 'custom'].includes(pkind)) setPkind('all') }, [filters.from, filters.to, filters.inPipe]) // eslint-disable-line
+  const [rA, rB] = curRange()
+  const pLabel = periodLabel({ kind: pkind }, ...periodRange({ kind: pkind, from: rA, to: rB }))
   const [view, setView] = useState(() => localStorage.getItem('dealsView') || 'table')
   const [sort, setSort] = useState({ key: 'created_at', dir: 'desc' })
   const [importOpen, setImportOpen] = useState(false)
@@ -88,6 +94,7 @@ export default function Deals() {
         <div className="mb-3 flex items-center gap-2 rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-800">
           From dashboard: <b>{fromCard}</b>
           {filters.from && <> · added {filters.from} → {filters.to || 'today'}</>}
+          {filters.inPipe && <> · in pipeline {filters.inPipe.replace(",", " → ")}</>}
           {filters.ho && <> · handed over {filters.ho.replace(',', ' → ')}</>}
           {filters.en && <> · energized {filters.en.replace(',', ' → ')}</>}
           {filters.openOnly && <> · excluding dropped</>}
@@ -102,7 +109,15 @@ export default function Deals() {
       )}
       <div className="mb-4">
         <DealFilters value={filters} onChange={setFilters} show={['q', 'region', 'city', 'owner', 'type', 'stage', 'siteType', 'overdue']} />
-        <div className="mt-2"><PeriodBar allTime value={{ kind: pkind, from: filters.from, to: filters.to }} onChange={onPeriod} label={pLabel} prefix="Sites added" /></div>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <PeriodBar allTime value={{ kind: pkind, from: rA, to: rB }} onChange={onPeriod} label={pLabel} prefix={pmode === 'pipe' ? 'Sites in pipeline' : 'Sites added'} />
+          {pkind !== 'all' && (
+            <select className="input w-auto" value={pmode} onChange={e => { setPmode(e.target.value); applyPeriod(pkind, rA, rB, e.target.value) }}>
+              <option value="added">Added in this period</option>
+              <option value="pipe">In pipeline in this period</option>
+            </select>
+          )}
+        </div>
       </div>
 
       {deals.length === 0 ? (

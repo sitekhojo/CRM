@@ -17,7 +17,19 @@ export function useDeals() {
   return { deals, error, reload, loading: deals === null && !error }
 }
 
-export const EMPTY_FILTERS = { q: '', city: [], recordType: '', stage: [], siteType: [], region: [], owner: [], member: '', from: '', to: '', overdue: false, mine: false, age: '', ho: '', en: '', openOnly: false }
+/**
+ * Was this site in the pipeline at some point between `from` and `to` (ISO days)?
+ * = added on/before `to`, and not already dropped or energized before `from`.
+ */
+export function inPipeline(d, from, to) {
+  if (to && String(d.created_at).slice(0, 10) > to) return false
+  if (!from) return true
+  if (d.stage_category === 'dropped' && String(d.stage_entered_at || '').slice(0, 10) < from) return false
+  if (d.stage_category === 'live' && String(d.extra?.energized_on || d.stage_entered_at || '').slice(0, 10) < from) return false
+  return true
+}
+
+export const EMPTY_FILTERS = { q: '', city: [], recordType: '', stage: [], siteType: [], region: [], owner: [], member: '', from: '', to: '', overdue: false, mine: false, age: '', ho: '', en: '', openOnly: false, inPipe: '' }
 
 /** Apply the shared filter bar to a list of deals. */
 export function applyFilters(deals, f, userId) {
@@ -35,6 +47,7 @@ export function applyFilters(deals, f, userId) {
     if (f.mine && d.assigned_to !== userId && d.created_by !== userId) return false
     if (f.overdue && !d.is_overdue) return false
     if (f.openOnly && d.stage_category === 'dropped') return false
+    if (f.inPipe) { const [a, b] = f.inPipe.split(','); if (!inPipeline(d, a, b)) return false }
     if (f.ho) { const [a, b] = f.ho.split(','); const x = d.extra?.ho_date; if (!x || x < a || x > b) return false }
     if (f.en) { const [a, b] = f.en.split(','); const x = d.extra?.energized_on; if (!x || x < a || x > b) return false }
     if (f.age) {
