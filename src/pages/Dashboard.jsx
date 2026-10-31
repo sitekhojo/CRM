@@ -44,7 +44,7 @@ export default function Dashboard() {
       const c = acc[r.city] || (acc[r.city] = { city: r.city, sites: 0, qis: 0 })
       c.sites += 1; c.qis += qisOf(r); return acc
     }, {})).sort((a, b) => b[metric] - a[metric] || b.sites - a.sites)
-    const net = network.filter(n => n.point_type === 'own_station' && (!filters.city || n.city === filters.city))
+    const net = network.filter(n => n.point_type === 'own_station' && (!filters.city.length || filters.city.includes(n.city)) && (!filters.siteType.length || filters.siteType.includes(n.site_type)))
 
     // weekly trend (last 12 weeks)
     const weeks = Array.from({ length: 12 }, (_, i) => { const d = startOfWeek(); d.setDate(d.getDate() - 7 * (11 - i)); return d })

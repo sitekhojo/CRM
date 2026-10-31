@@ -2,20 +2,19 @@ import { X } from 'lucide-react'
 import { useConfig, stagesFor } from '../lib/config'
 import { EMPTY_FILTERS } from '../lib/deals'
 import { SITE_TYPES } from '../lib/format'
+import MultiSelect from './MultiSelect'
 
 /** Shared filter bar: search, city, lead/deal, stage, site type, date range, beyond-SLA. */
 export default function DealFilters({ value, onChange, show = ['q', 'city', 'type', 'stage', 'siteType', 'date', 'overdue'], extra }) {
   const { cities = [], stages = [] } = useConfig()
   const set = (k, v) => onChange({ ...value, [k]: v })
-  const active = Object.entries(value).some(([k, v]) => v && v !== EMPTY_FILTERS[k])
+  const active = Object.entries(value).some(([k, v]) => Array.isArray(v) ? v.length > 0 : v && v !== EMPTY_FILTERS[k])
   return (
     <div className="flex flex-wrap items-end gap-2">
       {show.includes('q') && <input className="input w-full sm:w-56" placeholder="Search…" value={value.q} onChange={e => set('q', e.target.value)} />}
       {show.includes('city') && (
-        <select className="input w-auto" value={value.city} onChange={e => set('city', e.target.value)}>
-          <option value="">All cities</option>
-          {cities.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-        </select>
+        <MultiSelect allLabel="All cities" noun="cities" value={value.city} onChange={v => set('city', v)}
+          options={cities.map(c => ({ value: c.name, label: c.name }))} />
       )}
       {show.includes('type') && (
         <select className="input w-auto" value={value.recordType} onChange={e => set('recordType', e.target.value)}>
@@ -25,16 +24,12 @@ export default function DealFilters({ value, onChange, show = ['q', 'city', 'typ
         </select>
       )}
       {show.includes('stage') && (
-        <select className="input w-auto" value={value.stage} onChange={e => set('stage', e.target.value)}>
-          <option value="">All stages</option>
-          {stagesFor(stages, value.siteType).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-        </select>
+        <MultiSelect allLabel="All stages" noun="stages" value={value.stage} onChange={v => set('stage', v)}
+          options={stagesFor(stages, value.siteType).map(s => ({ value: String(s.id), label: s.name, color: s.color }))} />
       )}
       {show.includes('siteType') && (
-        <select className="input w-auto" value={value.siteType} onChange={e => set('siteType', e.target.value)}>
-          <option value="">All site types</option>
-          {SITE_TYPES.map(t => <option key={t}>{t}</option>)}
-        </select>
+        <MultiSelect allLabel="All site types" noun="site types" value={value.siteType} onChange={v => set('siteType', v)}
+          options={SITE_TYPES.map(t => ({ value: t, label: t }))} />
       )}
       {show.includes('date') && (
         <div className="flex items-center gap-1">

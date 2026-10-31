@@ -22,7 +22,7 @@ export const POWER_FEASIBILITY = {
   unknown: { label: 'Unknown', cls: 'bg-slate-100 text-slate-600' },
 }
 
-export const SITE_TYPES = ['Franchise', 'Private', 'SPP', 'IOCL', 'Railways']
+export const SITE_TYPES = ['Franchise', 'Private', 'SPP', 'Metro', 'IOCL', 'Railways']
 
 /** Match free text (e.g. from Excel) to a known site type. */
 export function normaliseSiteType(v) {

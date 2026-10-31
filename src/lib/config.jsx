@@ -46,5 +46,6 @@ export const useConfig = () => useContext(ConfigCtx)
 
 /** Active stages that apply to a site type (stages with no site_types apply to all). */
 export function stagesFor(stages = [], siteType) {
-  return stages.filter(s => s.is_active && (!s.site_types?.length || !siteType || s.site_types.includes(siteType)))
+  const types = Array.isArray(siteType) ? siteType : siteType ? [siteType] : []
+  return stages.filter(s => s.is_active && (!s.site_types?.length || !types.length || types.some(t => s.site_types.includes(t))))
 }

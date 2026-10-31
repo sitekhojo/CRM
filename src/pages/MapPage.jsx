@@ -22,7 +22,7 @@ export default function MapPage() {
 
   useEffect(() => { fetchNetworkPoints().then(setNetwork).catch(() => {}) }, [])
   const rows = useMemo(() => (deals ? applyFilters(deals, filters, user?.id) : []), [deals, filters, user])
-  const fitKey = `${filters.city}|${filters.stage}|${filters.recordType}|${filters.siteType}|${rows.length}`
+  const fitKey = `${filters.city.join()}|${filters.stage.join()}|${filters.recordType}|${filters.siteType.join()}|${rows.length}`
 
   if (loading) return <PageLoader />
   const counts = stages.map(s => ({ ...s, n: rows.filter(r => r.stage_id === s.id).length })).filter(s => s.n)
@@ -60,7 +60,7 @@ export default function MapPage() {
             <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-500">Stages</p>
             <div className="flex max-w-md flex-wrap gap-x-3 gap-y-1">
               {counts.map(s => (
-                <button key={s.id} onClick={() => setFilters(f => ({ ...f, stage: f.stage === String(s.id) ? '' : String(s.id) }))} className="flex items-center gap-1.5 text-xs">
+                <button key={s.id} onClick={() => setFilters(f => ({ ...f, stage: f.stage.includes(String(s.id)) ? f.stage.filter(x => x !== String(s.id)) : [...f.stage, String(s.id)] }))} className="flex items-center gap-1.5 text-xs">
                   <span className="h-3 w-3 rounded-full border-2 border-white shadow" style={{ background: s.color }} />{s.name} <b>{s.n}</b>
                 </button>
               ))}

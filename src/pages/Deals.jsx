@@ -15,7 +15,7 @@ export default function Deals() {
   const { stages = [] } = useConfig()
   const { user, isAdmin } = useAuth()
   const [params] = useSearchParams()
-  const [filters, setFilters] = useState({ ...EMPTY_FILTERS, q: params.get('q') || '', overdue: params.get('overdue') === '1', stage: params.get('stage') || '', city: params.get('city') || '', recordType: params.get('type') || '' })
+  const [filters, setFilters] = useState({ ...EMPTY_FILTERS, q: params.get('q') || '', overdue: params.get('overdue') === '1', stage: params.get('stage') ? params.get('stage').split(',') : [], city: params.get('city') ? params.get('city').split(',') : [], recordType: params.get('type') || '' })
   const [view, setView] = useState(() => localStorage.getItem('dealsView') || 'table')
   const [sort, setSort] = useState({ key: 'created_at', dir: 'desc' })
   const [importOpen, setImportOpen] = useState(false)
