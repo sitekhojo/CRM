@@ -27,7 +27,7 @@ export default function Home() {
           <div>
             <span className="inline-block rounded-full bg-brand-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-brand-700">Site scouting & network planning</span>
             <h1 className="mt-4 text-4xl font-extrabold leading-tight tracking-tight text-navy-900 sm:text-5xl">
-              Find, track and close the right sites for your <span className="text-brand-600">swap network</span>.
+              Find, track and close the right sites for your <span className="text-brand-600">network</span>.
             </h1>
             <p className="mt-4 max-w-lg text-lg text-slate-600">Site Khojo brings every scouted location, every landlord conversation and every stage change into one place — so expansion moves faster and nothing gets stuck.</p>
             <div className="mt-7 flex flex-wrap gap-3">
