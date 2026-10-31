@@ -15,7 +15,7 @@ export default function Deals() {
   const { stages = [] } = useConfig()
   const { user, isAdmin } = useAuth()
   const [params] = useSearchParams()
-  const [filters, setFilters] = useState({ ...EMPTY_FILTERS, q: params.get('q') || '', overdue: params.get('overdue') === '1', stage: params.get('stage') ? params.get('stage').split(',') : [], city: params.get('city') ? params.get('city').split(',') : [], recordType: params.get('type') || '' })
+  const [filters, setFilters] = useState({ ...EMPTY_FILTERS, q: params.get('q') || '', overdue: params.get('overdue') === '1', stage: params.get('stage') ? params.get('stage').split(',') : [], city: params.get('city') ? params.get('city').split(',') : [], recordType: params.get('type') || '', age: params.get('age') || '' })
   const [view, setView] = useState(() => localStorage.getItem('dealsView') || 'table')
   const [sort, setSort] = useState({ key: 'created_at', dir: 'desc' })
   const [importOpen, setImportOpen] = useState(false)
@@ -65,6 +65,12 @@ export default function Deals() {
         </div>
       </div>
 
+      {filters.age && (
+        <div className="mb-3 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          Showing sites pending <b>{filters.age.replace('-', '–').replace(/–$/, '+')} days</b> in their current stage
+          <button className="ml-auto font-semibold underline" onClick={() => setFilters({ ...filters, age: '' })}>Clear</button>
+        </div>
+      )}
       <div className="mb-4">
         <DealFilters value={filters} onChange={setFilters}
           extra={<label className="flex h-[38px] items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-sm">

@@ -104,6 +104,42 @@ export default function Dashboard() {
 
     return {
       total: open.length,
+      ageing: (() => {
+        const open = rows.filter(r => ['active', 'approved', 'hold'].includes(r.stage_category))
+        return stages.filter(st => st.is_active && ['active', 'approved', 'hold'].includes(st.category)).map(st => {
+          const xs = open.filter(r => r.stage_id === st.id)
+          const cells = AGE_BUCKETS.map(([lo, hi]) => {
+            const ys = xs.filter(r => +r.days_in_stage >= lo && +r.days_in_stage <= hi)
+            return { lo, hi, qis: sumQis(ys), sites: ys.length, overSla: st.sla_days ? lo > st.sla_days : false, partSla: st.sla_days ? hi > st.sla_days && lo <= st.sla_days : false }
+          })
+          return { id: st.id, name: st.name, color: st.color, sla: st.sla_days, qis: sumQis(xs), sites: xs.length, overdueQis: sumQis(xs.filter(r => r.is_overdue)), cells }
+        }).filter(x => x.sites > 0)
+      })(),
+      milestones: (() => {
+        const dates = r => ({
+          added: r.created_at,
+          loi: firstEntry(r.id, keyId.loi_signed),
+          agreement: firstEntry(r.id, keyId.agreement_signed) || firstEntry(r.id, keyId.agreement_registered),
+          ho: hoDate(r),
+          energized: enDate(r),
+        })
+        const all = rows.map(r => ({ r, d: dates(r) }))
+        const seg = (from, to, label) => {
+          const xs = all.filter(({ d }) => d[from] && d[to] && inP(d[to]))
+            .map(({ r, d }) => ({ r, days: (new Date(d[to]) - new Date(d[from])) / 864e5 }))
+            .filter(x => x.days >= 0)
+          const ds = xs.map(x => x.days).sort((a, b) => a - b)
+          return { label, n: xs.length, qis: sumQis(xs.map(x => x.r)), avg: avg(ds), median: ds.length ? ds[Math.floor(ds.length / 2)] : null, max: ds.length ? ds[ds.length - 1] : null }
+        }
+        return [
+          seg('added', 'loi', 'Added → LOI signed'),
+          seg('loi', 'agreement', 'LOI → Agreement signed'),
+          seg('agreement', 'ho', 'Agreement → Handover'),
+          seg('loi', 'ho', 'LOI → Handover'),
+          seg('ho', 'energized', 'Handover → Energized'),
+          seg('added', 'energized', 'Added → Energized (end to end)'),
+        ]
+      })(),
       period: (() => {
         const added = rows.filter(r => inP(r.created_at))
         const stillOpen = added.filter(r => ['active', 'approved'].includes(r.stage_category))
@@ -185,6 +221,24 @@ export default function Dashboard() {
         )}
       </Panel>
 
+      <Panel title={`Milestone TAT — milestones reached ${m.period.label}`}>
+        <div className="space-y-3">
+          {m.milestones.map(t => {
+            const maxAvg = Math.max(1, ...m.milestones.map(x => x.avg || 0))
+            return (
+              <div key={t.label} className="grid grid-cols-12 items-center gap-3 text-sm">
+                <span className="col-span-4 font-medium text-slate-700 sm:col-span-3">{t.label}</span>
+                <div className="col-span-5 h-6 rounded-md bg-slate-100 sm:col-span-6">
+                  {t.n > 0 && <div className="flex h-6 items-center rounded-md bg-brand-500 px-2 text-xs font-bold text-white" style={{ width: `${Math.max(8, (100 * t.avg) / maxAvg)}%` }}>{fmtNum(t.avg, 1)} d</div>}
+                </div>
+                <span className="col-span-3 text-xs text-slate-500">{t.n ? <>median <b>{fmtNum(t.median, 1)} d</b> · max {fmtNum(t.max, 0)} d · {t.n} sites / {t.qis} QIS</> : 'no sites reached this in the period'}</span>
+              </div>
+            )
+          })}
+        </div>
+        <p className="mt-3 text-xs text-slate-500">Each stage change is time-stamped automatically. TAT = days between the two milestones for sites that reached the second one in the selected period. Imported sites only have dates from the sheet, so early numbers are based on few sites.</p>
+      </Panel>
+
       <div className="grid gap-4 xl:grid-cols-3">
         <Panel title={<span className="flex items-center justify-between">Stage-wise pipeline<Toggle value={metric} onChange={setMetric} /></span>} className="xl:col-span-2">
           <ResponsiveContainer width="100%" height={280}>
@@ -214,29 +268,37 @@ export default function Dashboard() {
       </div>
 
       <div className="grid gap-4 xl:grid-cols-3">
-        <Panel title="Pending at each stage" className="xl:col-span-2">
+        <Panel title="How long are QIS pending? (current stage × days in stage)" className="xl:col-span-2">
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
-              <thead><tr className="border-b border-slate-100"><th className="th">Stage</th><th className="th text-right">QIS</th><th className="th text-right">Sites</th><th className="th text-right">Avg days in stage</th><th className="th text-right">SLA</th><th className="th text-right">Beyond SLA</th><th className="th text-right">Avg TAT (exited)</th></tr></thead>
+              <thead><tr className="border-b border-slate-100">
+                <th className="th">Stage</th><th className="th text-right">QIS</th><th className="th text-right">SLA</th>
+                {AGE_BUCKETS.map(([lo, hi]) => <th key={lo} className="th text-center">{hi === Infinity ? `${lo}+ d` : `${lo}–${hi} d`}</th>)}
+                <th className="th text-right">Beyond SLA</th>
+              </tr></thead>
               <tbody>
-                {m.pipeline.map(p => {
-                  const t = m.tat.find(x => x.id === p.id)
-                  return (
-                    <tr key={p.id} className="cursor-pointer border-b border-slate-50 hover:bg-slate-50" onClick={() => go(`stage=${p.id}`)}>
-                      <td className="td"><StageBadge name={p.name} color={p.color} /></td>
-                      <td className="td text-right font-semibold">{p.qis || '—'}</td>
-                      <td className="td text-right text-slate-500">{p.count}</td>
-                      <td className="td text-right">{p.count ? daysLabel(p.avgDays) : '—'}</td>
-                      <td className="td text-right text-slate-500">{p.sla ? `${p.sla} d` : '—'}</td>
-                      <td className={`td text-right font-semibold ${p.overdue ? 'text-red-600' : 'text-slate-300'}`}>{p.overdue}</td>
-                      <td className="td text-right">{t ? <span className={t.sla && t.avg > t.sla ? 'font-semibold text-red-600' : ''}>{daysLabel(t.avg)} <span className="text-xs text-slate-400">n={t.n}</span></span> : '—'}</td>
-                    </tr>
-                  )
-                })}
+                {m.ageing.map(a => (
+                  <tr key={a.id} className="border-b border-slate-50">
+                    <td className="td"><StageBadge name={a.name} color={a.color} /></td>
+                    <td className="td text-right font-semibold">{a.qis}<span className="block text-[11px] font-normal text-slate-400">{a.sites} sites</span></td>
+                    <td className="td text-right text-slate-500">{a.sla ? `${a.sla} d` : '—'}</td>
+                    {a.cells.map(c => (
+                      <td key={c.lo} className="px-1 py-1 text-center">
+                        {c.sites ? (
+                          <button onClick={() => go(`stage=${a.id}&age=${c.lo}-${c.hi === Infinity ? '' : c.hi}`)} title="Open these sites"
+                            className={`w-full rounded-md px-2 py-1.5 text-sm font-bold transition hover:ring-2 hover:ring-slate-300 ${c.overSla ? 'bg-red-100 text-red-700' : c.partSla ? 'bg-amber-100 text-amber-800' : 'bg-emerald-50 text-emerald-800'}`}>
+                            {c.qis}<span className="block text-[10px] font-medium opacity-70">{c.sites} {c.sites === 1 ? "site" : "sites"}</span>
+                          </button>
+                        ) : <span className="text-slate-200">·</span>}
+                      </td>
+                    ))}
+                    <td className={`td text-right font-semibold ${a.overdueQis ? 'text-red-600' : 'text-slate-300'}`}>{a.overdueQis} QIS</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
-          <p className="mt-2 text-xs text-slate-500">Avg TAT = average days deals spent in a stage before moving on. Avg scouting → energized cycle: <b>{m.cycle !== null ? daysLabel(m.cycle) : 'no energized deals yet'}</b></p>
+          <p className="mt-2 text-xs text-slate-500"><span className="rounded bg-emerald-50 px-1 text-emerald-800">green</span> within SLA · <span className="rounded bg-amber-100 px-1 text-amber-800">amber</span> crossing SLA · <span className="rounded bg-red-100 px-1 text-red-700">red</span> beyond SLA. Click a cell to open those sites. SLA days are set in Settings → Pipeline stages.</p>
         </Panel>
         <Panel title={`${metric === 'qis' ? 'QIS' : 'Sites'} added — last 12 weeks`}>
           <ResponsiveContainer width="100%" height={250}>
@@ -348,6 +410,7 @@ function PeriodBar({ value, onChange, label }) {
     </div>
   )
 }
+const AGE_BUCKETS = [[0, 7], [8, 15], [16, 30], [31, 60], [61, Infinity]]
 const qisOf = r => Number(r.extra?.qis_count) || 0
 const sumQis = rs => rs.reduce((a, r) => a + qisOf(r), 0)
 const Toggle = ({ value, onChange }) => (
