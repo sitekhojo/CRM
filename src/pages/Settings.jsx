@@ -39,7 +39,9 @@ function Stages() {
   const { stages = [] } = useConfig()
   const save = useSave()
   const [rows, setRows] = useState(stages)
+  const [showRetired, setShowRetired] = useState(false)
   useEffect(() => setRows(stages), [stages])
+  const retired = rows.filter(s => !s.is_active).length
   const set = (i, k, v) => setRows(r => r.map((x, j) => (j === i ? { ...x, [k]: v } : x)))
 
   const persist = async () => {
@@ -57,8 +59,8 @@ function Stages() {
       <table className="min-w-full text-sm">
         <thead><tr><th className="th">Order</th><th className="th">Name</th><th className="th">Colour</th><th className="th">SLA (days)</th><th className="th">Type</th><th className="th">Applies to</th><th className="th">Admin only</th><th className="th">Active</th><th className="th">Preview</th></tr></thead>
         <tbody>
-          {rows.map((s, i) => (
-            <tr key={s.id} className="border-t border-slate-100">
+          {rows.map((s, i) => (!s.is_active && !showRetired) ? null : (
+            <tr key={s.id} className={`border-t border-slate-100 ${s.is_active ? '' : 'opacity-50'}`}>
               <td className="td"><input className="input w-16 py-1" type="number" value={s.sort_order} onChange={e => set(i, 'sort_order', e.target.value)} /></td>
               <td className="td"><input className="input w-52 py-1" value={s.name} onChange={e => set(i, 'name', e.target.value)} /></td>
               <td className="td"><input type="color" className="h-8 w-12 cursor-pointer rounded border border-slate-300" value={s.color} onChange={e => set(i, 'color', e.target.value)} /></td>
@@ -83,7 +85,8 @@ function Stages() {
           ))}
         </tbody>
       </table>
-      <div className="mt-3 flex gap-2"><button className="btn-primary" onClick={persist}><Save className="h-4 w-4" />Save stages</button><button className="btn-secondary" onClick={add}><Plus className="h-4 w-4" />Add stage</button></div>
+      <div className="mt-3 flex gap-2"><button className="btn-primary" onClick={persist}><Save className="h-4 w-4" />Save stages</button><button className="btn-secondary" onClick={add}><Plus className="h-4 w-4" />Add stage</button>
+        {retired > 0 && <button className="btn-ghost" onClick={() => setShowRetired(v => !v)}>{showRetired ? 'Hide' : 'Show'} {retired} retired stages</button>}</div>
     </div>
   )
 }
