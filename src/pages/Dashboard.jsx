@@ -15,6 +15,7 @@ export default function Dashboard() {
   const { stages = [], users = [] } = useConfig()
   const [history, setHistory] = useState(null)
   const [filters, setFilters] = useState(EMPTY_FILTERS)
+  const [period, setPeriod] = useState({ kind: 'month', from: '', to: '' })
   const [network, setNetwork] = useState([])
   const [metric, setMetric] = useState('qis') // chart unit: 'qis' | 'sites'
   const nav = useNavigate()
@@ -29,6 +30,12 @@ export default function Dashboard() {
   const m = useMemo(() => {
     if (!deals) return null
     const rows = applyFilters(deals, filters)
+    const [pStart, pEnd] = periodRange(period)
+    const inP = d => { if (!d) return false; const t = new Date(d); return t >= pStart && t <= pEnd }
+    const keyId = Object.fromEntries(stages.map(s => [s.key, s.id]))
+    const firstEntry = (siteId, stageId) => (history || []).find(x => x.site_id === siteId && x.to_stage_id === stageId)?.changed_at
+    const hoDate = r => r.extra?.ho_date || firstEntry(r.id, keyId.ho_done) || (r.stage_id === keyId.ho_done ? r.stage_entered_at : null)
+    const enDate = r => r.extra?.energized_on || firstEntry(r.id, keyId.energized) || (r.stage_id === keyId.energized ? r.stage_entered_at : null)
     const wk = startOfWeek(), mo = startOfMonth()
     const by = (fn) => rows.reduce((acc, r) => { const k = fn(r); acc[k] = (acc[k] || 0) + 1; return acc }, {})
 
@@ -46,6 +53,7 @@ export default function Dashboard() {
       c.sites += 1; c.qis += qisOf(r); return acc
     }, {})).sort((a, b) => b[metric] - a[metric] || b.sites - a.sites)
     const energizedDeals = rows.filter(r => r.stage_category === 'live')
+    const netAll = network.filter(n => n.point_type === 'own_station' && (!filters.city.length || filters.city.includes(n.city)) && (!filters.siteType.length || filters.siteType.includes(n.site_type)))
     const net = network.filter(n => n.point_type === 'own_station' && (!filters.city.length || filters.city.includes(n.city)) && (!filters.siteType.length || filters.siteType.includes(n.site_type)))
       .filter(n => !energizedDeals.some(d => haversine(d.latitude, d.longitude, n.latitude, n.longitude) <= 100)) // already counted as a deal
 
@@ -96,6 +104,25 @@ export default function Dashboard() {
 
     return {
       total: open.length,
+      period: (() => {
+        const added = rows.filter(r => inP(r.created_at))
+        const stillOpen = added.filter(r => ['active', 'approved'].includes(r.stage_category))
+        const ho = rows.filter(r => inP(hoDate(r)))
+        // energized in period: QIS-tracker dates + CRM energized sites that are not in the tracker
+        const trackerEn = netAll.reduce((a, n) => a + Object.entries(n.energized_dates || {}).reduce((b, [d, c]) => b + (inP(d + 'T12:00:00') ? c : 0), 0), 0)
+        const crmOnly = energizedDeals.filter(d => !netAll.some(n => haversine(d.latitude, d.longitude, n.latitude, n.longitude) <= 100))
+        const crmEn = crmOnly.filter(r => inP(enDate(r)))
+        const crmMatchedIds = new Set(energizedDeals.filter(d => !crmOnly.includes(d)).map(d => d.id))
+        const enSites = netAll.filter(n => Object.keys(n.energized_dates || {}).some(d => inP(d + 'T12:00:00'))).length + crmEn.length
+        const flow = {}
+        for (const r of added) { const k = r.stage_name; flow[k] = flow[k] || { name: k, color: r.stage_color, order: r.stage_order, qis: 0, sites: 0 }; flow[k].qis += qisOf(r); flow[k].sites++ }
+        return {
+          label: periodLabel(period, pStart, pEnd),
+          added: qs(added), open: qs(stillOpen), ho: qs(ho),
+          en: { qis: trackerEn + sumQis(crmEn), sites: enSites }, crmMatched: crmMatchedIds.size,
+          flow: Object.values(flow).sort((a, b) => a.order - b.order),
+        }
+      })(),
       totalQis: sumQis(open),
       weekQis: sumQis(open.filter(r => new Date(r.created_at) >= wk)),
       monthQis: sumQis(open.filter(r => new Date(r.created_at) >= mo)),
@@ -116,7 +143,7 @@ export default function Dashboard() {
       pipeline, cityCounts, trend, tat, team, stuck, cycle,
       dropReasons: Object.entries(by(r => r.stage_category === 'dropped' ? r.drop_reason || 'Unspecified' : null)).filter(([k]) => k !== 'null').sort((a, b) => b[1] - a[1]),
     }
-  }, [deals, filters, stages, users, history, network, metric])
+  }, [deals, filters, stages, users, history, network, metric, period])
 
   if (loading || !m) return <PageLoader />
   const go = q => nav(`/app/deals?${q}`)
@@ -129,16 +156,34 @@ export default function Dashboard() {
           <p className="text-sm text-slate-500">Network expansion at a glance{filters.from || filters.to ? ' · date filter applies to deal creation date' : ''}</p>
         </div>
       </div>
-      <DealFilters value={filters} onChange={setFilters} show={['city', 'type', 'stage', 'siteType', 'date']} />
+      <DealFilters value={filters} onChange={setFilters} show={['city', 'type', 'stage', 'siteType']} />
+      <PeriodBar value={period} onChange={setPeriod} label={m.period.label} />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <Stat label="Total QIS" value={fmtNum(m.totalQis)} icon={Boxes} sub={`${fmtNum(m.total)} sites · ${m.leads} leads · ${m.deals} deals (excl. dropped)`} />
-        <Stat label="QIS added this week" value={fmtNum(m.weekQis)} icon={CalendarPlus} tone="blue" sub={`${fmtNum(m.week)} sites`} />
-        <Stat label="QIS added this month" value={fmtNum(m.monthQis)} icon={CalendarDays} tone="blue" sub={`${fmtNum(m.month)} sites`} />
-        <Stat label="QIS in pipeline" value={fmtNum(m.pipeQis)} icon={Activity} tone="teal" sub={`${fmtNum(m.active)} sites · Scouting → Handover`} />
-        <Stat label="Energized via pipeline" value={fmtNum(m.liveQis)} icon={Zap} tone="green" sub={`${fmtNum(m.live)} sites · already inside the network total →`} />
-        <Stat label="Energized network" value={fmtNum(m.netQis + m.liveQis)} icon={Network} tone="green" sub={`${fmtNum(m.netSites + m.live)} sites · QIS tracker, each site counted once`} />
+        <Stat label="Total QIS" value={fmtNum(m.totalQis)} icon={Boxes} sub={`${fmtNum(m.total)} sites · all open, excl. dropped`} />
+        <Stat label="QIS added" value={fmtNum(m.period.added.qis)} icon={CalendarPlus} tone="blue" sub={`${fmtNum(m.period.added.sites)} sites · ${m.period.label}`} />
+        <Stat label="QIS in pipeline" value={fmtNum(m.period.open.qis)} icon={Activity} tone="teal" sub={`${fmtNum(m.period.open.sites)} sites · of those added, still Scouting → Handover`} />
+        <Stat label="QIS handed over" value={fmtNum(m.period.ho.qis)} icon={CalendarDays} tone="amber" sub={`${fmtNum(m.period.ho.sites)} sites · ${m.period.label}`} />
+        <Stat label="QIS energized" value={fmtNum(m.period.en.qis)} icon={Zap} tone="green" sub={`${fmtNum(m.period.en.sites)} sites · ${m.period.label}`} />
+        <Stat label="Energized network" value={fmtNum(m.netQis + m.liveQis)} icon={Network} tone="green" sub={`${fmtNum(m.netSites + m.live)} sites to date · +${fmtNum(m.period.en.qis)} in period`} />
       </div>
+
+      <Panel title={`Where did the QIS added ${m.period.label} go? (current stage)`}>
+        {m.period.flow.length === 0 ? <p className="text-sm text-slate-400">No QIS added in this period.</p> : (
+          <>
+            <div className="flex h-8 w-full overflow-hidden rounded-lg">
+              {m.period.flow.map(f => (
+                <div key={f.name} title={`${f.name}: ${f.qis} QIS`} style={{ width: `${(100 * f.qis) / Math.max(1, m.period.added.qis)}%`, background: f.color }} />
+              ))}
+            </div>
+            <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
+              {m.period.flow.map(f => (
+                <span key={f.name} className="flex items-center gap-1.5 text-sm"><span className="h-3 w-3 rounded-sm" style={{ background: f.color }} />{f.name} <b>{f.qis}</b><span className="text-xs text-slate-400">QIS · {f.sites} sites</span></span>
+              ))}
+            </div>
+          </>
+        )}
+      </Panel>
 
       <div className="grid gap-4 xl:grid-cols-3">
         <Panel title={<span className="flex items-center justify-between">Stage-wise pipeline<Toggle value={metric} onChange={setMetric} /></span>} className="xl:col-span-2">
@@ -266,6 +311,43 @@ const QS = ({ v, bold, cls = '' }) => (
   <td className={`td text-right ${cls}`}><span className={bold ? 'font-bold' : ''}>{v.qis}</span><span className="block text-[11px] text-slate-400">{v.sites} sites</span></td>
 )
 const qs = rs => ({ qis: rs.reduce((a, r) => a + (Number(r.extra?.qis_count) || 0), 0), sites: rs.length })
+function periodRange({ kind, from, to }) {
+  const now = new Date(); const end = new Date(now); end.setHours(23, 59, 59, 999)
+  if (kind === 'custom') {
+    return [from ? new Date(from + 'T00:00:00') : new Date(2000, 0, 1), to ? new Date(to + 'T23:59:59') : end]
+  }
+  if (kind === 'month') return [new Date(now.getFullYear(), now.getMonth(), 1), end]
+  if (kind === 'quarter') { const q = Math.floor(now.getMonth() / 3) * 3; return [new Date(now.getFullYear(), q, 1), end] }
+  const fy = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1 // Indian FY: Apr–Mar
+  return [new Date(fy, 3, 1), end]
+}
+function periodLabel({ kind }, a, b) {
+  const f = d => d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+  if (kind === 'month') return `in ${a.toLocaleDateString('en-IN', { month: 'long' })}`
+  if (kind === 'quarter') { const fyq = ((Math.floor(a.getMonth() / 3) + 3) % 4) + 1; return `in Q${fyq} (${a.toLocaleDateString('en-IN', { month: 'short' })}–now)` }
+  if (kind === 'fy') { const y = a.getFullYear(); return `in FY${String(y + 1).slice(2)} (Apr ${y}–now)` }
+  return `${f(a)} – ${f(b)}`
+}
+function PeriodBar({ value, onChange, label }) {
+  const opt = [['month', 'This month'], ['quarter', 'This quarter'], ['fy', 'This FY'], ['custom', 'Custom']]
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <div className="flex rounded-lg border border-slate-300 bg-white p-0.5">
+        {opt.map(([k, l]) => (
+          <button key={k} onClick={() => onChange({ ...value, kind: k })} className={`rounded-md px-3 py-1.5 text-sm font-semibold ${value.kind === k ? 'bg-navy-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>{l}</button>
+        ))}
+      </div>
+      {value.kind === 'custom' && (
+        <div className="flex items-center gap-1">
+          <input type="date" className="input w-auto" value={value.from} onChange={e => onChange({ ...value, from: e.target.value })} />
+          <span className="text-slate-400">–</span>
+          <input type="date" className="input w-auto" value={value.to} onChange={e => onChange({ ...value, to: e.target.value })} />
+        </div>
+      )}
+      <span className="text-sm text-slate-500">Showing activity <b>{label}</b></span>
+    </div>
+  )
+}
 const qisOf = r => Number(r.extra?.qis_count) || 0
 const sumQis = rs => rs.reduce((a, r) => a + qisOf(r), 0)
 const Toggle = ({ value, onChange }) => (
