@@ -56,16 +56,15 @@ function Stages() {
 
   return (
     <div className="card overflow-x-auto p-4">
-      <p className="mb-3 text-sm text-slate-500">Order, rename, colour and set SLA days for each stage. <b>Admin only</b> = only admins can move a deal into that stage. <b>Applies to</b> = which site types use this stage (none ticked = all). Deals beyond SLA are flagged on the dashboard. Deactivate instead of deleting stages that have history.</p>
+      <p className="mb-3 text-sm text-slate-500">Order, rename and colour each stage. <b>Admin only</b> = only admins can move a deal into that stage. <b>Applies to</b> = which site types use this stage (none ticked = all). Deactivate instead of deleting stages that have history.</p>
       <table className="min-w-full text-sm">
-        <thead><tr><th className="th">Order</th><th className="th">Name</th><th className="th">Colour</th><th className="th">SLA (days)</th><th className="th">Type</th><th className="th">Applies to</th><th className="th">Admin only</th><th className="th">Active</th><th className="th">Preview</th></tr></thead>
+        <thead><tr><th className="th">Order</th><th className="th">Name</th><th className="th">Colour</th><th className="th">Type</th><th className="th">Applies to</th><th className="th">Admin only</th><th className="th">Active</th><th className="th">Preview</th></tr></thead>
         <tbody>
           {rows.map((s, i) => (!s.is_active && !showRetired) ? null : (
             <tr key={s.id} className={`border-t border-slate-100 ${s.is_active ? '' : 'opacity-50'}`}>
               <td className="td"><input className="input w-16 py-1" type="number" value={s.sort_order} onChange={e => set(i, 'sort_order', e.target.value)} /></td>
               <td className="td"><input className="input w-52 py-1" value={s.name} onChange={e => set(i, 'name', e.target.value)} /></td>
               <td className="td"><input type="color" className="h-8 w-12 cursor-pointer rounded border border-slate-300" value={s.color} onChange={e => set(i, 'color', e.target.value)} /></td>
-              <td className="td"><input className="input w-20 py-1" type="number" min="1" placeholder="none" value={s.sla_days ?? ''} onChange={e => set(i, 'sla_days', e.target.value)} /></td>
               <td className="td"><select className="input w-auto py-1" value={s.category} onChange={e => set(i, 'category', e.target.value)}>
                 <option value="active">Pipeline</option><option value="approved">Post-agreement</option><option value="live">Energized (final)</option><option value="hold">Hold</option><option value="dropped">Dropped</option></select></td>
               <td className="td">

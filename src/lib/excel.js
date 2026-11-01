@@ -3,7 +3,7 @@ import Papa from 'papaparse'
 
 export const DEAL_COLUMNS = [
   ['site_code', 'ID'], ['record_type', 'Type'], ['name', 'Site name'], ['stage_name', 'Stage'], ['days_in_stage', 'Days in stage'],
-  ['is_overdue', 'Beyond SLA'], ['city', 'City'], ['address', 'Address'], ['pincode', 'Pincode'],
+  ['city', 'City'], ['address', 'Address'], ['pincode', 'Pincode'],
   ['latitude', 'Latitude'], ['longitude', 'Longitude'], ['site_type', 'Site type'], ['area_sqft', 'Area (sq ft)'],
   ['landlord_name', 'Landlord name'], ['landlord_phone', 'Landlord phone'], ['landlord_email', 'Landlord email'],
   ['rent_expectation', 'Rent / month (INR)'], ['deposit_expectation', 'Deposit (INR)'], ['rent_negotiable', 'Rent negotiable'],

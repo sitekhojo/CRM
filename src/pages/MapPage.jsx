@@ -8,7 +8,7 @@ import { useConfig } from '../lib/config'
 import DealFilters from '../components/DealFilters'
 import { BaseMap, DealMarkers, FitBounds } from '../components/maps'
 import { PageLoader, StageBadge } from '../components/ui'
-import { daysLabel } from '../lib/format'
+import { daysInt, stageAgeTone } from '../lib/format'
 import { NETWORK_TYPES } from './Planning'
 import { hasLoc } from '../lib/geo'
 
@@ -42,7 +42,7 @@ export default function MapPage() {
             ))}
           </div>
         </div>
-        <DealFilters value={filters} onChange={setFilters} show={['q', 'city', 'type', 'stage', 'siteType', 'overdue']} />
+        <DealFilters value={filters} onChange={setFilters} show={['q', 'region', 'city', 'owner', 'type', 'stage', 'siteType']} />
       </div>
 
       {view === 'map' ? (
@@ -77,7 +77,7 @@ export default function MapPage() {
                 <div className="flex justify-between gap-2"><b className="text-slate-900">{d.name}</b><span className="font-mono text-[10px] text-slate-400">{d.site_code}</span></div>
                 <p className="text-xs text-slate-500">{d.city} · {hasLoc(d) ? `${d.latitude.toFixed(5)}, ${d.longitude.toFixed(5)}` : 'no location'}</p>
                 <div className="mt-2 flex items-center justify-between"><StageBadge name={d.stage_name} color={d.stage_color} />
-                  <span className={`text-xs font-semibold ${d.is_overdue ? 'text-red-600' : 'text-slate-500'}`}>{daysLabel(d.days_in_stage)}</span></div>
+                  <span title="Days in stage" className={`rounded px-1.5 text-xs font-bold ${stageAgeTone(d.days_in_stage, d.stage_category).cls}`}>{daysInt(d.days_in_stage) ?? '—'}</span></div>
               </Link>
             ))}
           </div>

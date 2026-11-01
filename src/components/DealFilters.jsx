@@ -4,8 +4,8 @@ import { EMPTY_FILTERS } from '../lib/deals'
 import { SITE_TYPES } from '../lib/format'
 import MultiSelect from './MultiSelect'
 
-/** Shared filter bar: search, city, lead/deal, stage, site type, date range, beyond-SLA. */
-export default function DealFilters({ value, onChange, show = ['q', 'region', 'city', 'owner', 'type', 'stage', 'siteType', 'date', 'overdue'], extra }) {
+/** Shared filter bar: search, region, city, owner, lead/deal, stage, site type, date range. */
+export default function DealFilters({ value, onChange, show = ['q', 'region', 'city', 'owner', 'type', 'stage', 'siteType', 'date'], extra }) {
   const { cities = [], stages = [], team = [] } = useConfig()
   const cityOpts = cities.filter(c => c.is_active && (!value.region?.length || value.region.includes(c.region)))
   const ownerOpts = team.filter(t => t.is_active && (!value.region?.length || value.region.includes(t.region)))
@@ -47,11 +47,6 @@ export default function DealFilters({ value, onChange, show = ['q', 'region', 'c
           <span className="text-slate-400">–</span>
           <input type="date" className="input w-auto" value={value.to} onChange={e => set('to', e.target.value)} title="Created to" />
         </div>
-      )}
-      {show.includes('overdue') && (
-        <label className="flex h-[38px] items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-sm">
-          <input type="checkbox" checked={value.overdue} onChange={e => set('overdue', e.target.checked)} className="accent-red-600" /> Beyond SLA
-        </label>
       )}
       {extra}
       {active && <button className="btn-ghost" onClick={() => onChange(EMPTY_FILTERS)}><X className="h-4 w-4" />Clear</button>}

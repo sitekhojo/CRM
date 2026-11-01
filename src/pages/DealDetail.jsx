@@ -12,7 +12,7 @@ import { Marker } from 'react-leaflet'
 import { hasLoc } from '../lib/geo'
 import StageChangeModal from '../components/StageChangeModal'
 import DealForm from '../components/DealForm'
-import { fmtDateTime, fmtDate, fmtINR, fmtNum, daysLabel, timeAgo, POWER_FEASIBILITY, RECORD_TYPES, EXTRA_FIELDS } from '../lib/format'
+import { fmtDateTime, fmtDate, fmtINR, fmtNum, daysLabel, daysInt, stageAgeTone, timeAgo, POWER_FEASIBILITY, RECORD_TYPES, EXTRA_FIELDS } from '../lib/format'
 
 export default function DealDetail() {
   const { id } = useParams()
@@ -96,9 +96,8 @@ export default function DealDetail() {
               <Pill className={RECORD_TYPES[deal.record_type || 'deal'].cls}>{RECORD_TYPES[deal.record_type || 'deal'].label}</Pill>
               {deal.site_type && <Pill className="bg-slate-100 text-slate-700">{deal.site_type}</Pill>}
               <StageBadge name={deal.stage_name} color={deal.stage_color} />
-              <span className={`text-sm ${deal.is_overdue ? 'font-semibold text-red-600' : 'text-slate-600'}`}>
-                {deal.is_overdue && <AlertTriangle className="mr-1 inline h-3.5 w-3.5" />}
-                {daysLabel(deal.days_in_stage)} in stage{deal.stage_sla_days ? ` (SLA ${deal.stage_sla_days}d)` : ''}
+              <span className="flex items-center gap-1.5 text-sm text-slate-600">
+                <span className={`rounded-md px-2 py-0.5 font-bold ${stageAgeTone(deal.days_in_stage, deal.stage_category).cls}`}>{daysInt(deal.days_in_stage) ?? '—'}</span> days in stage
               </span>
             </div>
           </div>
@@ -131,7 +130,7 @@ export default function DealDetail() {
         ) : null}
         {deal.stage_category === 'hold' && (
           <div className="mt-3 rounded-lg border border-slate-300 bg-slate-100 p-3 text-sm text-slate-700">
-            <b>On hold</b> since {fmtDateTime(deal.stage_entered_at)}{deal.stage_note ? ` — ${deal.stage_note}` : ''}. SLA clock is paused.
+            <b>On hold</b> since {fmtDateTime(deal.stage_entered_at)}{deal.stage_note ? ` — ${deal.stage_note}` : ''}.
           </div>
         )}
         {deal.stage_category === 'dropped' && (

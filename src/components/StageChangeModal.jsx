@@ -35,7 +35,7 @@ export default function StageChangeModal({ open, onClose, deal, onSave, presetSt
         </button>
       </>}>
       <div className="space-y-3">
-        <p className="text-sm text-slate-600">Current stage: <b>{deal?.stage_name}</b> · {deal?.days_in_stage} days</p>
+        <p className="text-sm text-slate-600">Current stage: <b>{deal?.stage_name}</b> · {Math.floor(Number(deal?.days_in_stage) || 0)} days in stage</p>
         <Field label="New stage">
           <select className="input" value={stageId} onChange={e => setStageId(e.target.value)}>
             <option value="">Select stage</option>

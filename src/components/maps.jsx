@@ -4,7 +4,7 @@ import L from 'leaflet'
 import { Link } from 'react-router-dom'
 import { Crosshair, Loader2 } from 'lucide-react'
 import { StageBadge } from './ui'
-import { daysLabel, fmtINR } from '../lib/format'
+import { daysInt, stageAgeTone, fmtINR } from '../lib/format'
 import { parseLatLng, validLatLng, hasLoc } from '../lib/geo'
 
 export const INDIA_CENTER = [22.5, 79]
@@ -45,9 +45,9 @@ export function DealPopup({ d }) {
       <StageBadge name={d.stage_name} color={d.stage_color} />
       <div className="text-xs text-slate-600">{d.address || d.city}{d.pincode ? ` · ${d.pincode}` : ''}</div>
       <div className="grid grid-cols-2 gap-x-3 text-xs text-slate-600">
-        <span>Days in stage</span><span className={`font-semibold ${d.is_overdue ? 'text-red-600' : ''}`}>{daysLabel(d.days_in_stage)}</span>
+        <span>Days in stage</span><span><b className={`rounded px-1.5 ${stageAgeTone(d.days_in_stage, d.stage_category).cls}`}>{daysInt(d.days_in_stage) ?? '—'}</b></span>
         <span>Rent</span><span className="font-semibold">{fmtINR(d.rent_expectation)}</span>
-        <span>Owner</span><span className="font-semibold">{d.assigned_to_name || '—'}</span>
+        <span>Owner</span><span className="font-semibold">{d.owner || '—'}</span>
       </div>
       <Link to={`/app/deals/${d.id}`} className="mt-1 inline-block font-semibold !text-brand-700">Open deal →</Link>
     </div>

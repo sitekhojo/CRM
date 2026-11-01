@@ -8,7 +8,7 @@ import { useConfig, stagesFor, REGIONS } from '../lib/config'
 import DealFilters from '../components/DealFilters'
 import PeriodBar, { periodRange, periodLabel, isoDay } from '../components/PeriodBar'
 import { Stat, StageBadge, PageLoader, Modal } from '../components/ui'
-import { fmtNum, daysLabel, startOfWeek, startOfMonth, fmtDate } from '../lib/format'
+import { fmtNum, daysLabel, daysInt, stageAgeTone, AGE_TONES, startOfWeek, startOfMonth, fmtDate } from '../lib/format'
 import { haversine, hasLoc } from '../lib/geo'
 
 export default function Dashboard() {
@@ -134,7 +134,7 @@ export default function Dashboard() {
     }).filter(x => x.total.sites || x.dropped.sites || (x.active && x.id !== '_none'))
       .sort((a, b) => regionRank(a.region) - regionRank(b.region) || b.lead - a.lead || b.total.qis - a.total.qis)
 
-    const stuck = rows.filter(r => r.is_overdue).sort((a, b) => (b.days_in_stage - b.stage_sla_days) - (a.days_in_stage - a.stage_sla_days))
+    const stuck = rows.filter(r => ['active', 'approved', 'hold'].includes(r.stage_category)).sort((a, b) => b.days_in_stage - a.days_in_stage).slice(0, 25)
 
     return {
       total: open.length,
@@ -144,7 +144,7 @@ export default function Dashboard() {
           const xs = open.filter(r => r.stage_id === st.id)
           const cells = AGE_BUCKETS.map(([lo, hi]) => {
             const ys = xs.filter(r => +r.days_in_stage >= lo && +r.days_in_stage <= hi)
-            return { lo, hi, qis: sumQis(ys), sites: ys.length, overSla: st.sla_days ? lo > st.sla_days : false, partSla: st.sla_days ? hi > st.sla_days && lo <= st.sla_days : false }
+            return { lo, hi, qis: sumQis(ys), sites: ys.length, cls: AGE_TONES.find(t => t.lo === lo)?.cls || '' }
           })
           return { id: st.id, name: st.name, color: st.color, sla: st.sla_days, qis: sumQis(xs), sites: xs.length, overdueQis: sumQis(xs.filter(r => r.is_overdue)), cells }
         }).filter(x => x.sites > 0)
@@ -308,33 +308,30 @@ export default function Dashboard() {
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead><tr className="border-b border-slate-100">
-                <th className="th">Stage</th><th className="th text-right">QIS</th><th className="th text-right">SLA</th>
-                {AGE_BUCKETS.map(([lo, hi]) => <th key={lo} className="th text-center">{hi === Infinity ? `${lo}+ d` : `${lo}–${hi} d`}</th>)}
-                <th className="th text-right">Beyond SLA</th>
+                <th className="th">Stage</th><th className="th text-right">QIS</th>
+                {AGE_BUCKETS.map(([lo, hi]) => <th key={lo} className="th text-center">{hi === Infinity ? `${lo}+ days` : `${lo}–${hi} days`}</th>)}
               </tr></thead>
               <tbody>
                 {m.ageing.map(a => (
                   <tr key={a.id} className="border-b border-slate-50">
                     <td className="td"><StageBadge name={a.name} color={a.color} /></td>
                     <td className="td text-right font-semibold">{a.qis}<span className="block text-[11px] font-normal text-slate-400">{a.sites} sites</span></td>
-                    <td className="td text-right text-slate-500">{a.sla ? `${a.sla} d` : '—'}</td>
                     {a.cells.map(c => (
                       <td key={c.lo} className="px-1 py-1 text-center">
                         {c.sites ? (
                           <button onClick={() => go(`stage=${a.id}&age=${c.lo}-${c.hi === Infinity ? '' : c.hi}`)} title="Open these sites"
-                            className={`w-full rounded-md px-2 py-1.5 text-sm font-bold transition hover:ring-2 hover:ring-slate-300 ${c.overSla ? 'bg-red-100 text-red-700' : c.partSla ? 'bg-amber-100 text-amber-800' : 'bg-emerald-50 text-emerald-800'}`}>
+                            className={`w-full rounded-md px-2 py-1.5 text-sm font-bold transition hover:ring-2 hover:ring-slate-300 ${c.cls}`}>
                             {c.qis}<span className="block text-[10px] font-medium opacity-70">{c.sites} {c.sites === 1 ? "site" : "sites"}</span>
                           </button>
                         ) : <span className="text-slate-200">·</span>}
                       </td>
                     ))}
-                    <td className={`td text-right font-semibold ${a.overdueQis ? 'text-red-600' : 'text-slate-300'}`}>{a.overdueQis} QIS</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <p className="mt-2 text-xs text-slate-500"><span className="rounded bg-emerald-50 px-1 text-emerald-800">green</span> within SLA · <span className="rounded bg-amber-100 px-1 text-amber-800">amber</span> crossing SLA · <span className="rounded bg-red-100 px-1 text-red-700">red</span> beyond SLA. Click a cell to open those sites. SLA days are set in Settings → Pipeline stages.</p>
+          <p className="mt-2 text-xs text-slate-500">Colour = how long the QIS have been in their current stage. Click a cell to open those sites.</p>
         </Panel>
         <Panel title={`${metric === 'qis' ? 'QIS' : 'Sites'} added — last 12 weeks`}>
           <ResponsiveContainer width="100%" height={250}>
@@ -350,11 +347,11 @@ export default function Dashboard() {
       </div>
 
       <div className="grid gap-4 xl:grid-cols-3">
-        <Panel title={`Stuck beyond SLA (${m.stuck.length})`} className="xl:col-span-2">
-          {m.stuck.length === 0 ? <p className="py-6 text-center text-sm text-slate-400">Nothing stuck. 🎉</p> : (
+        <Panel title="Longest pending in current stage (top 25)" className="xl:col-span-2">
+          {m.stuck.length === 0 ? <p className="py-6 text-center text-sm text-slate-400">Nothing pending.</p> : (
             <div className="max-h-80 overflow-auto">
               <table className="min-w-full text-sm">
-                <thead className="sticky top-0 bg-white"><tr className="border-b border-slate-100"><th className="th">Deal</th><th className="th">Stage</th><th className="th">City</th><th className="th">Owner</th><th className="th text-right">Days / SLA</th></tr></thead>
+                <thead className="sticky top-0 bg-white"><tr className="border-b border-slate-100"><th className="th">Deal</th><th className="th">Stage</th><th className="th">City</th><th className="th">Owner</th><th className="th text-right">QIS</th><th className="th text-right">Days in stage</th></tr></thead>
                 <tbody>
                   {m.stuck.map(d => (
                     <tr key={d.id} className="border-b border-slate-50 hover:bg-slate-50">
@@ -362,7 +359,7 @@ export default function Dashboard() {
                       <td className="td"><StageBadge name={d.stage_name} color={d.stage_color} /></td>
                       <td className="td">{d.city}</td>
                       <td className="td">{d.owner || '—'}</td>
-                      <td className="td text-right font-semibold text-red-600">{fmtNum(d.days_in_stage, 1)} / {d.stage_sla_days}</td>
+                      <td className="td text-right">{d.extra?.qis_count ?? '—'}</td><td className="td text-right"><span className={`inline-block min-w-[2.5rem] rounded-md px-2 py-0.5 text-center font-bold ${stageAgeTone(d.days_in_stage, d.stage_category).cls}`}>{daysInt(d.days_in_stage)}</span></td>
                     </tr>
                   ))}
                 </tbody>
@@ -382,7 +379,7 @@ export default function Dashboard() {
           <table className="min-w-full text-sm">
             <thead><tr className="border-b border-slate-100">
               <th className="th">Owner</th><th className="th">Region</th><th className="th text-right">QIS owned (excl. dropped)</th><th className="th text-right">Added this week</th><th className="th text-right">Added this month</th>
-              <th className="th text-right">In pipeline</th><th className="th text-right">On hold</th><th className="th text-right">Handed over · {m.period.label}</th><th className="th text-right">Energized</th><th className="th text-right">Dropped</th><th className="th text-right">Beyond SLA</th>
+              <th className="th text-right">In pipeline</th><th className="th text-right">On hold</th><th className="th text-right">Handed over · {m.period.label}</th><th className="th text-right">Energized</th><th className="th text-right">Dropped</th>
             </tr></thead>
             <tbody>
               {m.team.map((t, i) => (
@@ -395,7 +392,6 @@ export default function Dashboard() {
                   <td className="td text-slate-500">{t.region}</td>
                   <QS v={t.total} bold /><QS v={t.week} /><QS v={t.month} />
                   <QS v={t.owned} /><QS v={t.hold} cls="text-slate-500" /><QS v={t.ho} cls="text-amber-700" /><QS v={t.won} cls="text-emerald-700" /><QS v={t.dropped} cls="text-slate-500" />
-                  <td className={`td text-right ${t.overdue ? 'font-semibold text-red-600' : 'text-slate-300'}`}>{t.overdue}</td>
                 </tr>
               ))}
             </tbody>

@@ -55,7 +55,7 @@ export default function Login() {
         <p className="max-w-md text-3xl font-extrabold leading-snug">Every site your team scouts — <span className="text-brand-500">one pipeline, one map, one dashboard.</span></p>
         <ul className="mt-6 space-y-2 text-slate-300">
           <li>• GPS-pinned site capture from the field</li>
-          <li>• Stage tracking with time-in-stage & SLA alerts</li>
+          <li>• Stage tracking with days in each stage</li>
           <li>• Instant network feasibility for any location</li>
         </ul>
       </div>

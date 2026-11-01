@@ -9,15 +9,20 @@ export const daysLabel = d => {
   return n < 1 ? '< 1 day' : n === 1 ? '1 day' : `${n} days`
 }
 
-/** Colour for time spent in a stage vs its SLA: green ≤ half, amber ≤ SLA, red beyond, dark red > 2× SLA. */
-export function stageAgeTone(days, sla, category) {
-  if (['dropped', 'live'].includes(category)) return { cls: 'bg-slate-100 text-slate-500', key: 'closed', label: 'Closed stage' }
-  const d = Number(days) || 0
-  if (!sla) return { cls: 'bg-slate-100 text-slate-600', key: 'nosla', label: 'No SLA for this stage' }
-  if (d > 2 * sla) return { cls: 'bg-red-600 text-white', key: 'critical', label: `More than 2× SLA (${sla} days)` }
-  if (d > sla) return { cls: 'bg-red-100 text-red-700', key: 'over', label: `Beyond SLA (${sla} days)` }
-  if (d > sla / 2) return { cls: 'bg-amber-100 text-amber-800', key: 'near', label: `Over half of SLA (${sla} days)` }
-  return { cls: 'bg-emerald-100 text-emerald-700', key: 'ok', label: `Within SLA (${sla} days)` }
+/** Days-in-stage buckets and colours (no SLA). */
+export const AGE_TONES = [
+  { lo: 0, hi: 7, cls: 'bg-emerald-100 text-emerald-800', label: '0–7' },
+  { lo: 8, hi: 15, cls: 'bg-lime-100 text-lime-800', label: '8–15' },
+  { lo: 16, hi: 30, cls: 'bg-amber-100 text-amber-800', label: '16–30' },
+  { lo: 31, hi: 60, cls: 'bg-orange-200 text-orange-900', label: '31–60' },
+  { lo: 61, hi: Infinity, cls: 'bg-red-500 text-white', label: '61+' },
+]
+export const daysInt = d => (d === null || d === undefined || isNaN(d) ? null : Math.floor(Number(d)))
+export function stageAgeTone(days, category) {
+  if (['dropped', 'live'].includes(category)) return { cls: 'bg-slate-100 text-slate-500', label: 'Closed stage' }
+  const d = daysInt(days) ?? 0
+  const t = AGE_TONES.find(x => d >= x.lo && d <= x.hi) || AGE_TONES[0]
+  return { cls: t.cls, label: `${t.label} days in stage` }
 }
 
 export function timeAgo(d) {
