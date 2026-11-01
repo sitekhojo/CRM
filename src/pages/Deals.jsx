@@ -14,7 +14,7 @@ import StageCell from '../components/StageCell'
 import TypeCell from '../components/TypeCell'
 import OwnerCell from '../components/OwnerCell'
 
-export default function Deals() {
+export default function Deals({ fixedType }) {
   const { deals, loading, reload } = useDeals()
   const { stages = [] } = useConfig()
   const { user, isAdmin } = useAuth()
@@ -22,7 +22,7 @@ export default function Deals() {
   const list = k => (params.get(k) ? params.get(k).split(',') : [])
   const [filters, setFilters] = useState({
     ...EMPTY_FILTERS, q: params.get('q') || '', stage: list('stage'), city: list('city'), siteType: list('siteType'), region: list('region'), owner: list('owner'),
-    recordType: params.get('type') || '', age: params.get('age') || '', from: params.get('from') || '', to: params.get('to') || '',
+    recordType: fixedType || params.get('type') || '', age: params.get('age') || '', from: params.get('from') || '', to: params.get('to') || '',
     ho: params.get('ho') || '', en: params.get('en') || '', openOnly: params.get('open') === '1', inPipe: params.get('inp') || '',
   })
   const fromCard = params.get('card')
@@ -74,8 +74,8 @@ export default function Deals() {
     <div className="p-4 sm:p-6">
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div>
-          <h1 className="text-xl font-extrabold text-navy-900">Leads & Deals</h1>
-          <p className="text-sm text-slate-500">{rows.length} of {deals.length} sites · <b className="text-slate-700">{rows.reduce((a, r) => a + (Number(r.qis) || 0), 0)} QIS</b></p>
+          <h1 className="text-xl font-extrabold text-navy-900">{fixedType === 'lead' ? 'Leads' : fixedType === 'deal' ? 'Deals' : 'Leads & Deals'}</h1>
+          <p className="text-sm text-slate-500">{rows.length} of {fixedType ? deals.filter(d => (d.record_type || 'deal') === fixedType).length : deals.length} {fixedType ? `${fixedType}s` : 'sites'} · <b className="text-slate-700">{rows.reduce((a, r) => a + (Number(r.qis) || 0), 0)} QIS</b></p>
         </div>
         <div className="flex-1" />
         <div className="flex rounded-lg border border-slate-300 bg-white p-0.5">
@@ -98,7 +98,7 @@ export default function Deals() {
           {filters.ho && <> · handed over {filters.ho.replace(',', ' → ')}</>}
           {filters.en && <> · energized {filters.en.replace(',', ' → ')}</>}
           {filters.openOnly && <> · excluding dropped</>}
-          <button className="ml-auto font-semibold underline" onClick={() => setFilters(EMPTY_FILTERS)}>Show all</button>
+          <button className="ml-auto font-semibold underline" onClick={() => setFilters({ ...EMPTY_FILTERS, recordType: fixedType || '' })}>Show all</button>
         </div>
       )}
       {filters.age && (
@@ -108,7 +108,7 @@ export default function Deals() {
         </div>
       )}
       <div className="mb-4">
-        <DealFilters value={filters} onChange={setFilters} show={['q', 'region', 'city', 'owner', 'type', 'stage', 'siteType']} />
+        <DealFilters value={filters} onChange={f => setFilters({ ...f, recordType: fixedType || f.recordType })} show={['q', 'region', 'city', 'owner', ...(fixedType ? [] : ['type']), 'stage', 'siteType']} />
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <PeriodBar allTime value={{ kind: pkind, from: rA, to: rB }} onChange={onPeriod} label={pLabel} prefix={pmode === 'pipe' ? 'Sites in pipeline' : 'Sites added'} />
           {pkind !== 'all' && (

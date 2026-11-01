@@ -213,7 +213,8 @@ export default function Dashboard() {
   }, [deals, filters, stages, users, team, cities, history, network, metric, period, grain])
 
   if (loading || !m) return <PageLoader />
-  const go = q => nav(`/app/deals?${q}`)
+  const listPath = t => (t === 'lead' ? '/app/leads' : t === 'deal' ? '/app/deals' : '/app/all')
+  const go = q => nav(`${listPath(filters.recordType)}?${q}`)
   const goCard = (card, extra) => {
     const p = new URLSearchParams({ card, ...extra })
     if (filters.city.length) p.set('city', filters.city.join(','))
@@ -222,7 +223,7 @@ export default function Dashboard() {
     if (filters.owner.length && !extra.owner) p.set('owner', filters.owner.join(','))
     if (filters.recordType) p.set('type', filters.recordType)
     if (filters.stage.length && !extra.stage) p.set('stage', filters.stage.join(','))
-    nav(`/app/deals?${p}`)
+    nav(`${listPath(filters.recordType)}?${p}`)
   }
 
   return (

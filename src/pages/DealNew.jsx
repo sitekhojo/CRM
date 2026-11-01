@@ -29,7 +29,7 @@ export default function DealNew() {
 
   return (
     <div className="mx-auto max-w-3xl p-4 sm:p-6">
-      <Link to="/app/deals" className="mb-2 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"><ArrowLeft className="h-4 w-4" />Leads & Deals</Link>
+      <Link to={-1} className="mb-2 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"><ArrowLeft className="h-4 w-4" />Back</Link>
       <h1 className="mb-4 text-xl font-extrabold text-navy-900">Create {label.toLowerCase()}</h1>
       <DealForm key={type} onSubmit={submit} submitting={busy} initialLoc={initialLoc} submitLabel={`Create ${label.toLowerCase()}`} />
     </div>

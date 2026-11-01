@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import { NavLink, Outlet, useNavigate, Link } from 'react-router-dom'
-import { LayoutDashboard, Handshake, Map as MapIcon, Radar, Users, Settings, Plus, LogOut, Menu, X, Search, KeyRound } from 'lucide-react'
+import { LayoutDashboard, Handshake, Target, Map as MapIcon, Radar, Users, Settings, Plus, LogOut, Menu, X, Search, KeyRound } from 'lucide-react'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import { Modal, Field, useToast } from './ui'
 
 const NAV = [
   { to: '/app/dashboard', label: 'Dashboard', icon: LayoutDashboard, admin: true },
-  { to: '/app/deals', label: 'Leads & Deals', icon: Handshake },
+  { to: '/app/leads', label: 'Leads', icon: Target },
+  { to: '/app/deals', label: 'Deals', icon: Handshake },
   { to: '/app/map', label: 'Map', icon: MapIcon },
   { to: '/app/planning', label: 'Network Planning', icon: Radar },
 ]
@@ -33,7 +34,7 @@ export default function AppLayout() {
   const nav = useNavigate()
 
   const link = ({ to, label, icon: Icon }) => (
-    <NavLink key={to} to={to} onClick={() => setOpen(false)}
+    <NavLink key={to} to={to} end={to === '/app/deals'} onClick={() => setOpen(false)}
       className={({ isActive }) => `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${isActive ? 'bg-white/10 text-white' : 'text-slate-300 hover:bg-white/5 hover:text-white'}`}>
       <Icon className="h-4.5 w-4.5" />{label}
     </NavLink>
@@ -77,7 +78,7 @@ export default function AppLayout() {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-[500] flex h-14 shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-3 sm:px-5">
           <button className="btn-ghost p-1.5 lg:hidden" onClick={() => setOpen(true)} aria-label="Menu"><Menu className="h-5 w-5" /></button>
-          <form className="relative max-w-md flex-1" onSubmit={e => { e.preventDefault(); nav(`/app/deals?q=${encodeURIComponent(q)}`) }}>
+          <form className="relative max-w-md flex-1" onSubmit={e => { e.preventDefault(); nav(`/app/all?q=${encodeURIComponent(q)}`) }}>
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input className="input bg-slate-50 pl-9" placeholder="Search deals, landlords, pincodes…" value={q} onChange={e => setQ(e.target.value)} />
           </form>

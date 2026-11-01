@@ -39,7 +39,7 @@ export default function DealDetail() {
   useEffect(() => { load() }, [load])
 
   if (deal === undefined) return <PageLoader />
-  if (deal === null) return <div className="p-6"><Empty title="Deal not found"><Link className="text-brand-700" to="/app/deals">Back to deals</Link></Empty></div>
+  if (deal === null) return <div className="p-6"><Empty title="Deal not found"><Link className="text-brand-700" to="/app/all">Back to leads & deals</Link></Empty></div>
 
   const perm = permissions(deal, profile)
   const activeStages = stagesFor(stages, deal.site_type).filter(s => !['dropped', 'hold'].includes(s.category))
@@ -72,7 +72,7 @@ export default function DealDetail() {
     if (!window.confirm(`Delete ${deal.site_code} "${deal.name}" permanently? This also deletes its history and comments.`)) return
     const { error } = await supabase.from('sites').delete().eq('id', id)
     if (error) return toast(errMsg(error), 'error')
-    toast('Deal deleted'); nav('/app/deals', { replace: true })
+    toast('Deal deleted'); nav(deal.record_type === 'lead' ? '/app/leads' : '/app/deals', { replace: true })
   }
 
   // merge stage changes + comments into one activity feed
@@ -83,7 +83,7 @@ export default function DealDetail() {
 
   return (
     <div className="p-4 sm:p-6">
-      <Link to="/app/deals" className="mb-2 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"><ArrowLeft className="h-4 w-4" />Leads & Deals</Link>
+      <Link to={deal.record_type === 'lead' ? '/app/leads' : '/app/deals'} className="mb-2 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"><ArrowLeft className="h-4 w-4" />{deal.record_type === 'lead' ? 'Leads' : 'Deals'}</Link>
 
       {/* Header */}
       <div className="card mb-4 p-4 sm:p-5">
