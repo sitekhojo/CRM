@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { NavLink, Outlet, useNavigate, Link } from 'react-router-dom'
 import { LayoutDashboard, Handshake, Target, Crosshair, Map as MapIcon, Radar, Users, Settings, Plus, LogOut, Menu, X, Search, KeyRound } from 'lucide-react'
 import { useAuth } from '../lib/auth'
@@ -87,6 +87,7 @@ export default function AppLayout() {
           <Link to="/app/deals/new?type=lead" className="btn-secondary"><Plus className="h-4 w-4" /><span className="hidden sm:inline">Create lead</span><span className="sm:hidden">Lead</span></Link>
           <Link to="/app/deals/new" className="btn-primary"><Plus className="h-4 w-4" /><span className="hidden sm:inline">Create deal</span><span className="sm:hidden">Deal</span></Link>
         </header>
+        <UpdateBanner />
         <main className="min-h-0 flex-1 overflow-auto">
           <Outlet />
         </main>
@@ -118,5 +119,32 @@ function ChangePassword({ open, onClose }) {
         {pw2 && pw !== pw2 && <p className="text-sm text-red-600">Passwords don't match</p>}
       </div>
     </Modal>
+  )
+}
+
+/** Checks every few minutes (and when the tab regains focus) whether a newer version is deployed. */
+function UpdateBanner() {
+  const [stale, setStale] = useState(false)
+  useEffect(() => {
+    const mine = [...document.querySelectorAll('script[type="module"][src]')].map(x => new URL(x.src).pathname).find(p => p.includes('/assets/'))
+    if (!mine) return
+    const check = async () => {
+      try {
+        const html = await (await fetch('/index.html?v=' + Date.now(), { cache: 'no-store' })).text()
+        if (!html.includes(mine)) setStale(true)
+      } catch { /* offline */ }
+    }
+    const t = setInterval(check, 3 * 60 * 1000)
+    const onFocus = () => document.visibilityState === 'visible' && check()
+    document.addEventListener('visibilitychange', onFocus)
+    check()
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', onFocus) }
+  }, [])
+  if (!stale) return null
+  return (
+    <div className="flex items-center justify-center gap-3 bg-brand-600 px-3 py-2 text-sm font-semibold text-white">
+      A newer version of SiteKhojo is available.
+      <button className="rounded-md bg-white px-2.5 py-1 text-brand-700" onClick={() => window.location.reload()}>Reload</button>
+    </div>
   )
 }

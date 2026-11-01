@@ -68,7 +68,6 @@ export default function Dashboard() {
     const delivery = (() => {
       const enEvents = [
         ...netAll.flatMap(n => Object.entries(n.energized_dates || {}).map(([d, c]) => ({ d, qis: Number(c) || 0 }))),
-        ...energizedDeals.filter(d => !netAll.some(n => near(d, n))).map(r => ({ d: String(enDate(r) || '').slice(0, 10), qis: qisOf(r) })).filter(x => x.d),
       ]
       const hoEvents = rows.map(r => ({ d: String(hoDate(r) || '').slice(0, 10), qis: qisOf(r) })).filter(x => x.d)
       const N = 12
@@ -155,7 +154,7 @@ export default function Dashboard() {
         const crmOnly = energizedDeals.filter(d => !netAll.some(n => near(d, n)))
         const crmEn = crmOnly.filter(r => inP(enDate(r)))
         const crmMatchedIds = new Set(energizedDeals.filter(d => !crmOnly.includes(d)).map(d => d.id))
-        const enSites = netAll.filter(n => Object.keys(n.energized_dates || {}).some(d => inP(d + 'T12:00:00'))).length + crmEn.length
+        const enSites = netAll.filter(n => Object.keys(n.energized_dates || {}).some(d => inP(d + 'T12:00:00'))).length
         const enList = [
           ...netAll.flatMap(n => {
             const ds = Object.entries(n.energized_dates || {}).filter(([d]) => inP(d + 'T12:00:00'))
@@ -163,7 +162,6 @@ export default function Dashboard() {
             const deal = energizedDeals.find(d => near(d, n))
             return [{ key: 'n' + n.id, name: n.name, city: n.city, siteType: n.site_type, qis: ds.reduce((a, [, c]) => a + (Number(c) || 0), 0), date: ds.map(([d]) => d).sort().pop(), source: 'QIS tracker', dealId: deal?.id }]
           }),
-          ...crmEn.map(r => ({ key: 's' + r.id, name: r.name, city: r.city, siteType: r.site_type, qis: qisOf(r), date: String(enDate(r) || '').slice(0, 10), source: 'Pipeline', dealId: r.id })),
         ].sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.qis - a.qis)
         const pFrom = isoDay(pStart), pTo = isoDay(pEnd)
         const pipe = rows.filter(r => inPipeline(r, pFrom, pTo))
@@ -181,7 +179,7 @@ export default function Dashboard() {
         return {
           label: periodLabel(period, pStart, pEnd), from: isoDay(pStart), to: isoDay(pEnd),
           added: qs(added), open: qs(stillOpen), ho: qs(ho),
-          en: { qis: trackerEn + sumQis(crmEn), sites: enSites, list: enList }, crmMatched: crmMatchedIds.size,
+          en: { qis: trackerEn, sites: enSites, list: enList }, crmMatched: crmMatchedIds.size,
           flow: Object.values(flow).sort((a, b) => a.order - b.order),
           pipe: qs(pipe), carried: qs(carried), pipeAdded: qs(pipeAdded), droppedInP: qs(closedDrop), status: Object.values(status).sort((a, b) => a.order - b.order),
         }
@@ -190,8 +188,8 @@ export default function Dashboard() {
       openPipe: qs(rows.filter(r => !['dropped', 'live'].includes(r.stage_category))),
       weekQis: sumQis(open.filter(r => new Date(r.created_at) >= wk)),
       monthQis: sumQis(open.filter(r => new Date(r.created_at) >= mo)),
-      netSites: net.length,
-      netQis: net.reduce((a, n) => a + (Number(n.weight) || 0), 0),
+      netSites: netAll.length,
+      netQis: netAll.reduce((a, n) => a + (Number(n.weight) || 0), 0),
       leads: open.filter(r => r.record_type === 'lead').length,
       deals: open.filter(r => r.record_type !== 'lead').length,
       week: open.filter(r => new Date(r.created_at) >= wk).length,
@@ -245,12 +243,12 @@ export default function Dashboard() {
           onClick={() => goCard(`QIS handed over ${m.period.label}`, { ho: `${m.period.from},${m.period.to}` })} />
         <Stat label="QIS energized" value={fmtNum(m.period.en.qis)} icon={Zap} tone="green" sub={`${fmtNum(m.period.en.sites)} sites · ${m.period.label}`}
           onClick={() => setEnOpen(true)} />
-        <Stat label="Energized network" value={fmtNum(m.netQis + m.liveQis)} icon={Network} tone="green" sub={`${fmtNum(m.netSites + m.live)} sites to date · +${fmtNum(m.period.en.qis)} in period`}
+        <Stat label="Energized network" value={fmtNum(m.netQis)} icon={Network} tone="green" sub={`${fmtNum(m.netSites)} sites to date (QIS tracker) · +${fmtNum(m.period.en.qis)} in period`}
           onClick={() => nav('/app/map?network=1')} />
       </div>
 
       <Modal open={enOpen} onClose={() => setEnOpen(false)} wide title={`Energized ${m.period.label} · ${fmtNum(m.period.en.qis)} QIS · ${fmtNum(m.period.en.sites)} sites`}
-        footer={<><button className="btn btn-ghost" onClick={() => nav('/app/map?network=1')}>Open on map</button><button className="btn btn-ghost" onClick={() => goCard(`Pipeline sites energized ${m.period.label}`, { en: `${m.period.from},${m.period.to}` })}>Pipeline sites only</button><button className="btn btn-primary" onClick={() => setEnOpen(false)}>Close</button></>}>
+        footer={<><button className="btn btn-ghost" onClick={() => nav('/app/map?network=1')}>Open on map</button><button className="btn btn-primary" onClick={() => setEnOpen(false)}>Close</button></>}>
         {m.period.en.list.length === 0 ? <p className="text-sm text-slate-400">Nothing energized in this period.</p> : (
           <div className="max-h-[60vh] overflow-auto">
             <table className="w-full text-sm">
@@ -429,7 +427,7 @@ export default function Dashboard() {
             {showHo && <Bar dataKey="ho" name="QIS handed over" fill="#f59e0b" radius={[4, 4, 0, 0]}><LabelList dataKey="ho" position="top" fontSize={10} fill="#475569" formatter={v => (v ? v : '')} /></Bar>}
           </BarChart>
         </ResponsiveContainer>
-        <p className="mt-1 text-xs text-slate-500">Energized = QIS-tracker energisation dates + pipeline sites energized in the CRM (not double-counted). {grain === 'week' ? 'The current week is partial.' : 'The current month is partial.'} Follows the region / city / site-type filters above.</p>
+        <p className="mt-1 text-xs text-slate-500">Energized = energisation dates from the QIS tracker (Settings → Network data). {grain === 'week' ? 'The current week is partial.' : 'The current month is partial.'} Follows the region / city / site-type filters above.</p>
       </Panel>
     </div>
   )
