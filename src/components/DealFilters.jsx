@@ -5,7 +5,7 @@ import { SITE_TYPES } from '../lib/format'
 import MultiSelect, { SingleSelect } from './MultiSelect'
 
 /** Shared filter bar: search, region, city, owner, lead/deal, stage, site type, date range. */
-export default function DealFilters({ value, onChange, show = ['q', 'region', 'city', 'owner', 'type', 'stage', 'siteType', 'date'], extra }) {
+export default function DealFilters({ value, onChange, show = ['q', 'region', 'city', 'owner', 'type', 'stage', 'siteType', 'date'], extra, qPlaceholder = 'Search…' }) {
   const { cities = [], stages = [], team = [] } = useConfig()
   const cityOpts = cities.filter(c => c.is_active && (!value.region?.length || value.region.includes(c.region)))
   const ownerOpts = team.filter(t => t.is_active && (!value.region?.length || value.region.includes(t.region)))
@@ -13,7 +13,7 @@ export default function DealFilters({ value, onChange, show = ['q', 'region', 'c
   const active = Object.entries(value).some(([k, v]) => !(k === 'recordType' && !show.includes('type')) && (Array.isArray(v) ? v.length > 0 : !!v && v !== EMPTY_FILTERS[k]))
   return (
     <div className="flex flex-wrap items-end gap-2">
-      {show.includes('q') && <input className="input w-full sm:w-56" placeholder="Search…" value={value.q} onChange={e => set('q', e.target.value)} />}
+      {show.includes('q') && <input className="input w-full sm:w-56" placeholder={qPlaceholder} value={value.q} onChange={e => set('q', e.target.value)} />}
       {show.includes('region') && (
         <MultiSelect allLabel="All regions" noun="regions" value={value.region || []} onChange={v => set('region', v)}
           options={REGIONS.map(r => ({ value: r, label: r }))} />
