@@ -49,9 +49,15 @@ export function inPipeAt(d, day) {
   const x = exitOf(d)
   return !x || !x.date || x.date > day
 }
+/** Worked in the period: in the pipeline at some point between from and to (opening + added). */
+export function workedIn(d, from, to) {
+  const a = addedDay(d); if (!a || a > to) return false
+  const x = exitOf(d)
+  return !x || !x.date || x.date >= from
+}
 export const dayBefore = day => { const t = new Date(day + 'T12:00:00'); t.setDate(t.getDate() - 1); return localDay(t) }
 
-export const EMPTY_FILTERS = { q: '', city: [], recordType: '', stage: [], siteType: [], region: [], owner: [], member: '', from: '', to: '', overdue: false, mine: false, age: '', ho: '', en: '', openOnly: false, inPipe: '', pipeAt: '', exit: '' }
+export const EMPTY_FILTERS = { q: '', city: [], recordType: '', stage: [], siteType: [], region: [], owner: [], member: '', from: '', to: '', overdue: false, mine: false, age: '', ho: '', en: '', openOnly: false, inPipe: '', pipeAt: '', exit: '', worked: '' }
 
 /** Apply the shared filter bar to a list of deals. */
 export function applyFilters(deals, f, userId) {
@@ -70,6 +76,7 @@ export function applyFilters(deals, f, userId) {
     if (f.overdue && !d.is_overdue) return false
     if (f.openOnly && d.stage_category === 'dropped') return false
     if (f.pipeAt && !inPipeAt(d, f.pipeAt)) return false
+    if (f.worked) { const [a, b] = f.worked.split(','); if (!workedIn(d, a, b)) return false }
     if (f.exit) { const [k, a, b] = f.exit.split(','); const x = exitOf(d); if (!x || x.kind !== k || !x.date || x.date < a || x.date > b) return false }
     if (f.inPipe) { const [a, b] = f.inPipe.split(','); if (!inPipeline(d, a, b)) return false }
     if (f.ho) { const [a, b] = f.ho.split(','); const x = d.extra?.ho_date; if (!x || x < a || x > b) return false }

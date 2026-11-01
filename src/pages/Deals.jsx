@@ -25,7 +25,7 @@ export default function Deals({ fixedType }) {
   const [filters, setFilters] = useState({
     ...EMPTY_FILTERS, q: params.get('q') || '', stage: list('stage'), city: list('city'), siteType: list('siteType'), region: list('region'), owner: list('owner'),
     recordType: fixedType || params.get('type') || '', age: params.get('age') || '', from: params.get('from') || '', to: params.get('to') || '',
-    ho: params.get('ho') || '', en: params.get('en') || '', openOnly: params.get('open') === '1', inPipe: params.get('inp') || '', pipeAt: params.get('at') || '', exit: params.get('exit') || '',
+    ho: params.get('ho') || '', en: params.get('en') || '', openOnly: params.get('open') === '1', inPipe: params.get('inp') || '', pipeAt: params.get('at') || '', exit: params.get('exit') || '', worked: params.get('worked') || '',
   })
   const fromCard = params.get('card')
   const [pkind, setPkind] = useState(params.get('from') || params.get('to') || (params.get('inp') && params.get('inp') !== ',') ? 'custom' : 'all')
@@ -102,6 +102,7 @@ export default function Deals({ fixedType }) {
           {filters.en && <> · energized {filters.en.replace(',', ' → ')}</>}
           {filters.openOnly && <> · excluding dropped</>}
           {filters.pipeAt && <> · in pipeline at end of {filters.pipeAt}</>}
+          {filters.worked && <> · in pipeline at some point {filters.worked.replace(',', ' → ')}</>}
           {filters.exit && <> · {filters.exit.startsWith('ho') ? 'handed over' : 'dropped'} {filters.exit.split(',').slice(1).join(' → ')}</>}
           <button className="ml-auto font-semibold underline" onClick={() => setFilters({ ...EMPTY_FILTERS, recordType: fixedType || '' })}>Show all</button>
         </div>

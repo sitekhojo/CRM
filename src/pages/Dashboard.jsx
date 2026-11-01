@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell, LabelList, Legend } from 'recharts'
 import { Layers, CalendarPlus, CalendarDays, Zap, Activity, Boxes, Network } from 'lucide-react'
-import { useDeals, applyFilters, EMPTY_FILTERS, fetchNetworkPoints, inPipeline, exitOf, inPipeAt, dayBefore } from '../lib/deals'
+import { useDeals, applyFilters, EMPTY_FILTERS, fetchNetworkPoints, inPipeline, exitOf, inPipeAt, dayBefore, workedIn } from '../lib/deals'
 import { supabase, fetchAll } from '../lib/supabase'
 import { useConfig, stagesFor, REGIONS } from '../lib/config'
 import DealFilters from '../components/DealFilters'
@@ -45,8 +45,9 @@ export default function Dashboard() {
 
     // stage-wise & city-wise follow the period: All time = every site; otherwise sites added in the period
     const scoped = period.kind === 'all' ? rows : rows.filter(r => inP(r.created_at))
+    const worked = rows.filter(r => workedIn(r, isoDay(pStart), isoDay(pEnd))) // opening pipeline + added in the period
     const pipeline = stagesFor(stages, filters.siteType).filter(s => s.category !== 'dropped').map(s => {
-      const xs = scoped.filter(r => r.stage_id === s.id)
+      const xs = worked.filter(r => r.stage_id === s.id)
       return { id: s.id, name: s.name, color: s.color, sla: s.sla_days, count: xs.length, sites: xs.length, qis: sumQis(xs),
         overdue: xs.filter(r => r.is_overdue).length, avgDays: avg(xs.map(r => +r.days_in_stage)) }
     })
@@ -285,14 +286,14 @@ export default function Dashboard() {
 
 
       <div className="grid gap-4 xl:grid-cols-3">
-        <Panel title={<span className="flex items-center justify-between">{period.kind === 'all' ? 'Stage-wise pipeline' : `Stage-wise · QIS added ${m.period.label} (current stage)`}<Toggle value={metric} onChange={setMetric} /></span>} className="xl:col-span-2">
+        <Panel title={<span className="flex items-center justify-between">{`Stage-wise · pipeline worked ${m.period.label} (opening + added), stage today`}<Toggle value={metric} onChange={setMetric} /></span>} className="xl:col-span-2">
           <ResponsiveContainer width="100%" height={280}>
             <BarChart data={m.pipeline} margin={{ left: -20, right: 8 }}>
               <CartesianGrid vertical={false} stroke="#f1f5f9" />
               <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-25} textAnchor="end" height={70} />
               <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
               <Tooltip cursor={{ fill: '#f8fafc' }} />
-              <Bar dataKey={metric} name={metric === 'qis' ? 'QIS' : 'Sites'} radius={[6, 6, 0, 0]} onClick={d => go(`stage=${d.id}${period.kind === 'all' ? '' : `&from=${m.period.from}&to=${m.period.to}`}`)} className="cursor-pointer">
+              <Bar dataKey={metric} name={metric === 'qis' ? 'QIS' : 'Sites'} radius={[6, 6, 0, 0]} onClick={d => goCard(`${d.name} · pipeline worked ${m.period.label}`, { stage: String(d.id), worked: `${m.period.from},${m.period.to}` })} className="cursor-pointer">
                 {m.pipeline.map(p => <Cell key={p.id} fill={p.color} />)}
               </Bar>
             </BarChart>
