@@ -7,6 +7,8 @@ export function periodRange({ kind, from, to }) {
     return [from ? new Date(from + 'T00:00:00') : new Date(2000, 0, 1), to ? new Date(to + 'T23:59:59') : end]
   }
   if (kind === 'month') return [new Date(now.getFullYear(), now.getMonth(), 1), end]
+  if (kind === 'lastMonth') return [new Date(now.getFullYear(), now.getMonth() - 1, 1), new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999)]
+  if (kind === 'lastQuarter') { const q = Math.floor(now.getMonth() / 3) * 3; return [new Date(now.getFullYear(), q - 3, 1), new Date(now.getFullYear(), q, 0, 23, 59, 59, 999)] }
   if (kind === 'quarter') { const q = Math.floor(now.getMonth() / 3) * 3; return [new Date(now.getFullYear(), q, 1), end] }
   const fy = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1 // Indian FY: Apr–Mar
   return [new Date(fy, 3, 1), end]
@@ -14,13 +16,14 @@ export function periodRange({ kind, from, to }) {
 export function periodLabel({ kind }, a, b) {
   const f = d => d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
   if (kind === 'all') return 'all time'
-  if (kind === 'month') return `in ${a.toLocaleDateString('en-IN', { month: 'long' })}`
+  if (kind === 'month' || kind === 'lastMonth') return `in ${a.toLocaleDateString('en-IN', { month: 'long', ...(a.getFullYear() !== new Date().getFullYear() ? { year: 'numeric' } : {}) })}`
+  if (kind === 'lastQuarter') { const fyq = ((Math.floor(a.getMonth() / 3) + 3) % 4) + 1; return `in Q${fyq} (${a.toLocaleDateString('en-IN', { month: 'short' })}–${b.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })})` }
   if (kind === 'quarter') { const fyq = ((Math.floor(a.getMonth() / 3) + 3) % 4) + 1; return `in Q${fyq} (${a.toLocaleDateString('en-IN', { month: 'short' })}–now)` }
   if (kind === 'fy') { const y = a.getFullYear(); return `in FY${String(y + 1).slice(2)} (Apr ${y}–now)` }
   return `${f(a)} – ${f(b)}`
 }
 export default function PeriodBar({ value, onChange, label, allTime = false, prefix = 'Showing activity' }) {
-  const opt = [...(allTime ? [['all', 'All time']] : []), ['month', 'This month'], ['quarter', 'This quarter'], ['fy', 'This FY'], ['custom', 'Custom']]
+  const opt = [...(allTime ? [['all', 'All time']] : []), ['month', 'This month'], ['lastMonth', 'Last month'], ['quarter', 'This quarter'], ['lastQuarter', 'Last quarter'], ['fy', 'This FY'], ['custom', 'Custom']]
   return (
     <div className="flex flex-wrap items-center gap-2">
       <div className="flex rounded-lg border border-slate-300 bg-white p-0.5">

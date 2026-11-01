@@ -119,20 +119,17 @@ export default function Dashboard() {
     const names = [...new Set([...team.filter(t => t.is_active).map(t => t.name), ...rows.map(r => r.owner).filter(Boolean)])]
     const teamRows = [...names.map(n => ({ name: n, t: team.find(x => x.name === n) })), { name: null, t: null }].map(({ name, t }) => {
       const owned = rows.filter(r => (r.owner || null) === name)
+      const added = owned.filter(r => inP(r.created_at))
       return {
         id: name || '_none', name: name || 'Unassigned', region: t?.region || owned[0]?.region || '—', lead: !!t?.is_lead, active: t ? t.is_active : !!name,
-        total: qs(owned.filter(r => r.stage_category !== 'dropped')),
-        week: qs(owned.filter(r => new Date(r.created_at) >= wk)),
-        month: qs(owned.filter(r => new Date(r.created_at) >= mo)),
-        owned: qs(owned.filter(r => ['active', 'approved'].includes(r.stage_category))),
-        hold: qs(owned.filter(r => r.stage_category === 'hold')),
+        added: qs(added),
+        stillOpen: qs(added.filter(r => ['active', 'approved'].includes(r.stage_category))),
         ho: qs(owned.filter(r => inP(hoDate(r)))),
-        won: qs(owned.filter(r => r.stage_category === 'live')),
-        dropped: qs(owned.filter(r => r.stage_category === 'dropped')),
-        overdue: owned.filter(r => r.is_overdue).length,
+        won: qs(owned.filter(r => r.stage_category === 'live' && inP(enDate(r)))),
+        dropped: qs(owned.filter(r => r.stage_category === 'dropped' && inP(r.stage_entered_at))),
       }
-    }).filter(x => x.total.sites || x.dropped.sites || (x.active && x.id !== '_none'))
-      .sort((a, b) => regionRank(a.region) - regionRank(b.region) || b.lead - a.lead || b.total.qis - a.total.qis)
+    }).filter(x => x.added.sites || x.ho.sites || x.won.sites || x.dropped.sites || (x.active && x.id !== '_none'))
+      .sort((a, b) => regionRank(a.region) - regionRank(b.region) || b.lead - a.lead || b.added.qis - a.added.qis)
 
     const stuck = rows.filter(r => ['active', 'approved', 'hold'].includes(r.stage_category)).sort((a, b) => b.days_in_stage - a.days_in_stage).slice(0, 25)
 
@@ -375,12 +372,12 @@ export default function Dashboard() {
         </Panel>
       </div>
 
-      <Panel title="Team performance · by site owner">
+      <Panel title={`Team performance · by site owner · ${m.period.label}`}>
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead><tr className="border-b border-slate-100">
-              <th className="th">Owner</th><th className="th">Region</th><th className="th text-right">QIS owned (excl. dropped)</th><th className="th text-right">Added this week</th><th className="th text-right">Added this month</th>
-              <th className="th text-right">In pipeline</th><th className="th text-right">On hold</th><th className="th text-right">Handed over · {m.period.label}</th><th className="th text-right">Energized</th><th className="th text-right">Dropped</th>
+              <th className="th">Owner</th><th className="th">Region</th><th className="th text-right">QIS added</th><th className="th text-right">Of those, still Scouting → Handover</th>
+              <th className="th text-right">Handed over</th><th className="th text-right">Energized</th><th className="th text-right">Dropped</th>
             </tr></thead>
             <tbody>
               {m.team.map((t, i) => (
@@ -391,14 +388,13 @@ export default function Dashboard() {
                     {!t.active && t.id !== '_none' && <span className="ml-1 text-xs text-slate-400">(inactive)</span>}
                   </td>
                   <td className="td text-slate-500">{t.region}</td>
-                  <QS v={t.total} bold /><QS v={t.week} /><QS v={t.month} />
-                  <QS v={t.owned} /><QS v={t.hold} cls="text-slate-500" /><QS v={t.ho} cls="text-amber-700" /><QS v={t.won} cls="text-emerald-700" /><QS v={t.dropped} cls="text-slate-500" />
+                  <QS v={t.added} bold /><QS v={t.stillOpen} /><QS v={t.ho} cls="text-amber-700" /><QS v={t.won} cls="text-emerald-700" /><QS v={t.dropped} cls="text-slate-500" />
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <p className="mt-2 text-xs text-slate-500">Click a name to see their sites. Reassign owners from the Owner column in Leads &amp; Deals. Data as of {fmtDate(new Date())}.</p>
+        <p className="mt-2 text-xs text-slate-500">All columns follow the selected period: added = created in the period; handed over / energized / dropped = happened in the period. Click a name to see their sites. Data as of {fmtDate(new Date())}.</p>
       </Panel>
 
       <Panel title={<span className="flex flex-wrap items-center gap-2">
