@@ -26,7 +26,32 @@ export function inPipeline(d, from, to) {
   return d.stage_category !== 'dropped' && d.stage_category !== 'live'
 }
 
-export const EMPTY_FILTERS = { q: '', city: [], recordType: '', stage: [], siteType: [], region: [], owner: [], member: '', from: '', to: '', overdue: false, mine: false, age: '', ho: '', en: '', openOnly: false, inPipe: '' }
+const localDay = v => { if (!v) return null; const s = String(v); if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s; const d = new Date(v); return isNaN(d) ? null : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
+export const addedDay = d => localDay(d.created_at)
+
+/**
+ * When and how a site left the pipeline (pipeline = Scouting → Agreement, plus Hold).
+ * Handed over = first exit for sites now at Handover Done / Energized (or dropped after handover).
+ */
+export function exitOf(d) {
+  const ho = d.extra?.ho_date || d.extra?.energized_on
+  let x = null
+  if (['approved', 'live'].includes(d.stage_category)) x = { kind: 'ho', date: localDay(ho || d.stage_entered_at) }
+  else if (d.stage_category === 'dropped') x = ho ? { kind: 'ho', date: localDay(ho) } : { kind: 'dropped', date: localDay(d.stage_entered_at) }
+  if (!x) return null
+  const a = addedDay(d) // a site can't leave before it was added
+  if (!x.date || (a && x.date < a)) x.date = a
+  return x
+}
+/** In the pipeline at the end of `day` (ISO)? */
+export function inPipeAt(d, day) {
+  const a = addedDay(d); if (!a || a > day) return false
+  const x = exitOf(d)
+  return !x || !x.date || x.date > day
+}
+export const dayBefore = day => { const t = new Date(day + 'T12:00:00'); t.setDate(t.getDate() - 1); return localDay(t) }
+
+export const EMPTY_FILTERS = { q: '', city: [], recordType: '', stage: [], siteType: [], region: [], owner: [], member: '', from: '', to: '', overdue: false, mine: false, age: '', ho: '', en: '', openOnly: false, inPipe: '', pipeAt: '', exit: '' }
 
 /** Apply the shared filter bar to a list of deals. */
 export function applyFilters(deals, f, userId) {
@@ -44,6 +69,8 @@ export function applyFilters(deals, f, userId) {
     if (f.mine && d.assigned_to !== userId && d.created_by !== userId) return false
     if (f.overdue && !d.is_overdue) return false
     if (f.openOnly && d.stage_category === 'dropped') return false
+    if (f.pipeAt && !inPipeAt(d, f.pipeAt)) return false
+    if (f.exit) { const [k, a, b] = f.exit.split(','); const x = exitOf(d); if (!x || x.kind !== k || !x.date || x.date < a || x.date > b) return false }
     if (f.inPipe) { const [a, b] = f.inPipe.split(','); if (!inPipeline(d, a, b)) return false }
     if (f.ho) { const [a, b] = f.ho.split(','); const x = d.extra?.ho_date; if (!x || x < a || x > b) return false }
     if (f.en) { const [a, b] = f.en.split(','); const x = d.extra?.energized_on; if (!x || x < a || x > b) return false }

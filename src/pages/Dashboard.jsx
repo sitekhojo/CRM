@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell, LabelList, Legend } from 'recharts'
 import { Layers, CalendarPlus, CalendarDays, Zap, Activity, Boxes, Network } from 'lucide-react'
-import { useDeals, applyFilters, EMPTY_FILTERS, fetchNetworkPoints, inPipeline } from '../lib/deals'
+import { useDeals, applyFilters, EMPTY_FILTERS, fetchNetworkPoints, inPipeline, exitOf, inPipeAt, dayBefore } from '../lib/deals'
 import { supabase, fetchAll } from '../lib/supabase'
 import { useConfig, stagesFor, REGIONS } from '../lib/config'
 import DealFilters from '../components/DealFilters'
@@ -179,6 +179,11 @@ export default function Dashboard() {
         return {
           label: periodLabel(period, pStart, pEnd), from: isoDay(pStart), to: isoDay(pEnd),
           added: qs(added), open: qs(stillOpen), ho: qs(ho),
+          bridge: (() => {
+            const from = isoDay(pStart), to = isoDay(pEnd), prev = dayBefore(from)
+            const exits = k => rows.filter(r => { const x = exitOf(r); return x && x.kind === k && x.date >= from && x.date <= to })
+            return { prev, opening: qs(rows.filter(r => inPipeAt(r, prev))), handed: qs(exits('ho')), dropped: qs(exits('dropped')), closing: qs(rows.filter(r => inPipeAt(r, to))) }
+          })(),
           en: { qis: trackerEn, sites: enSites, list: enList }, crmMatched: crmMatchedIds.size,
           flow: Object.values(flow).sort((a, b) => a.order - b.order),
           pipe: qs(pipe), carried: qs(carried), pipeAdded: qs(pipeAdded), droppedInP: qs(closedDrop), status: Object.values(status).sort((a, b) => a.order - b.order),
@@ -186,6 +191,7 @@ export default function Dashboard() {
       })(),
       totalQis: sumQis(open),
       openPipe: qs(rows.filter(r => !['dropped', 'live'].includes(r.stage_category))),
+      awaiting: qs(rows.filter(r => r.stage_category === 'approved')),
       weekQis: sumQis(open.filter(r => new Date(r.created_at) >= wk)),
       monthQis: sumQis(open.filter(r => new Date(r.created_at) >= mo)),
       netSites: netAll.length,
@@ -232,20 +238,27 @@ export default function Dashboard() {
       <DealFilters value={filters} onChange={setFilters} show={['region', 'city', 'owner', 'type', 'stage', 'siteType']} />
       <PeriodBar value={period} onChange={setPeriod} label={m.period.label} />
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <Stat label="Total QIS in pipeline" value={fmtNum(m.openPipe.qis)} icon={Boxes} sub={`${fmtNum(m.openPipe.sites)} sites · as of today · Scouting → Handover + Hold`}
-          onClick={() => goCard('Total QIS in pipeline (as of today)', { inp: ',' })} />
-        <Stat label="QIS added" value={fmtNum(m.period.added.qis)} icon={CalendarPlus} tone="blue" sub={`${fmtNum(m.period.added.sites)} sites · ${m.period.label}`}
-          onClick={() => goCard(`QIS added ${m.period.label}`, { from: m.period.from, to: m.period.to })} />
-        <Stat label="QIS in pipeline" value={fmtNum(m.period.open.qis)} icon={Activity} tone="teal" sub={`${fmtNum(m.period.open.sites)} sites · of those added, still Scouting → Handover`}
-          onClick={() => goCard(`QIS in pipeline (added ${m.period.label})`, { from: m.period.from, to: m.period.to, stage: stages.filter(s => s.is_active && ['active', 'approved'].includes(s.category)).map(s => s.id).join(',') })} />
-        <Stat label="QIS handed over" value={fmtNum(m.period.ho.qis)} icon={CalendarDays} tone="amber" sub={`${fmtNum(m.period.ho.sites)} sites · ${m.period.label}`}
-          onClick={() => goCard(`QIS handed over ${m.period.label}`, { ho: `${m.period.from},${m.period.to}` })} />
-        <Stat label="QIS energized" value={fmtNum(m.period.en.qis)} icon={Zap} tone="green" sub={`${fmtNum(m.period.en.sites)} sites · ${m.period.label}`}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+        <Stat label="Opening pipeline" value={fmtNum(m.period.bridge.opening.qis)} icon={Boxes} sub={`${fmtNum(m.period.bridge.opening.sites)} sites · on ${fmtDate(m.period.bridge.prev)}`}
+          onClick={() => goCard(`Opening pipeline (end of ${fmtDate(m.period.bridge.prev)})`, { at: m.period.bridge.prev })} />
+        <Stat label="+ Added" value={fmtNum(m.period.added.qis)} icon={CalendarPlus} tone="blue" sub={`${fmtNum(m.period.added.sites)} sites · ${m.period.label}`}
+          onClick={() => goCard(`Added ${m.period.label}`, { from: m.period.from, to: m.period.to })} />
+        <Stat label="− Handed over" value={fmtNum(m.period.bridge.handed.qis)} icon={CalendarDays} tone="amber" sub={`${fmtNum(m.period.bridge.handed.sites)} sites · ${m.period.label}`}
+          onClick={() => goCard(`Handed over ${m.period.label}`, { exit: `ho,${m.period.from},${m.period.to}` })} />
+        <Stat label="− Dropped" value={fmtNum(m.period.bridge.dropped.qis)} icon={Activity} tone="red" sub={`${fmtNum(m.period.bridge.dropped.sites)} sites · ${m.period.label}`}
+          onClick={() => goCard(`Dropped ${m.period.label}`, { exit: `dropped,${m.period.from},${m.period.to}` })} />
+        <Stat label="= Closing pipeline" value={fmtNum(m.period.bridge.closing.qis)} icon={Boxes} tone="teal" sub={`${fmtNum(m.period.bridge.closing.sites)} sites · on ${fmtDate(m.period.to)}`}
+          onClick={() => goCard(`Closing pipeline (end of ${fmtDate(m.period.to)})`, { at: m.period.to })} />
+      </div>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+        <Stat label="Awaiting energisation" value={fmtNum(m.awaiting.qis)} icon={CalendarDays} tone="amber" sub={`${fmtNum(m.awaiting.sites)} sites · handed over, not yet energized · today`}
+          onClick={() => goCard('Awaiting energisation (Handover Done)', { stage: stages.filter(s => s.category === 'approved').map(s => s.id).join(',') })} />
+        <Stat label="Energized" value={fmtNum(m.period.en.qis)} icon={Zap} tone="green" sub={`${fmtNum(m.period.en.sites)} sites · ${m.period.label} · QIS tracker`}
           onClick={() => setEnOpen(true)} />
-        <Stat label="Energized network" value={fmtNum(m.netQis)} icon={Network} tone="green" sub={`${fmtNum(m.netSites)} sites to date (QIS tracker) · +${fmtNum(m.period.en.qis)} in period`}
+        <Stat label="Energized network" value={fmtNum(m.netQis)} icon={Network} tone="green" sub={`${fmtNum(m.netSites)} sites to date · QIS tracker`}
           onClick={() => nav('/app/map?network=1')} />
       </div>
+      <p className="-mt-2 text-xs text-slate-500">Pipeline = Scouting → Agreement, plus Hold. Opening + Added − Handed over − Dropped = Closing. A site leaves the pipeline when it is handed over (then waits for energisation) or dropped.</p>
 
       <Modal open={enOpen} onClose={() => setEnOpen(false)} wide title={`Energized ${m.period.label} · ${fmtNum(m.period.en.qis)} QIS · ${fmtNum(m.period.en.sites)} sites`}
         footer={<><button className="btn btn-ghost" onClick={() => nav('/app/map?network=1')}>Open on map</button><button className="btn btn-primary" onClick={() => setEnOpen(false)}>Close</button></>}>
