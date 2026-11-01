@@ -9,7 +9,7 @@ import { useTargets, matchAll, locationStatus, STATUS, PRIORITIES, PRIORITY_KEYS
 import { validLatLng } from '../lib/geo'
 import { fmtNum } from '../lib/format'
 import { Modal, PageLoader, Empty, StageBadge, useToast } from '../components/ui'
-import MultiSelect from '../components/MultiSelect'
+import MultiSelect, { SingleSelect } from '../components/MultiSelect'
 
 export const PriorityChip = ({ p, className = '' }) => (
   <span className={`inline-block rounded px-1.5 py-0.5 text-[11px] font-bold ${PRIORITIES[p]?.cls || 'bg-slate-200'} ${className}`}>{p}</span>
@@ -103,10 +103,8 @@ export default function Acquisition() {
             <input className="input w-full sm:w-56" placeholder="Search locations…" value={f.q} onChange={e => setF({ ...f, q: e.target.value })} />
             <MultiSelect allLabel="All priorities" noun="priorities" value={f.priority} onChange={v => setF({ ...f, priority: v })} options={PRIORITY_KEYS.map(p => ({ value: p, label: p, color: PRIORITIES[p].color }))} />
             <MultiSelect allLabel="All cities" noun="cities" value={f.city} onChange={v => setF({ ...f, city: v })} options={m.cities.map(c => ({ value: c, label: c }))} />
-            <select className="input w-auto" value={f.month} onChange={e => setF({ ...f, month: e.target.value })}>
-              <option value="">All months</option>
-              {m.months.map(x => <option key={x} value={x}>{monthLabel(x + '-01')}</option>)}
-            </select>
+            <SingleSelect value={f.month} onChange={v => setF({ ...f, month: v })}
+              options={[{ value: '', label: 'All months' }, ...m.months.map(x => ({ value: x, label: monthLabel(x + '-01') }))]} />
             <MultiSelect allLabel="All statuses" noun="statuses" value={f.status} onChange={v => setF({ ...f, status: v })} options={Object.entries(STATUS).sort((a, b) => b[1].rank - a[1].rank).map(([k, s]) => ({ value: k, label: s.label }))} />
             <span className="ml-auto text-xs text-slate-500">{m.unmatched} open sites with a location are outside every priority location</span>
           </div>

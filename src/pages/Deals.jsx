@@ -5,6 +5,7 @@ import { useDeals, applyFilters, EMPTY_FILTERS } from '../lib/deals'
 import { useAuth } from '../lib/auth'
 import { useConfig, stagesFor } from '../lib/config'
 import DealFilters from '../components/DealFilters'
+import { SingleSelect } from '../components/MultiSelect'
 import PeriodBar, { periodRange, periodLabel, isoDay } from '../components/PeriodBar'
 import { StageBadge, PageLoader, Empty, Pill } from '../components/ui'
 import { fmtDate, fmtINR, daysInt, stageAgeTone, AGE_TONES, POWER_FEASIBILITY, RECORD_TYPES } from '../lib/format'
@@ -116,10 +117,8 @@ export default function Deals({ fixedType }) {
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <PeriodBar allTime value={{ kind: pkind, from: rA, to: rB }} onChange={onPeriod} label={pLabel} prefix={pmode === 'pipe' ? 'Sites in pipeline' : 'Sites added'} />
           {pkind !== 'all' && (
-            <select className="input w-auto" value={pmode} onChange={e => { setPmode(e.target.value); applyPeriod(pkind, rA, rB, e.target.value) }}>
-              <option value="added">Added in this period</option>
-              <option value="pipe">In pipeline in this period</option>
-            </select>
+            <SingleSelect value={pmode} allValue="added" onChange={v => { setPmode(v); applyPeriod(pkind, rA, rB, v) }}
+              options={[{ value: 'added', label: 'Added in this period' }, { value: 'pipe', label: 'In pipeline in this period' }]} />
           )}
         </div>
       </div>

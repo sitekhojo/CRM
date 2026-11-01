@@ -2,7 +2,7 @@ import { X } from 'lucide-react'
 import { useConfig, stagesFor, REGIONS } from '../lib/config'
 import { EMPTY_FILTERS } from '../lib/deals'
 import { SITE_TYPES } from '../lib/format'
-import MultiSelect from './MultiSelect'
+import MultiSelect, { SingleSelect } from './MultiSelect'
 
 /** Shared filter bar: search, region, city, owner, lead/deal, stage, site type, date range. */
 export default function DealFilters({ value, onChange, show = ['q', 'region', 'city', 'owner', 'type', 'stage', 'siteType', 'date'], extra }) {
@@ -27,11 +27,8 @@ export default function DealFilters({ value, onChange, show = ['q', 'region', 'c
           options={ownerOpts.map(t => ({ value: t.name, label: `${t.name} · ${t.region}` }))} />
       )}
       {show.includes('type') && (
-        <select className="input w-auto" value={value.recordType} onChange={e => set('recordType', e.target.value)}>
-          <option value="">Leads & deals</option>
-          <option value="lead">Leads only</option>
-          <option value="deal">Deals only</option>
-        </select>
+        <SingleSelect value={value.recordType} onChange={v => set('recordType', v)}
+          options={[{ value: '', label: 'Leads & deals' }, { value: 'lead', label: 'Leads only' }, { value: 'deal', label: 'Deals only' }]} />
       )}
       {show.includes('stage') && (
         <MultiSelect allLabel="All stages" noun="stages" value={value.stage} onChange={v => set('stage', v)}

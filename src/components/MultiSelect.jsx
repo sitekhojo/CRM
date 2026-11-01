@@ -38,3 +38,33 @@ export default function MultiSelect({ allLabel, noun, options, value = [], onCha
     </div>
   )
 }
+
+/** Single-choice dropdown styled like MultiSelect. options = [{value, label}]; '' = the "all" option. */
+export function SingleSelect({ value, onChange, options, allValue = '', className = '' }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    const close = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', close); return () => document.removeEventListener('mousedown', close)
+  }, [])
+  const cur = options.find(o => String(o.value) === String(value)) || options[0]
+  const active = String(value) !== String(allValue)
+  return (
+    <div ref={ref} className={`relative ${className}`}>
+      <button type="button" onClick={() => setOpen(o => !o)}
+        className={`input flex w-auto min-w-[150px] items-center justify-between gap-2 text-left ${active ? 'border-brand-500 bg-brand-50 font-semibold text-brand-800' : ''}`}>
+        <span className="truncate">{cur?.label}</span><ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
+      </button>
+      {open && (
+        <div className="absolute left-0 z-[700] mt-1 max-h-80 min-w-full overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-xl">
+          {options.map(o => (
+            <button type="button" key={o.value} onClick={() => { onChange(o.value); setOpen(false) }}
+              className={`flex w-full items-center gap-2 whitespace-nowrap px-3 py-1.5 text-left text-sm hover:bg-slate-50 ${String(o.value) === String(value) ? 'font-semibold text-brand-700' : ''}`}>
+              <Check className={`h-3.5 w-3.5 shrink-0 ${String(o.value) === String(value) ? 'text-brand-600' : 'invisible'}`} />{o.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
