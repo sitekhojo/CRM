@@ -236,7 +236,7 @@ export default function Dashboard() {
       <div className="flex flex-wrap items-end gap-3">
         <div className="mr-auto">
           <h1 className="text-xl font-extrabold text-navy-900">{(() => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening' })()}, Team Indofast Energy</h1>
-          <p className="text-sm text-slate-500">Welcome to SiteKhojo · network expansion at a glance{filters.from || filters.to ? ' · date filter applies to deal creation date' : ''}</p>
+          <p className="text-sm text-slate-500">Network expansion at a glance{filters.from || filters.to ? ' · date filter applies to deal creation date' : ''}</p>
         </div>
       </div>
       <DealFilters value={filters} onChange={setFilters} show={['region', 'city', 'owner', 'type', 'stage', 'siteType']} />
