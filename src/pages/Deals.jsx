@@ -13,6 +13,7 @@ import ImportDealsModal from '../components/ImportDealsModal'
 import StageCell from '../components/StageCell'
 import TypeCell from '../components/TypeCell'
 import OwnerCell from '../components/OwnerCell'
+import { useTargets, matchSite, PRIORITIES, monthLabel } from '../lib/acquisition'
 
 export default function Deals({ fixedType }) {
   const { deals, loading, reload } = useDeals()
@@ -45,13 +46,14 @@ export default function Deals({ fixedType }) {
   const [sort, setSort] = useState({ key: 'created_at', dir: 'desc' })
   const [importOpen, setImportOpen] = useState(false)
   const nav = useNavigate()
+  const { targets } = useTargets()
 
   useEffect(() => { setFilters(f => ({ ...f, q: params.get('q') || f.q })) }, [params])
   useEffect(() => { try { localStorage.setItem('dealsView', view) } catch { /* ignore */ } }, [view])
 
   const rows = useMemo(() => {
     if (!deals) return []
-    const r = applyFilters(deals, filters, user?.id).map(d => ({ ...d, qis: d.extra?.qis_count ?? null, ho_sort: d.extra?.ho_date ?? null, en_sort: d.extra?.energized_on ?? null }))
+    const r = applyFilters(deals, filters, user?.id).map(d => { const t = matchSite(d, targets); return { ...d, qis: d.extra?.qis_count ?? null, ho_sort: d.extra?.ho_date ?? null, en_sort: d.extra?.energized_on ?? null, target: t, target_priority: t?.priority || null, target_name: t?.name || null, target_month_label: t ? monthLabel(t.target_month) : null } })
     const { key, dir } = sort
     return [...r].sort((a, b) => {
       const x = a[key], y = b[key]
@@ -60,7 +62,7 @@ export default function Deals({ fixedType }) {
       if (y === null || y === undefined) return -1
       return (x > y ? 1 : -1) * (dir === 'asc' ? 1 : -1)
     })
-  }, [deals, filters, sort, user])
+  }, [deals, filters, sort, user, targets])
 
   if (loading) return <PageLoader />
 
@@ -145,7 +147,7 @@ export default function Deals({ fixedType }) {
                 <tr key={d.id} className="cursor-pointer hover:bg-slate-50" onClick={() => nav(`/app/deals/${d.id}`)}>
                   <td className="td font-mono text-xs text-slate-500">{d.site_code}</td>
                   <td className="td" onClick={e => e.stopPropagation()}><TypeCell deal={d} onChanged={reload} /></td>
-                  <td className="td max-w-[260px]"><div className="truncate font-semibold text-slate-900">{d.name}</div><div className="truncate text-xs text-slate-500">{[d.site_type, d.address].filter(Boolean).join(' · ') || '—'}{d.latitude === null && <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] font-semibold text-amber-700">No location</span>}</div></td>
+                  <td className="td max-w-[260px]"><div className="truncate font-semibold text-slate-900">{d.name}</div><div className="truncate text-xs text-slate-500">{[d.site_type, d.address].filter(Boolean).join(' · ') || '—'}{d.latitude === null && <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] font-semibold text-amber-700">No location</span>}</div>{d.target && <div className="mt-0.5 truncate text-[11px] text-slate-600" title={`Priority location · month of acquisition ${d.target_month_label}`}><span className={`mr-1 rounded px-1 font-bold ${PRIORITIES[d.target.priority]?.cls}`}>{d.target.priority}</span>{d.target.name}</div>}</td>
                   <td className="td" onClick={e => e.stopPropagation()}><StageCell deal={d} onChanged={reload} /></td>
                   <td className="td font-semibold">{d.qis ?? '—'}</td>
                   <td className="td whitespace-nowrap">

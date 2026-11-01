@@ -12,6 +12,7 @@ import Login from './pages/Login'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Deals = lazy(() => import('./pages/Deals'))
+const Acquisition = lazy(() => import('./pages/Acquisition'))
 const DealNew = lazy(() => import('./pages/DealNew'))
 const DealDetail = lazy(() => import('./pages/DealDetail'))
 const MapPage = lazy(() => import('./pages/MapPage'))
@@ -71,6 +72,7 @@ function App() {
               <Route path="all" element={<Lazy><Deals key="all" /></Lazy>} />
               <Route path="deals/new" element={<Lazy><DealNew /></Lazy>} />
               <Route path="deals/:id" element={<Lazy><DealDetail /></Lazy>} />
+              <Route path="acquisition" element={<Lazy><Acquisition /></Lazy>} />
               <Route path="map" element={<Lazy><MapPage /></Lazy>} />
               <Route path="planning" element={<Lazy><Planning /></Lazy>} />
               <Route path="admin/users" element={<RequireAuth admin><Lazy><Users /></Lazy></RequireAuth>} />

@@ -12,7 +12,7 @@ export const DEAL_COLUMNS = [
   ['remarks', 'Remarks'], ['drop_reason', 'Drop reason'], ['drop_notes', 'Drop notes'],
   ['qis_count', 'No. of QIS'], ['expected_ho', 'Expected HO date'], ['priority_zone', 'Priority zone (P0/P1)'], ['probability', 'Probability %'],
   ['ho_date', 'Handover date'], ['energized_on', 'Energization date'],
-  ['region', 'Region'], ['owner', 'Owner'], ['created_by_name', 'Scouted by'], ['created_at', 'Created at'], ['stage_entered_at', 'Stage since'],
+  ['target_priority', 'Priority location'], ['target_name', 'Priority location name'], ['target_month_label', 'Month of acquisition'], ['region', 'Region'], ['owner', 'Owner'], ['created_by_name', 'Scouted by'], ['created_at', 'Created at'], ['stage_entered_at', 'Stage since'],
 ]
 
 // Columns accepted on import (header text is matched case-insensitively against key OR label)

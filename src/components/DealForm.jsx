@@ -6,6 +6,8 @@ import { LocationPicker, DealMarkers } from './maps'
 import { SITE_TYPES, EXTRA_FIELDS } from '../lib/format'
 import { evaluateFeasibility, validLatLng, VERDICT } from '../lib/geo'
 import { fetchDeals, fetchNetworkPoints } from '../lib/deals'
+import { useTargets, matchPoint } from '../lib/acquisition'
+import TargetMatch from './TargetMatch'
 
 export const blankDeal = {
   name: '', address: '', city: '', pincode: '', site_type: '', area_sqft: '',
@@ -82,6 +84,8 @@ export default function DealForm({ initial, initialLoc, onSubmit, submitting, mo
     onSubmit(toPayload(f, loc))
   }
   const locOk = validLatLng(loc.lat, loc.lng)
+  const { targets } = useTargets()
+  const target = locOk ? matchPoint(loc.lat, loc.lng, targets) : null
 
   return (
     <form onSubmit={submit} className="space-y-4">
@@ -89,6 +93,7 @@ export default function DealForm({ initial, initialLoc, onSubmit, submitting, mo
         <LocationPicker value={loc} onChange={setLoc}>
           {check && <DealMarkers deals={check.nearby.pipeline.slice(0, 50)} radius={6} />}
         </LocationPicker>
+        {locOk && targets.length > 0 && <div className="mt-3"><TargetMatch match={target} /></div>}
         {check && (
           <div className={`mt-3 rounded-lg border px-3 py-2 text-sm ${VERDICT[check.verdict].cls}`}>
             <b>Network check: {VERDICT[check.verdict].label}</b>

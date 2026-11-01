@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import OwnerCell from '../components/OwnerCell'
+import TargetMatch from '../components/TargetMatch'
+import { useTargets, matchSite } from '../lib/acquisition'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Pencil, ArrowRightLeft, Trash2, MapPin, Phone, Mail, AlertTriangle, MessageSquare, History, ExternalLink, Radar, Check } from 'lucide-react'
 import { supabase, errMsg } from '../lib/supabase'
@@ -27,6 +29,7 @@ export default function DealDetail() {
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [comment, setComment] = useState('')
+  const { targets } = useTargets()
 
   const load = useCallback(async () => {
     const [d, h, c] = await Promise.all([
@@ -219,6 +222,7 @@ export default function DealDetail() {
             </div>
           )}
           <div className="card space-y-3 p-4 text-sm">
+            <Meta label="Priority location"><TargetMatch compact match={matchSite(deal, targets)} hasLocation={hasLoc(deal)} />{!hasLoc(deal) && <span className="text-xs text-slate-400">Needs a location</span>}</Meta>
             <Meta label="Owner">
               <OwnerCell deal={deal} onChanged={load} className="font-semibold" />
               {deal.region && <span className="ml-2 text-xs text-slate-400">{deal.region}</span>}

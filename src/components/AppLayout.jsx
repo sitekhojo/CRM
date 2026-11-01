@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { NavLink, Outlet, useNavigate, Link } from 'react-router-dom'
-import { LayoutDashboard, Handshake, Target, Map as MapIcon, Radar, Users, Settings, Plus, LogOut, Menu, X, Search, KeyRound } from 'lucide-react'
+import { LayoutDashboard, Handshake, Target, Crosshair, Map as MapIcon, Radar, Users, Settings, Plus, LogOut, Menu, X, Search, KeyRound } from 'lucide-react'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import { Modal, Field, useToast } from './ui'
@@ -9,6 +9,7 @@ const NAV = [
   { to: '/app/dashboard', label: 'Dashboard', icon: LayoutDashboard, admin: true },
   { to: '/app/leads', label: 'Leads', icon: Target },
   { to: '/app/deals', label: 'Deals', icon: Handshake },
+  { to: '/app/acquisition', label: 'Acquisition Desk', icon: Crosshair },
   { to: '/app/map', label: 'Map', icon: MapIcon },
   { to: '/app/planning', label: 'Network Planning', icon: Radar },
 ]
