@@ -90,7 +90,7 @@ export default function MapPage() {
             </>}
           </BaseMap>
           {point && (
-            <div className="absolute right-3 top-3 z-[400] w-72 rounded-xl bg-white/95 p-3 text-sm shadow-lg">
+            <div className="absolute right-3 top-16 z-[400] w-72 rounded-xl bg-white/95 p-3 text-sm shadow-lg">
               <p className="font-bold text-navy-900">{point.lat.toFixed(6)}, {point.lng.toFixed(6)}</p>
               <p className="mt-1 text-xs text-slate-600">{pointTarget ? <><span className={`mr-1 rounded px-1 font-bold ${PRIORITIES[pointTarget.priority].cls}`}>{pointTarget.priority}</span>Inside {pointTarget.name} · {monthLabel(pointTarget.target_month)}</> : 'Not in a priority location'}</p>
               {nearNet && <p className="mt-1 text-xs text-slate-600">Nearest energized station: <b>{nearNet.n.name}</b> · {fmtNum(Math.round(nearNet.m))} m</p>}
