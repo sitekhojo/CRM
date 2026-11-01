@@ -48,7 +48,7 @@ export default function Dashboard() {
     const worked = rows.filter(r => workedIn(r, isoDay(pStart), isoDay(pEnd))) // opening pipeline + added in the period
     const pipeline = stagesFor(stages, filters.siteType).filter(s => s.category !== 'dropped').map(s => {
       const xs = worked.filter(r => r.stage_id === s.id)
-      return { id: s.id, name: s.name, color: s.color, sla: s.sla_days, count: xs.length, sites: xs.length, qis: sumQis(xs),
+      return { id: s.id, cat: s.category, name: s.name, color: s.color, sla: s.sla_days, count: xs.length, sites: xs.length, qis: sumQis(xs),
         overdue: xs.filter(r => r.is_overdue).length, avgDays: avg(xs.map(r => +r.days_in_stage)) }
     })
 
@@ -133,7 +133,7 @@ export default function Dashboard() {
 
     const stuck = rows.filter(r => ['active', 'approved', 'hold'].includes(r.stage_category)).sort((a, b) => b.days_in_stage - a.days_in_stage).slice(0, 25)
 
-    return {
+    const out = {
       total: open.length,
       ageing: (() => {
         const open = rows.filter(r => ['active', 'approved', 'hold'].includes(r.stage_category))
@@ -209,9 +209,12 @@ export default function Dashboard() {
       pipeQis: rows.filter(r => ['active', 'approved'].includes(r.stage_category)).reduce((a, r) => a + (Number(r.extra?.qis_count) || 0), 0),
       liveQis: rows.filter(r => r.stage_category === 'live').reduce((a, r) => a + (Number(r.extra?.qis_count) || 0), 0),
       overdue: stuck.length,
-      pipeline, cityCounts, trend, delivery, tat, team: teamRows, stuck, cycle,
+      cityCounts, trend, delivery, tat, team: teamRows, stuck, cycle,
       dropReasons: Object.entries(by(r => r.stage_category === 'dropped' ? r.drop_reason || 'Unspecified' : null)).filter(([k]) => k !== 'null').sort((a, b) => b[1] - a[1]),
     }
+    // Energized bar = energisations in the period from the QIS tracker (same as the Energized card)
+    out.pipeline = pipeline.map(p => (p.cat === 'live' ? { ...p, qis: out.period.en.qis, sites: out.period.en.sites, count: out.period.en.sites } : p))
+    return out
   }, [deals, filters, stages, users, team, cities, history, network, metric, period, grain])
 
   if (loading || !m) return <PageLoader />
@@ -286,14 +289,14 @@ export default function Dashboard() {
 
 
       <div className="grid gap-4 xl:grid-cols-3">
-        <Panel title={<span className="flex items-center justify-between">{`Stage-wise · pipeline worked ${m.period.label} (opening + added), stage today`}<Toggle value={metric} onChange={setMetric} /></span>} className="xl:col-span-2">
+        <Panel title={<span className="flex items-center justify-between">{`Stage-wise · pipeline worked ${m.period.label} (stage today) · Energized = QIS tracker`}<Toggle value={metric} onChange={setMetric} /></span>} className="xl:col-span-2">
           <ResponsiveContainer width="100%" height={280}>
             <BarChart data={m.pipeline} margin={{ left: -20, right: 8 }}>
               <CartesianGrid vertical={false} stroke="#f1f5f9" />
               <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-25} textAnchor="end" height={70} />
               <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
               <Tooltip cursor={{ fill: '#f8fafc' }} />
-              <Bar dataKey={metric} name={metric === 'qis' ? 'QIS' : 'Sites'} radius={[6, 6, 0, 0]} onClick={d => goCard(`${d.name} · pipeline worked ${m.period.label}`, { stage: String(d.id), worked: `${m.period.from},${m.period.to}` })} className="cursor-pointer">
+              <Bar dataKey={metric} name={metric === 'qis' ? 'QIS' : 'Sites'} radius={[6, 6, 0, 0]} onClick={d => (d.cat === 'live' ? setEnOpen(true) : goCard(`${d.name} · pipeline worked ${m.period.label}`, { stage: String(d.id), worked: `${m.period.from},${m.period.to}` }))} className="cursor-pointer">
                 {m.pipeline.map(p => <Cell key={p.id} fill={p.color} />)}
               </Bar>
             </BarChart>
