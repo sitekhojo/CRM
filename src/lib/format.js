@@ -3,7 +3,22 @@ export const fmtDateTime = d => d ? new Date(d).toLocaleString('en-IN', { day: '
 export const fmtINR = n => (n === null || n === undefined || n === '') ? '—' : '₹' + Number(n).toLocaleString('en-IN')
 export const fmtNum = (n, d = 0) => (n === null || n === undefined || Number.isNaN(n)) ? '—' : Number(n).toLocaleString('en-IN', { maximumFractionDigits: d })
 export const fmtDist = m => m === null || m === undefined || !Number.isFinite(m) ? '—' : m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(2)} km`
-export const daysLabel = d => d === null || d === undefined ? '—' : `${Number(d).toFixed(d < 10 ? 1 : 0)} d`
+export const daysLabel = d => {
+  if (d === null || d === undefined || isNaN(d)) return '—'
+  const n = Math.floor(Number(d))
+  return n < 1 ? '< 1 day' : n === 1 ? '1 day' : `${n} days`
+}
+
+/** Colour for time spent in a stage vs its SLA: green ≤ half, amber ≤ SLA, red beyond, dark red > 2× SLA. */
+export function stageAgeTone(days, sla, category) {
+  if (['dropped', 'live'].includes(category)) return { cls: 'bg-slate-100 text-slate-500', key: 'closed', label: 'Closed stage' }
+  const d = Number(days) || 0
+  if (!sla) return { cls: 'bg-slate-100 text-slate-600', key: 'nosla', label: 'No SLA for this stage' }
+  if (d > 2 * sla) return { cls: 'bg-red-600 text-white', key: 'critical', label: `More than 2× SLA (${sla} days)` }
+  if (d > sla) return { cls: 'bg-red-100 text-red-700', key: 'over', label: `Beyond SLA (${sla} days)` }
+  if (d > sla / 2) return { cls: 'bg-amber-100 text-amber-800', key: 'near', label: `Over half of SLA (${sla} days)` }
+  return { cls: 'bg-emerald-100 text-emerald-700', key: 'ok', label: `Within SLA (${sla} days)` }
+}
 
 export function timeAgo(d) {
   if (!d) return ''

@@ -7,7 +7,7 @@ import { useConfig, stagesFor } from '../lib/config'
 import DealFilters from '../components/DealFilters'
 import PeriodBar, { periodRange, periodLabel, isoDay } from '../components/PeriodBar'
 import { StageBadge, PageLoader, Empty, Pill } from '../components/ui'
-import { fmtDate, fmtINR, daysLabel, POWER_FEASIBILITY, RECORD_TYPES } from '../lib/format'
+import { fmtDate, fmtINR, daysLabel, stageAgeTone, POWER_FEASIBILITY, RECORD_TYPES } from '../lib/format'
 import { exportRows, DEAL_COLUMNS } from '../lib/excel'
 import ImportDealsModal from '../components/ImportDealsModal'
 import StageCell from '../components/StageCell'
@@ -124,6 +124,13 @@ export default function Deals() {
         <div className="card"><Empty icon={Handshake} title="No leads or deals yet">
           <Link to="/app/deals/new" className="btn-primary mt-3"><Plus className="h-4 w-4" />Create your first deal</Link></Empty></div>
       ) : view === 'table' ? (
+        <>
+        <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+          <span className="font-semibold text-slate-600">Time in stage:</span>
+          {[['bg-emerald-100 text-emerald-700', 'Within half of SLA'], ['bg-amber-100 text-amber-800', 'Over half of SLA'], ['bg-red-100 text-red-700', 'Beyond SLA'], ['bg-red-600 text-white', 'More than 2× SLA'], ['bg-slate-100 text-slate-500', 'No SLA / closed']].map(([c, l]) => (
+            <span key={l} className={`rounded-full px-2 py-0.5 font-semibold ${c}`}>{l}</span>
+          ))}
+        </div>
         <div className="card overflow-x-auto">
           <table className="min-w-full divide-y divide-slate-100">
             <thead className="bg-slate-50">
@@ -141,11 +148,12 @@ export default function Deals() {
                   <td className="td max-w-[260px]"><div className="truncate font-semibold text-slate-900">{d.name}</div><div className="truncate text-xs text-slate-500">{[d.site_type, d.address].filter(Boolean).join(' · ') || '—'}{d.latitude === null && <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] font-semibold text-amber-700">No location</span>}</div></td>
                   <td className="td" onClick={e => e.stopPropagation()}><StageCell deal={d} onChanged={reload} /></td>
                   <td className="td font-semibold">{d.qis ?? '—'}</td>
-                  <td className="td">
-                    <span className={d.is_overdue ? 'inline-flex items-center gap-1 font-semibold text-red-600' : ''}>
-                      {d.is_overdue && <AlertTriangle className="h-3.5 w-3.5" />}{daysLabel(d.days_in_stage)}
-                    </span>
-                    {d.stage_sla_days && <span className="text-xs text-slate-400"> / {d.stage_sla_days}d</span>}
+                  <td className="td whitespace-nowrap">
+                    {(() => { const t = stageAgeTone(d.days_in_stage, d.stage_sla_days, d.stage_category); return (
+                      <span title={t.label} className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${t.cls}`}>
+                        {['over', 'critical'].includes(t.key) && <AlertTriangle className="h-3 w-3" />}{daysLabel(d.days_in_stage)}
+                      </span>) })()}
+                    {d.stage_sla_days && !['dropped', 'live'].includes(d.stage_category) && <div className="mt-0.5 text-[10px] text-slate-400">SLA {d.stage_sla_days} days</div>}
                   </td>
                   <td className="td">{d.city}{d.region && <div className="text-[10px] text-slate-400">{d.region}</div>}</td>
                   <td className="td">{fmtINR(d.rent_expectation)}</td>
@@ -160,6 +168,7 @@ export default function Deals() {
           </table>
           {rows.length === 0 && <Empty title="No deals match these filters" />}
         </div>
+        </>
       ) : (
         <Board rows={rows} stages={stagesFor(stages, filters.siteType)} />
       )}
@@ -198,7 +207,7 @@ function Board({ rows, stages }) {
                     </div>
                     <div className="mt-2 flex items-center justify-between text-xs">
                       <span className="text-slate-600">{d.qis ? <b>{d.qis} QIS · </b> : ''}{d.owner || '—'}</span>
-                      <span className={`font-semibold ${d.is_overdue ? 'text-red-600' : 'text-slate-500'}`}>{daysLabel(d.days_in_stage)}</span>
+                      <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${stageAgeTone(d.days_in_stage, d.stage_sla_days, d.stage_category).cls}`}>{daysLabel(d.days_in_stage)}</span>
                     </div>
                   </Link>
                 ))}
