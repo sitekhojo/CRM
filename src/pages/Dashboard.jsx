@@ -4,7 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 import { Layers, CalendarPlus, CalendarDays, Zap, Activity, Boxes, Network } from 'lucide-react'
 import { useDeals, applyFilters, EMPTY_FILTERS, fetchNetworkPoints, inPipeline, exitOf, inPipeAt, dayBefore, workedIn } from '../lib/deals'
 import { supabase, fetchAll } from '../lib/supabase'
-import { useConfig, stagesFor, REGIONS } from '../lib/config'
+import { useConfig, stagesFor, REGIONS, leadLabel } from '../lib/config'
 import DealFilters from '../components/DealFilters'
 import PeriodBar, { periodRange, periodLabel, isoDay } from '../components/PeriodBar'
 import { Stat, StageBadge, PageLoader, Modal } from '../components/ui'
@@ -121,7 +121,7 @@ export default function Dashboard() {
       const owned = rows.filter(r => (r.owner || null) === name)
       const added = owned.filter(r => inP(r.created_at))
       return {
-        id: name || '_none', name: name || 'Unassigned', region: t?.region || owned[0]?.region || '—', lead: !!t?.is_lead, active: t ? t.is_active : !!name,
+        id: name || '_none', name: name || 'Unassigned', region: t?.region || owned[0]?.region || '—', lead: t?.is_lead ? leadLabel(t.region) : null, active: t ? t.is_active : !!name,
         added: qs(added),
         stillOpen: qs(added.filter(r => ['active', 'approved'].includes(r.stage_category))),
         ho: qs(owned.filter(r => inP(hoDate(r)))),
@@ -129,7 +129,7 @@ export default function Dashboard() {
         dropped: qs(owned.filter(r => r.stage_category === 'dropped' && inP(r.stage_entered_at))),
       }
     }).filter(x => x.added.sites || x.ho.sites || x.won.sites || x.dropped.sites || (x.active && x.id !== '_none'))
-      .sort((a, b) => regionRank(a.region) - regionRank(b.region) || b.lead - a.lead || b.added.qis - a.added.qis)
+      .sort((a, b) => regionRank(a.region) - regionRank(b.region) || (b.lead ? 1 : 0) - (a.lead ? 1 : 0) || b.added.qis - a.added.qis)
 
     const stuck = rows.filter(r => ['active', 'approved', 'hold'].includes(r.stage_category)).sort((a, b) => b.days_in_stage - a.days_in_stage).slice(0, 25)
 
@@ -399,7 +399,7 @@ export default function Dashboard() {
                 <tr key={t.id} className={`hover:bg-slate-50 ${i && m.team[i - 1].region !== t.region ? 'border-t-2 border-slate-200' : 'border-b border-slate-50'}`}>
                   <td className="td font-semibold">
                     <button className="hover:underline" onClick={() => t.id !== '_none' && goCard(`Sites owned by ${t.name}`, { owner: t.name })}>{t.name}</button>
-                    {t.lead && <span className="ml-1 rounded bg-brand-50 px-1 text-[10px] font-semibold text-brand-700">lead</span>}
+                    {t.lead && <span className="ml-1 rounded bg-brand-50 px-1 text-[10px] font-semibold text-brand-700">{t.lead}</span>}
                     {!t.active && t.id !== '_none' && <span className="ml-1 text-xs text-slate-400">(inactive)</span>}
                   </td>
                   <td className="td text-slate-500">{t.region}</td>

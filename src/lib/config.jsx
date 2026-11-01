@@ -67,3 +67,6 @@ export function ownerOptions(team = [], region, current) {
   if (current && !act.some(t => t.name === current)) groups.push({ region: 'Former', members: [{ name: current }] })
   return groups
 }
+
+/** Badge for a team lead: zonal head for North/South/West, "lead" elsewhere (e.g. East). */
+export const leadLabel = region => (['North', 'South', 'West'].includes(region) ? 'Zonal head' : 'lead')

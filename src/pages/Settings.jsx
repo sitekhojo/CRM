@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Plus, Upload, Trash2, Save, Download } from 'lucide-react'
 import { supabase, errMsg, fetchAll } from '../lib/supabase'
-import { useConfig, DEFAULT_RULES, REGIONS } from '../lib/config'
+import { useConfig, DEFAULT_RULES, REGIONS, leadLabel } from '../lib/config'
 import { useToast, Field, StageBadge } from '../components/ui'
 import { readSheet, normaliseRow, toNum, downloadTemplate, exportRows } from '../lib/excel'
 import { NETWORK_TYPES } from './Planning'
@@ -97,7 +97,7 @@ function Team() {
   const [n, setN] = useState(''); const [r, setR] = useState('North')
   return (
     <div className="card max-w-3xl p-4">
-      <p className="mb-3 text-sm text-slate-500">Site owners. Everyone shares one login, so ownership is by name. The <b>lead</b> is the default owner for their region's cities (set per city in the Cities tab).</p>
+      <p className="mb-3 text-sm text-slate-500">Site owners. Everyone shares one login, so ownership is by name. The <b>zonal head</b> (or lead) is the default owner for their region's cities (set per city in the Cities tab).</p>
       <form className="mb-4 flex flex-wrap gap-2" onSubmit={async e => { e.preventDefault(); if (await save(supabase.from('team_members').insert({ name: n.trim(), region: r }), 'Added')) setN('') }}>
         <input className="input w-56" required placeholder="Name" value={n} onChange={e => setN(e.target.value)} />
         <select className="input w-36" value={r} onChange={e => setR(e.target.value)}>{REGIONS.map(x => <option key={x}>{x}</option>)}</select>
@@ -110,9 +110,9 @@ function Team() {
             <ul className="divide-y divide-slate-100">
               {team.filter(t => t.region === reg).map(t => (
                 <li key={t.id} className="flex items-center gap-2 py-1.5 text-sm">
-                  <span className={`mr-auto ${t.is_active ? 'font-medium' : 'text-slate-400 line-through'}`}>{t.name}{t.is_lead && <span className="ml-1 rounded bg-brand-50 px-1 text-[10px] font-semibold text-brand-700">lead</span>}</span>
+                  <span className={`mr-auto ${t.is_active ? 'font-medium' : 'text-slate-400 line-through'}`}>{t.name}{t.is_lead && <span className="ml-1 rounded bg-brand-50 px-1 text-[10px] font-semibold text-brand-700">{leadLabel(t.region)}</span>}</span>
                   <select className="input w-24 py-0.5 text-xs" value={t.region} onChange={e => save(supabase.from('team_members').update({ region: e.target.value }).eq('id', t.id), 'Moved')}>{REGIONS.map(x => <option key={x}>{x}</option>)}</select>
-                  <button className="btn-ghost py-0.5 text-xs" onClick={() => save(supabase.from('team_members').update({ is_lead: !t.is_lead }).eq('id', t.id))}>{t.is_lead ? 'Unset lead' : 'Make lead'}</button>
+                  <button className="btn-ghost py-0.5 text-xs" onClick={() => save(supabase.from('team_members').update({ is_lead: !t.is_lead }).eq('id', t.id))}>{t.is_lead ? `Unset ${leadLabel(t.region).toLowerCase()}` : `Make ${leadLabel(t.region).toLowerCase()}`}</button>
                   <button className="btn-ghost py-0.5 text-xs" onClick={() => save(supabase.from('team_members').update({ is_active: !t.is_active }).eq('id', t.id))}>{t.is_active ? 'Hide' : 'Restore'}</button>
                 </li>
               ))}

@@ -2,7 +2,7 @@ import { useRef, useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronDown } from 'lucide-react'
 import { useToast } from './ui'
-import { useConfig, ownerOptions } from '../lib/config'
+import { useConfig, ownerOptions, leadLabel } from '../lib/config'
 import { supabase, errMsg } from '../lib/supabase'
 
 /** Owner name that opens a dropdown (team grouped by region) to reassign in place. */
@@ -50,7 +50,7 @@ export default function OwnerCell({ deal, onChanged, className = '' }) {
                 {g.members.map(t => (
                   <button key={t.name} type="button" onClick={e => pick(e, t.name)}
                     className={`flex w-full items-center px-3 py-1.5 text-left text-sm ${t.name === deal.owner ? 'bg-slate-50 font-semibold' : 'hover:bg-slate-50'}`}>
-                    {t.name}{t.is_lead && <span className="ml-1 text-[10px] text-slate-400">lead</span>}
+                    {t.name}{t.is_lead && <span className="ml-1 text-[10px] text-slate-400">{leadLabel(t.region)}</span>}
                     {t.name === deal.owner && <span className="ml-auto text-[10px] text-slate-400">current</span>}
                   </button>
                 ))}
