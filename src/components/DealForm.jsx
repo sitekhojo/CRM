@@ -141,7 +141,7 @@ export default function DealForm({ initial, initialLoc, onSubmit, submitting, mo
             </Field>
           )}
           <Field label="Owner" hint={f.city ? `Defaults to the ${regionOf(cities, f.city) || ''} lead for ${f.city}` : 'Pick a city first'}>
-            <select className="input" value={f.owner || ''} onChange={e => set('owner', e.target.value)}>
+            <select className="input" disabled={mode !== 'create' && !isAdmin} title={mode !== 'create' && !isAdmin ? 'Only an admin can change the owner' : undefined} value={f.owner || ''} onChange={e => set('owner', e.target.value)}>
               <option value="">Unassigned</option>
               {ownerOptions(team, regionOf(cities, f.city), f.owner).map(g => (
                 <optgroup key={g.region} label={g.region}>{g.members.map(t => <option key={t.name} value={t.name}>{t.name}</option>)}</optgroup>

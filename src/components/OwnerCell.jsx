@@ -4,6 +4,7 @@ import { ChevronDown } from 'lucide-react'
 import { useToast } from './ui'
 import { useConfig, ownerOptions, leadLabel } from '../lib/config'
 import { supabase, errMsg } from '../lib/supabase'
+import { useAuth } from '../lib/auth'
 
 /** Owner name that opens a dropdown (team grouped by region) to reassign in place. */
 export default function OwnerCell({ deal, onChanged, className = '' }) {
@@ -11,6 +12,7 @@ export default function OwnerCell({ deal, onChanged, className = '' }) {
   const toast = useToast()
   const [pos, setPos] = useState(null)
   const btn = useRef(null)
+  const { isAdmin } = useAuth()
 
   useEffect(() => {
     if (!pos) return
@@ -34,6 +36,7 @@ export default function OwnerCell({ deal, onChanged, className = '' }) {
     setPos({ left: Math.min(r.left, window.innerWidth - 230), top: r.bottom + h + 4 > window.innerHeight ? Math.max(8, r.top - h - 4) : r.bottom + 4, h })
   }
 
+  if (!isAdmin) return <span className={`${deal.owner ? '' : 'text-slate-400'} ${className}`}>{deal.owner || 'Unassigned'}</span>
   return (
     <>
       <button ref={btn} type="button" onClick={open} title="Change owner"

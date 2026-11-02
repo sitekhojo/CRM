@@ -104,8 +104,8 @@ export function permissions(deal, profile) {
   const admin = profile?.role === 'admin'
   const uid = profile?.id
   return {
-    canEdit: admin || deal.created_by === uid || deal.assigned_to === uid,
-    canChangeStage: admin || deal.assigned_to === uid,
+    canEdit: admin || (!!uid && profile?.is_active !== false), // team logins edit site details on any site
+    canChangeStage: admin,
     canReassign: admin,
     canDelete: admin,
   }
