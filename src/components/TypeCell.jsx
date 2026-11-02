@@ -13,7 +13,8 @@ export default function TypeCell({ deal, onChanged }) {
   const toast = useToast()
   const [pos, setPos] = useState(null)
   const btn = useRef(null)
-  const can = permissions(deal, profile).canEdit
+  const locked = ['approved', 'live'].includes(deal.stage_category) // Handover Done / Energized are always Deals
+  const can = permissions(deal, profile).canEdit && !locked
   const cur = deal.record_type || 'deal'
 
   useEffect(() => {
@@ -33,7 +34,7 @@ export default function TypeCell({ deal, onChanged }) {
 
   return (
     <>
-      <button ref={btn} type="button" title={can ? 'Change Lead / Deal' : 'Only the owner or an admin can change this'}
+      <button ref={btn} type="button" title={locked ? 'Handover Done and Energized sites are always Deals' : can ? 'Change Lead / Deal' : 'You cannot change this'}
         onClick={e => { e.stopPropagation(); if (!can) return; const r = btn.current.getBoundingClientRect(); setPos({ left: r.left, top: r.bottom + 4 }) }}
         className={`group inline-flex items-center gap-0.5 rounded-full ${can ? 'cursor-pointer hover:ring-2 hover:ring-slate-200' : 'cursor-default'}`}>
         <Pill className={RECORD_TYPES[cur].cls}>{RECORD_TYPES[cur].label}</Pill>

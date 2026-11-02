@@ -37,7 +37,7 @@ export default function StageCell({ deal, onChanged }) {
     if (s.category === 'dropped') { setDropTo(s.id); return } // needs a reason
     const { error } = await supabase.from('sites').update({ stage_id: s.id, stage_note: 'Changed from Leads & Deals list' }).eq('id', deal.id)
     if (error) return toast(errMsg(error), 'error')
-    toast(`${deal.site_code} → ${s.name}`); onChanged?.()
+    toast(`${deal.site_code} → ${s.name}${deal.record_type === 'lead' && ['approved', 'live'].includes(s.category) ? ' · converted to a Deal' : ''}`); onChanged?.()
   }
 
   const options = stagesFor(stages, deal.site_type)
