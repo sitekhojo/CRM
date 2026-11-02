@@ -7,6 +7,7 @@ import { supabase, fetchAll } from '../lib/supabase'
 import { useConfig, stagesFor, REGIONS, leadLabel } from '../lib/config'
 import DealFilters from '../components/DealFilters'
 import PeriodBar, { periodRange, periodLabel, isoDay } from '../components/PeriodBar'
+import FranchisePayments from '../components/FranchisePayments'
 import { Stat, StageBadge, PageLoader, Modal } from '../components/ui'
 import { fmtNum, daysLabel, daysInt, stageAgeTone, AGE_TONES, startOfWeek, startOfMonth, fmtDate } from '../lib/format'
 import { haversine, hasLoc } from '../lib/geo'
@@ -386,6 +387,10 @@ export default function Dashboard() {
           )}
         </Panel>
       </div>
+
+      <Panel title={<span className="flex items-center justify-between">Franchise payments · sites energized this FY<Link to="/app/acquisition?tab=payments" className="text-xs font-semibold text-brand-700 hover:underline">Open in Acquisition Desk →</Link></span>}>
+        <FranchisePayments filters={filters} compact />
+      </Panel>
 
       <Panel title={`Team performance · by site owner · ${m.period.label}`}>
         <div className="overflow-x-auto">

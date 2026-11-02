@@ -7,11 +7,11 @@ import { useToast } from './ui'
 import { fmtDate, fmtNum } from '../lib/format'
 
 /** Click-to-edit value stored in sites.extra (planning fields: expected dates, QIS). */
-export default function EditCell({ deal, field, type = 'date', label, onChanged, className = '' }) {
-  const { profile } = useAuth()
+export default function EditCell({ deal, field, type = 'date', label, onChanged, className = '', adminOnly = false, format }) {
+  const { profile, isAdmin } = useAuth()
   const toast = useToast()
   const [editing, setEditing] = useState(false)
-  const can = permissions(deal, profile).canEdit
+  const can = adminOnly ? isAdmin : permissions(deal, profile).canEdit
   const raw = deal.extra?.[field]
   const value = raw === undefined || raw === null ? '' : String(raw)
 
@@ -35,7 +35,7 @@ export default function EditCell({ deal, field, type = 'date', label, onChanged,
         onBlur={e => save(e.currentTarget.value)} />
     )
   }
-  const shown = value === '' ? '—' : type === 'date' ? fmtDate(value) : type === 'number' ? fmtNum(Number(value)) : value
+  const shown = value === '' ? '—' : format ? format(value) : type === 'date' ? fmtDate(value) : type === 'number' ? fmtNum(Number(value)) : value
   return (
     <button type="button" disabled={!can} title={can ? `Edit ${label.toLowerCase()}` : undefined}
       onClick={e => { e.stopPropagation(); setEditing(true) }}
