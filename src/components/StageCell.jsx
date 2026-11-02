@@ -43,7 +43,7 @@ export default function StageCell({ deal, onChanged }) {
   const options = stagesFor(stages, deal.site_type)
   return (
     <>
-      <button ref={btn} type="button" onClick={open} title={perm.canChangeStage ? 'Change stage' : 'Only the owner or an admin can change the stage'}
+      <button ref={btn} type="button" onClick={open} title={perm.canChangeStage ? 'Change stage' : 'You cannot change the stage'}
         className={`group inline-flex items-center gap-0.5 rounded-full ${perm.canChangeStage ? 'cursor-pointer hover:ring-2 hover:ring-slate-200' : 'cursor-default'}`}>
         <StageBadge name={deal.stage_name} color={deal.stage_color} />
         {perm.canChangeStage && <ChevronDown className="h-3.5 w-3.5 text-slate-400 group-hover:text-slate-700" />}

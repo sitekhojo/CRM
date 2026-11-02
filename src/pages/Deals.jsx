@@ -14,6 +14,7 @@ import ImportDealsModal from '../components/ImportDealsModal'
 import StageCell from '../components/StageCell'
 import TypeCell from '../components/TypeCell'
 import OwnerCell from '../components/OwnerCell'
+import DateCell from '../components/DateCell'
 import { useTargets, matchSite, PRIORITIES, monthLabel } from '../lib/acquisition'
 
 export default function Deals({ fixedType }) {
@@ -159,8 +160,8 @@ export default function Deals({ fixedType }) {
                   <td className="td">{d.city}{d.region && <div className="text-[10px] text-slate-400">{d.region}</div>}</td>
                   <td className="td">{fmtINR(d.rent_expectation)}</td>
                   <td className="td"><Pill className={POWER_FEASIBILITY[d.power_feasibility]?.cls}>{POWER_FEASIBILITY[d.power_feasibility]?.label}</Pill></td>
-                  <td className="td text-slate-600">{d.extra?.ho_date ? fmtDate(d.extra.ho_date) : '—'}</td>
-                  <td className="td text-slate-600">{d.extra?.energized_on ? fmtDate(d.extra.energized_on) : '—'}</td>
+                  <td className="td whitespace-nowrap" onClick={e => e.stopPropagation()}><DateCell deal={d} field="ho_date" label="Handover date" onChanged={reload} /></td>
+                  <td className="td whitespace-nowrap" onClick={e => e.stopPropagation()}><DateCell deal={d} field="energized_on" label="Energization date" onChanged={reload} /></td>
                   <td className="td whitespace-nowrap" onClick={e => e.stopPropagation()}><OwnerCell deal={d} onChanged={reload} /></td>
                   <td className="td text-slate-500">{fmtDate(d.created_at)}</td>
                 </tr>
