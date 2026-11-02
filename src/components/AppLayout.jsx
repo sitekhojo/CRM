@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase'
 import { Modal, Field, useToast } from './ui'
 
 const NAV = [
-  { to: '/app/dashboard', label: 'Dashboard', icon: LayoutDashboard, admin: true },
+  { to: '/app/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/app/leads', label: 'Leads', icon: Target },
   { to: '/app/deals', label: 'Deals', icon: Handshake },
   { to: '/app/acquisition', label: 'Acquisition Desk', icon: Crosshair },

@@ -43,7 +43,7 @@ function Inactive() {
 
 function AppHome() {
   const { isAdmin } = useAuth()
-  return <Navigate to={isAdmin ? '/app/dashboard' : '/app/deals'} replace />
+  return <Navigate to="/app/dashboard" replace />
 }
 
 function NotConfigured() {
@@ -66,7 +66,7 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/app" element={<RequireAuth><ConfigProvider><AppLayout /></ConfigProvider></RequireAuth>}>
               <Route index element={<AppHome />} />
-              <Route path="dashboard" element={<RequireAuth admin><Lazy><Dashboard /></Lazy></RequireAuth>} />
+              <Route path="dashboard" element={<Lazy><Dashboard /></Lazy>} />
               <Route path="leads" element={<Lazy><Deals key="lead" fixedType="lead" /></Lazy>} />
               <Route path="deals" element={<Lazy><Deals key="deal" fixedType="deal" /></Lazy>} />
               <Route path="all" element={<Lazy><Deals key="all" /></Lazy>} />

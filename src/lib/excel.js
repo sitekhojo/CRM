@@ -112,3 +112,35 @@ function download(blob, name) {
   document.body.appendChild(a); a.click(); a.remove()
   setTimeout(() => URL.revokeObjectURL(a.href), 2000)
 }
+
+/** One workbook, many sheets. sheets = [{ name, rows, columns?: [[key,label]] }] (columns default to all keys). */
+export async function exportWorkbook(sheets, filename) {
+  const { default: ExcelJS } = await import('exceljs')
+  const wb = new ExcelJS.Workbook()
+  for (const sh of sheets) {
+    const rows = sh.rows || []
+    let columns = sh.columns || [...new Set(rows.flatMap(r => Object.keys(r)))].map(k => [k, k])
+    if (!columns.length) columns = [['_empty', '(no records yet)']]
+    const ws = wb.addWorksheet(sh.name.slice(0, 31))
+    const header = columns.map(c => c[1])
+    ws.addRow(header)
+    for (const r of rows) {
+      ws.addRow(columns.map(([k]) => {
+        const v = r[k]
+        if (v && typeof v === 'object' && !(v instanceof Date)) return JSON.stringify(v)
+        if (/_at$/.test(k) && v) return new Date(v)
+        return cell(v)
+      }))
+    }
+    ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } }
+    ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F1F33' } }
+    ;(ws.columns || []).forEach((col, i) => {
+      col.width = Math.min(45, Math.max(10, String(header[i] ?? '').length + 2))
+      if (/_at$/.test(columns[i]?.[0] || '')) col.numFmt = 'dd-mmm-yyyy hh:mm'
+    })
+    ws.views = [{ state: 'frozen', ySplit: 1 }]
+    if (header.length) ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: header.length } }
+  }
+  const buf = await wb.xlsx.writeBuffer()
+  download(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), filename + '.xlsx')
+}

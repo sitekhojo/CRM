@@ -3,11 +3,11 @@ import { Plus, Upload, Trash2, Save, Download } from 'lucide-react'
 import { supabase, errMsg, fetchAll } from '../lib/supabase'
 import { useConfig, DEFAULT_RULES, REGIONS, leadLabel } from '../lib/config'
 import { useToast, Field, StageBadge } from '../components/ui'
-import { readSheet, normaliseRow, toNum, downloadTemplate, exportRows } from '../lib/excel'
+import { readSheet, normaliseRow, toNum, downloadTemplate, exportRows, exportWorkbook, DEAL_COLUMNS } from '../lib/excel'
 import { NETWORK_TYPES } from './Planning'
 import { SITE_TYPES, normaliseSiteType } from '../lib/format'
 
-const TABS = [['stages', 'Pipeline stages'], ['team', 'Team & regions'], ['cities', 'Cities'], ['drops', 'Drop reasons'], ['rules', 'Feasibility rules'], ['network', 'Network data']]
+const TABS = [['stages', 'Pipeline stages'], ['team', 'Team & regions'], ['cities', 'Cities'], ['drops', 'Drop reasons'], ['rules', 'Feasibility rules'], ['network', 'Network data'], ['backup', 'Backup & export']]
 
 export default function Settings() {
   const [tab, setTab] = useState('stages')
@@ -23,6 +23,7 @@ export default function Settings() {
       {tab === 'drops' && <SimpleList table="drop_reasons" col="label" title="Drop reasons" />}
       {tab === 'rules' && <Rules />}
       {tab === 'network' && <Network />}
+      {tab === 'backup' && <Backup />}
     </div>
   )
 }
@@ -285,6 +286,55 @@ function Network() {
             </div>
           )
         })}
+      </div>
+    </div>
+  )
+}
+
+const FULL_SITE_COLUMNS = [['id', 'Record UUID'], ...DEAL_COLUMNS, ['region', 'Region'], ['source', 'Source'], ['stage_note', 'Stage note'], ['extra_json', 'All extra fields (JSON)'], ['updated_at', 'Updated at']]
+
+function Backup() {
+  const toast = useToast()
+  const [busy, setBusy] = useState(false)
+  const [last, setLast] = useState(() => { try { return localStorage.getItem('lastBackup') } catch { return null } })
+  const run = async () => {
+    setBusy(true)
+    try {
+      const get = (t, order = 'id') => fetchAll(() => supabase.from(t).select('*').order(order))
+      const [sites, history, comments, network, targets, team, cities, stages, drops, users] = await Promise.all([
+        get('site_overview', 'created_at'), get('stage_history_overview'), get('site_comments'), get('network_points'),
+        get('target_locations'), get('team_members'), get('cities'), get('stages', 'sort_order'), get('drop_reasons'),
+        fetchAll(() => supabase.from('profiles').select('id,email,full_name,role,is_active,created_at').order('created_at')),
+      ])
+      const flat = sites.map(r => ({ ...r, ...(r.extra || {}), source: r.extra?.source === 'qis_tracker' ? 'QIS tracker import' : 'CRM', extra_json: r.extra }))
+      const stamp = new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', '')
+      await exportWorkbook([
+        { name: 'Leads & Deals', rows: flat, columns: FULL_SITE_COLUMNS },
+        { name: 'Stage history', rows: history },
+        { name: 'Comments', rows: comments },
+        { name: 'Network (QIS tracker)', rows: network },
+        { name: 'Priority locations', rows: targets },
+        { name: 'Team', rows: team },
+        { name: 'Cities', rows: cities },
+        { name: 'Stages', rows: stages },
+        { name: 'Drop reasons', rows: drops },
+        { name: 'Users', rows: users },
+        { name: 'About', rows: [{ exported_at: new Date().toISOString(), leads_and_deals: sites.length, stage_changes: history.length, comments: comments.length, network_points: network.length, priority_locations: targets.length }] },
+      ], `sitekhojo-full-backup-${stamp}`)
+      const when = new Date().toLocaleString('en-IN'); setLast(when); try { localStorage.setItem('lastBackup', when) } catch { /* ignore */ }
+      toast(`Backup downloaded · ${sites.length} leads/deals, ${history.length} stage changes`)
+    } catch (e) { toast(errMsg(e), 'error') } finally { setBusy(false) }
+  }
+  return (
+    <div className="card max-w-3xl space-y-4 p-5">
+      <div>
+        <h3 className="text-base font-bold text-slate-900">Full backup</h3>
+        <p className="mt-1 text-sm text-slate-500">One Excel workbook with everything in SiteKhojo: every lead and deal (all fields, including dropped and energized), the full stage history with who changed what and when, comments, the QIS-tracker network, priority locations, team, cities, stages, drop reasons and users.</p>
+      </div>
+      <button className="btn-primary" onClick={run} disabled={busy}><Download className="h-4 w-4" />{busy ? 'Preparing backup…' : 'Download full backup (.xlsx)'}</button>
+      {last && <p className="text-xs text-slate-500">Last backup from this browser: {last}</p>}
+      <div className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
+        Other exports: <b>Leads</b> / <b>Deals</b> lists (Excel or CSV of the current filters), <b>Acquisition Desk</b> forecast and pipeline list, <b>Network data</b> tab, and the <b>Priority locations</b> list. Every export includes the record ID, so a backup can be re-imported or matched later.
       </div>
     </div>
   )

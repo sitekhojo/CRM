@@ -10,6 +10,8 @@ import IntentCell from './IntentCell'
 import StageCell from './StageCell'
 import OwnerCell from './OwnerCell'
 import { SingleSelect } from './MultiSelect'
+import { Download } from 'lucide-react'
+import { exportWorkbook } from '../lib/excel'
 
 const ym = d => String(d || '').slice(0, 7)
 const monthName = k => new Date(k + '-01T12:00:00').toLocaleDateString('en-IN', { month: 'short', year: '2-digit' })
@@ -86,6 +88,7 @@ export default function Forecast({ view = 'table' }) {
             { value: 'nodate', label: 'Missing expected dates' }, { value: 'all', label: 'All open pipeline' },
           ]} />
           <DealFilters value={filters} onChange={setFilters} show={['q', 'region', 'city', 'owner', 'siteType']} />
+          <button className="btn-secondary ml-auto" onClick={() => exportWorkbook([{ name: 'Pipeline list', rows: list.map(r => planRow(r, scope)), columns: PLAN_COLS }], `sitekhojo-pipeline-list-${m.today}`)}><Download className="h-4 w-4" />Excel</button>
         </div>
         <p className="text-sm text-slate-500"><b className="text-slate-700">{list.length} sites · {fmtNum(sum(list).qis)} QIS</b> · open pipeline and Handover Done (not yet energized). Click a date, QIS, intent, stage or owner to change it — the forecast updates instantly.</p>
         <div className="card overflow-x-auto"><PlanTable rows={list} onChanged={reload} today={m.today} /></div>
@@ -114,7 +117,25 @@ export default function Forecast({ view = 'table' }) {
 
   return (
     <div className="space-y-3">
-      <DealFilters value={filters} onChange={setFilters} show={['region', 'city', 'owner', 'siteType']} />
+      <div className="flex flex-wrap items-end gap-2">
+        <DealFilters value={filters} onChange={setFilters} show={['region', 'city', 'owner', 'siteType']} />
+        <button className="btn-secondary ml-auto" onClick={() => {
+          const line = (metric, kind, o) => ({ metric, kind, slipped: o.slipped?.qis ?? '', ...Object.fromEntries(m.months.map(k => [monthName(k), o.est?.[k]?.qis ?? (k === m.cur ? o.done?.qis ?? '' : '')])), fy_total: o.total?.qis ?? '', no_date: o.noDate?.qis ?? '' })
+          const summary = [
+            { metric: 'Scouted', kind: 'Done (this month)', [monthName(m.cur)]: m.sc.done.qis },
+            { metric: 'Handover', kind: 'Done (this month)', [monthName(m.cur)]: m.ho.done.qis },
+            line('Handover', 'Estimate', m.ho),
+            { metric: 'Energisation', kind: 'Done (this month, QIS tracker)', [monthName(m.cur)]: m.en.done.qis },
+            line('Energisation', 'Estimate', m.en),
+          ]
+          const cols = [['metric', 'Metric'], ['kind', 'Row'], ['slipped', 'Slipped'], ...m.months.map(k => [monthName(k), monthName(k)]), ['fy_total', 'FY total'], ['no_date', 'No date']]
+          const sites = [
+            ...m.ho.slipped.list.map(r => planRow(r, 'HO slipped')), ...m.months.flatMap(k => m.ho.est[k].list.map(r => planRow(r, `HO ${monthName(k)}`))), ...m.ho.noDate.list.map(r => planRow(r, 'HO no date')),
+            ...m.en.slipped.list.map(r => planRow(r, 'Energisation slipped')), ...m.months.flatMap(k => m.en.est[k].list.map(r => planRow(r, `Energisation ${monthName(k)}`))), ...m.en.noDate.list.map(r => planRow(r, 'Energisation no date')),
+          ]
+          exportWorkbook([{ name: 'Forecast (QIS)', rows: summary, columns: cols }, { name: 'Sites by bucket', rows: sites, columns: PLAN_COLS }], `sitekhojo-forecast-${m.today}`)
+        }}><Download className="h-4 w-4" />Excel</button>
+      </div>
       <div className="card overflow-x-auto">
         <table className="min-w-full text-sm">
           <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
@@ -165,6 +186,10 @@ export default function Forecast({ view = 'table' }) {
     </div>
   )
 }
+
+const PLAN_COLS = [['site_code', 'ID'], ['name', 'Site'], ['record_type', 'Type'], ['city', 'City'], ['region', 'Region'], ['site_type', 'Site type'], ['stage_name', 'Stage'],
+  ['intent', 'Intent'], ['qis', 'QIS'], ['expected_ho', 'Expected HO'], ['expected_en', 'Expected energisation'], ['ho_date', 'Handover date'], ['energized_on', 'Energization date'], ['owner', 'Owner'], ['bucket', 'Forecast bucket']]
+const planRow = (r, bucket) => ({ ...r, intent: INTENTS[r.extra?.intent]?.label || '', qis: qisOf(r), expected_ho: r.extra?.expected_ho || '', expected_en: r.extra?.expected_en || '', ho_date: r.extra?.ho_date || '', energized_on: r.extra?.energized_on || '', bucket })
 
 /** Editable planning table: stage, intent, QIS, expected HO / energisation dates, owner. */
 export function PlanTable({ rows, onChanged, today }) {
