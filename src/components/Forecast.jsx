@@ -4,7 +4,12 @@ import { useDeals, applyFilters, EMPTY_FILTERS, fetchNetworkPoints, exitOf, isTr
 import { useConfig } from '../lib/config'
 import { fmtNum, fmtDate, INTENTS } from '../lib/format'
 import DealFilters from './DealFilters'
-import { Modal, PageLoader, StageBadge } from './ui'
+import { Modal, PageLoader } from './ui'
+import EditCell from './EditCell'
+import IntentCell from './IntentCell'
+import StageCell from './StageCell'
+import OwnerCell from './OwnerCell'
+import { SingleSelect } from './MultiSelect'
 
 const ym = d => String(d || '').slice(0, 7)
 const monthName = k => new Date(k + '-01T12:00:00').toLocaleDateString('en-IN', { month: 'short', year: '2-digit' })
@@ -22,12 +27,13 @@ function horizon() {
 }
 const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 
-export default function Forecast() {
-  const { deals, loading } = useDeals()
+export default function Forecast({ view = 'table' }) {
+  const { deals, loading, reload } = useDeals()
   const { cities = [] } = useConfig()
   const [network, setNetwork] = useState([])
   const [filters, setFilters] = useState(EMPTY_FILTERS)
-  const [detail, setDetail] = useState(null)
+  const [detail, setDetail] = useState(null) // { title, pick: m => rows }
+  const [scope, setScope] = useState('both')
   useEffect(() => { fetchNetworkPoints().then(setNetwork).catch(() => {}) }, [])
 
   const m = useMemo(() => {
@@ -54,15 +60,43 @@ export default function Forecast() {
     }
     const sc = { done: sum(rows.filter(r => ym(addedDay(r)) === cur)) }
     const tot = o => sum(months.flatMap(k => o.est[k].list))
-    return { months, cur, ho: { ...ho, total: tot(ho) }, en: { ...en, total: tot(en) }, sc }
+    return { months, cur, today, ho: { ...ho, total: tot(ho) }, en: { ...en, total: tot(en) }, sc, openPipe, notLive }
   }, [deals, filters, network, cities])
 
   if (loading || !m) return <PageLoader />
 
-  const Cell = ({ v, title, tone = 'text-slate-900', intents = true }) => (
+  if (view === 'list') {
+    const [c, n] = m.months
+    const inM = (d, k) => ym(d) === k && d >= m.today
+    const pick = {
+      both: r => inM(r.extra?.expected_ho, c) || inM(r.extra?.expected_ho, n) || inM(r.extra?.expected_en, c) || inM(r.extra?.expected_en, n),
+      this: r => inM(r.extra?.expected_ho, c) || inM(r.extra?.expected_en, c),
+      next: r => inM(r.extra?.expected_ho, n) || inM(r.extra?.expected_en, n),
+      slipped: r => (r.stage_category === 'active' && r.extra?.expected_ho && r.extra.expected_ho < m.today) || (r.extra?.expected_en && r.extra.expected_en < m.today),
+      nodate: r => (r.stage_category === 'active' && !r.extra?.expected_ho) || !r.extra?.expected_en,
+      all: () => true,
+    }[scope]
+    const list = m.notLive.filter(pick)
+    return (
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-end gap-2">
+          <SingleSelect value={scope} allValue="__" onChange={setScope} options={[
+            { value: 'both', label: `Due ${monthName(c)} + ${monthName(n)}` }, { value: 'this', label: `Due this month (${monthName(c)})` },
+            { value: 'next', label: `Due next month (${monthName(n)})` }, { value: 'slipped', label: 'Slipped (date passed)' },
+            { value: 'nodate', label: 'Missing expected dates' }, { value: 'all', label: 'All open pipeline' },
+          ]} />
+          <DealFilters value={filters} onChange={setFilters} show={['q', 'region', 'city', 'owner', 'siteType']} />
+        </div>
+        <p className="text-sm text-slate-500"><b className="text-slate-700">{list.length} sites · {fmtNum(sum(list).qis)} QIS</b> · open pipeline and Handover Done (not yet energized). Click a date, QIS, intent, stage or owner to change it — the forecast updates instantly.</p>
+        <div className="card overflow-x-auto"><PlanTable rows={list} onChanged={reload} today={m.today} /></div>
+      </div>
+    )
+  }
+
+  const Cell = ({ v, pick, title, tone = 'text-slate-900', intents = true }) => (
     <td className="px-2 py-2 text-right align-top">
       {v && v.sites ? (
-        <button className="w-full rounded-md px-2 py-1 text-right hover:bg-slate-100" onClick={() => v.list && setDetail({ title, list: v.list })} disabled={!v.list}>
+        <button className="w-full rounded-md px-2 py-1 text-right hover:bg-slate-100" onClick={() => v.list && setDetail({ title, pick })} disabled={!v.list}>
           <div className={`text-base font-bold ${tone}`}>{fmtNum(v.qis)}</div>
           <div className="text-[11px] text-slate-400">{v.sites} sites</div>
           {intents && v.list && (() => { const b = byIntent(v.list); return (
@@ -94,26 +128,26 @@ export default function Forecast() {
           </thead>
           <tbody className="divide-y divide-slate-100">
             <tr className="bg-slate-50/60"><td colSpan={m.months.length + 4} className="px-3 pt-3 text-xs font-bold uppercase tracking-wide text-slate-500">Scouted</td></tr>
-            <tr><Lbl sub="leads/deals added">Done</Lbl><td />{[<Cell key="d" v={m.sc.done} title={`Scouted in ${curName}`} tone="text-sky-700" intents={false} />]}{blank(m.months.length - 1)}<td /><td /></tr>
+            <tr><Lbl sub="leads/deals added">Done</Lbl><td />{[<Cell key="d" v={m.sc.done} pick={x => x.sc.done.list} title={`Scouted in ${curName}`} tone="text-sky-700" intents={false} />]}{blank(m.months.length - 1)}<td /><td /></tr>
             <tr><Lbl sub="you'll add these">Target</Lbl><td />{blank(m.months.length + 1)}<td /></tr>
 
             <tr className="bg-slate-50/60"><td colSpan={m.months.length + 4} className="px-3 pt-3 text-xs font-bold uppercase tracking-wide text-slate-500">Handover</td></tr>
-            <tr><Lbl sub="actually handed over">Done</Lbl><td />{[<Cell key="d" v={m.ho.done} title={`Handed over in ${curName}`} tone="text-amber-700" intents={false} />]}{blank(m.months.length - 1)}<td /><td /></tr>
+            <tr><Lbl sub="actually handed over">Done</Lbl><td />{[<Cell key="d" v={m.ho.done} pick={x => x.ho.done.list} title={`Handed over in ${curName}`} tone="text-amber-700" intents={false} />]}{blank(m.months.length - 1)}<td /><td /></tr>
             <tr><Lbl sub="by Expected HO date">Estimate</Lbl>
-              <Cell v={m.ho.slipped} title="Handover slipped (expected HO date passed)" tone="text-red-600" />
-              {m.months.map(k => <Cell key={k} v={m.ho.est[k]} title={`Expected handover · ${monthName(k)}`} tone="text-amber-700" />)}
-              <Cell v={m.ho.total} title="Expected handover · rest of FY" tone="text-amber-800" />
-              <Cell v={m.ho.noDate} title="Open pipeline with no Expected HO date" tone="text-slate-500" />
+              <Cell v={m.ho.slipped} pick={x => x.ho.slipped.list} title="Handover slipped (expected HO date passed)" tone="text-red-600" />
+              {m.months.map(k => <Cell key={k} v={m.ho.est[k]} pick={x => x.ho.est[k].list} title={`Expected handover · ${monthName(k)}`} tone="text-amber-700" />)}
+              <Cell v={m.ho.total} pick={x => x.ho.total.list} title="Expected handover · rest of FY" tone="text-amber-800" />
+              <Cell v={m.ho.noDate} pick={x => x.ho.noDate.list} title="Open pipeline with no Expected HO date" tone="text-slate-500" />
             </tr>
             <tr><Lbl sub="you'll add these">Target</Lbl><td />{blank(m.months.length + 1)}<td /></tr>
 
             <tr className="bg-slate-50/60"><td colSpan={m.months.length + 4} className="px-3 pt-3 text-xs font-bold uppercase tracking-wide text-slate-500">Energisation</td></tr>
             <tr><Lbl sub="QIS tracker">Done</Lbl><td />{[<Cell key="d" v={m.en.done} title={`Energized in ${curName}`} tone="text-emerald-700" intents={false} />]}{blank(m.months.length - 1)}<td /><td /></tr>
             <tr><Lbl sub="by Expected energisation date">Estimate</Lbl>
-              <Cell v={m.en.slipped} title="Energisation slipped (expected date passed)" tone="text-red-600" />
-              {m.months.map(k => <Cell key={k} v={m.en.est[k]} title={`Expected energisation · ${monthName(k)}`} tone="text-emerald-700" />)}
-              <Cell v={m.en.total} title="Expected energisation · rest of FY" tone="text-emerald-800" />
-              <Cell v={m.en.noDate} title="Not yet energized, no Expected energisation date" tone="text-slate-500" />
+              <Cell v={m.en.slipped} pick={x => x.en.slipped.list} title="Energisation slipped (expected date passed)" tone="text-red-600" />
+              {m.months.map(k => <Cell key={k} v={m.en.est[k]} pick={x => x.en.est[k].list} title={`Expected energisation · ${monthName(k)}`} tone="text-emerald-700" />)}
+              <Cell v={m.en.total} pick={x => x.en.total.list} title="Expected energisation · rest of FY" tone="text-emerald-800" />
+              <Cell v={m.en.noDate} pick={x => x.en.noDate.list} title="Not yet energized, no Expected energisation date" tone="text-slate-500" />
             </tr>
             <tr><Lbl sub="you'll add these">Target</Lbl><td />{blank(m.months.length + 1)}<td /></tr>
           </tbody>
@@ -124,30 +158,40 @@ export default function Forecast() {
         <b className="text-red-600"> Slipped</b> = expected date already passed. Chips show QIS by intent: <span className={`rounded px-1 ${INTENTS.hot.cls}`}>H</span> hot · <span className={`rounded px-1 ${INTENTS.warm.cls}`}>W</span> warm · <span className={`rounded px-1 ${INTENTS.cold.cls}`}>C</span> cold. Click a number to see the sites.
       </p>
 
-      <Modal open={!!detail} onClose={() => setDetail(null)} wide title={detail ? `${detail.title} · ${fmtNum(sum(detail.list).qis)} QIS · ${detail.list.length} sites` : ''}
+      <Modal open={!!detail} onClose={() => setDetail(null)} wide="xl" title={detail ? `${detail.title} · ${fmtNum(sum(detail.pick(m)).qis)} QIS · ${detail.pick(m).length} sites` : ''}
         footer={<button className="btn-primary" onClick={() => setDetail(null)}>Close</button>}>
-        {detail && (
-          <div className="max-h-[60vh] overflow-auto">
-            <table className="w-full text-sm">
-              <thead><tr className="text-left text-xs uppercase text-slate-500"><th className="py-2 pr-2">Site</th><th className="pr-2">City</th><th className="pr-2">Stage</th><th className="pr-2">Intent</th><th className="pr-2 text-right">QIS</th><th className="pr-2">Exp. HO</th><th className="pr-2">Exp. energisation</th><th>Owner</th></tr></thead>
-              <tbody>
-                {[...detail.list].sort((a, b) => String(a.extra?.expected_ho || a.extra?.expected_en || '').localeCompare(String(b.extra?.expected_ho || b.extra?.expected_en || ''))).map(r => (
-                  <tr key={r.id} className="border-t border-slate-100 hover:bg-slate-50">
-                    <td className="py-1.5 pr-2"><Link className="font-semibold text-slate-900 hover:text-brand-700" to={`/app/deals/${r.id}`}>{r.name}</Link><div className="font-mono text-[10px] text-slate-400">{r.site_code}</div></td>
-                    <td className="pr-2">{r.city}</td>
-                    <td className="pr-2"><StageBadge name={r.stage_name} color={r.stage_color} /></td>
-                    <td className="pr-2">{INTENTS[r.extra?.intent] ? <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${INTENTS[r.extra.intent].cls}`}>{INTENTS[r.extra.intent].label}</span> : <span className="text-slate-300">—</span>}</td>
-                    <td className="pr-2 text-right font-semibold">{qisOf(r) || '—'}</td>
-                    <td className="whitespace-nowrap pr-2">{r.extra?.expected_ho ? fmtDate(r.extra.expected_ho) : '—'}</td>
-                    <td className="whitespace-nowrap pr-2">{r.extra?.expected_en ? fmtDate(r.extra.expected_en) : '—'}</td>
-                    <td>{r.owner || '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        {detail && <div className="max-h-[65vh] overflow-auto"><PlanTable rows={detail.pick(m)} onChanged={reload} /></div>}
       </Modal>
     </div>
+  )
+}
+
+/** Editable planning table: stage, intent, QIS, expected HO / energisation dates, owner. */
+export function PlanTable({ rows, onChanged, today }) {
+  const t = today || todayIso()
+  const sorted = [...rows].sort((a, b) => String(a.extra?.expected_ho || a.extra?.expected_en || '9').localeCompare(String(b.extra?.expected_ho || b.extra?.expected_en || '9')))
+  const late = (d, active = true) => active && d && d < t
+  if (!rows.length) return <p className="p-6 text-center text-sm text-slate-400">No sites here.</p>
+  return (
+    <table className="min-w-full text-sm">
+      <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+        <tr><th className="px-3 py-2">Site</th><th className="px-2 py-2">City</th><th className="px-2 py-2">Stage</th><th className="px-2 py-2">Intent</th>
+          <th className="px-2 py-2 text-right">QIS</th><th className="px-2 py-2">Expected HO</th><th className="px-2 py-2">Expected energisation</th><th className="px-2 py-2">Owner</th></tr>
+      </thead>
+      <tbody className="divide-y divide-slate-100">
+        {sorted.map(r => (
+          <tr key={r.id} className="hover:bg-slate-50">
+            <td className="max-w-[260px] px-3 py-2"><Link className="block truncate font-semibold text-slate-900 hover:text-brand-700" to={`/app/deals/${r.id}`}>{r.name}</Link><div className="font-mono text-[10px] text-slate-400">{r.site_code} · {r.record_type === 'lead' ? 'Lead' : 'Deal'}</div></td>
+            <td className="px-2 py-2">{r.city}</td>
+            <td className="px-2 py-2"><StageCell deal={r} onChanged={onChanged} /></td>
+            <td className="px-2 py-2"><IntentCell deal={r} onChanged={onChanged} /></td>
+            <td className="px-2 py-2 text-right font-semibold"><EditCell deal={r} field="qis_count" type="number" label="QIS" onChanged={onChanged} /></td>
+            <td className="px-2 py-2"><EditCell deal={r} field="expected_ho" label="Expected HO" onChanged={onChanged} className={r.stage_category === 'active' && late(r.extra?.expected_ho) ? 'font-semibold text-red-600' : r.stage_category !== 'active' ? 'text-slate-400' : ''} /></td>
+            <td className="px-2 py-2"><EditCell deal={r} field="expected_en" label="Expected energisation" onChanged={onChanged} className={late(r.extra?.expected_en) ? 'font-semibold text-red-600' : ''} /></td>
+            <td className="px-2 py-2"><OwnerCell deal={r} onChanged={onChanged} /></td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   )
 }

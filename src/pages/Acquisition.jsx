@@ -72,7 +72,7 @@ export default function Acquisition() {
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div>
           <h1 className="text-xl font-extrabold text-navy-900">Acquisition Desk</h1>
-          <p className="text-sm text-slate-500">{tab === 'forecast' ? 'Handover and energisation outlook · this month to the end of the FY' : `${m.rows.length} of ${m.all.length} priority locations · a lead/deal counts against a location when it lies within its radius`}</p>
+          <p className="text-sm text-slate-500">{tab !== 'locations' ? 'Handover and energisation outlook · this month to the end of the FY' : `${m.rows.length} of ${m.all.length} priority locations · a lead/deal counts against a location when it lies within its radius`}</p>
         </div>
         <div className="flex-1" />
         {tab === 'locations' && <>
@@ -82,12 +82,12 @@ export default function Acquisition() {
         </>}
       </div>
       <div className="mb-4 flex gap-1 border-b border-slate-200">
-        {[['forecast', 'Forecast'], ['locations', `Priority locations${m.all.length ? ` (${m.all.length})` : ''}`]].map(([k, l]) => (
+        {[['forecast', 'Forecast'], ['list', 'Pipeline list'], ['locations', `Priority locations${m.all.length ? ` (${m.all.length})` : ''}`]].map(([k, l]) => (
           <button key={k} onClick={() => setTab(k)} className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm font-semibold ${tab === k ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>{l}</button>
         ))}
       </div>
 
-      {tab === 'forecast' ? <Forecast /> : m.all.length === 0 ? (
+      {tab === 'forecast' ? <Forecast /> : tab === 'list' ? <Forecast view="list" /> : m.all.length === 0 ? (
         <div className="card"><Empty icon={Crosshair} title="No priority locations yet">
           Upload your P0–P4 list (name, lat/long, priority, month of acquisition). Every lead and deal is then tagged to the location it falls in.
           {isAdmin && <div className="mt-3 flex justify-center gap-2"><button className="btn-primary" onClick={() => setUpOpen(true)}><Upload className="h-4 w-4" />Upload locations</button>

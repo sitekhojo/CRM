@@ -13,8 +13,9 @@ export default function IntentCell({ deal, onChanged }) {
   const toast = useToast()
   const [pos, setPos] = useState(null)
   const btn = useRef(null)
-  const can = permissions(deal, profile).canEdit
-  const cur = deal.extra?.intent || ''
+  const hoLocked = deal.stage_category === 'approved' // Handover Done is always Hot
+  const can = permissions(deal, profile).canEdit && !hoLocked
+  const cur = hoLocked ? 'hot' : deal.extra?.intent || ''
 
   useEffect(() => {
     if (!pos) return
@@ -36,7 +37,7 @@ export default function IntentCell({ deal, onChanged }) {
   const t = INTENTS[cur]
   return (
     <>
-      <button ref={btn} type="button" title={can ? 'Change intent' : undefined}
+      <button ref={btn} type="button" title={hoLocked ? 'Handover Done sites are always Hot' : can ? 'Change intent' : undefined}
         onClick={e => { e.stopPropagation(); if (!can) return; const r = btn.current.getBoundingClientRect(); setPos({ left: r.left, top: r.bottom + 4 }) }}
         className={`group inline-flex items-center gap-0.5 rounded-full ${can ? 'cursor-pointer hover:ring-2 hover:ring-slate-200' : 'cursor-default'}`}>
         {t ? <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${t.cls}`}>{t.label}</span> : <span className="px-1 text-xs text-slate-400">Set</span>}
