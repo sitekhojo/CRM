@@ -82,15 +82,13 @@ export default function Forecast({ view = 'table' }) {
     const list = m.notLive.filter(pick)
     return (
       <div className="space-y-3">
-        <div className="flex flex-wrap items-end gap-2">
-          <SingleSelect value={scope} allValue="__" onChange={setScope} options={[
+        <DealFilters value={filters} onChange={setFilters} show={['q', 'region', 'city', 'owner', 'stage', 'siteType', 'format']}
+          prefix={<SingleSelect value={scope} allValue="__" onChange={setScope} options={[
             { value: 'both', label: `Due ${monthName(c)} + ${monthName(n)}` }, { value: 'this', label: `Due this month (${monthName(c)})` },
             { value: 'next', label: `Due next month (${monthName(n)})` }, { value: 'slipped', label: 'Slipped (date passed)' },
             { value: 'nodate', label: 'Missing expected dates' }, { value: 'all', label: 'All open pipeline' },
-          ]} />
-          <DealFilters value={filters} onChange={setFilters} show={['q', 'region', 'city', 'owner', 'siteType']} />
-          <button className="btn-secondary ml-auto" onClick={() => exportWorkbook([{ name: 'Pipeline list', rows: list.map(r => planRow(r, scope)), columns: PLAN_COLS }], `sitekhojo-pipeline-list-${m.today}`)}><Download className="h-4 w-4" />Excel</button>
-        </div>
+          ]} />}
+          extra={<button className="btn-secondary" onClick={() => exportWorkbook([{ name: 'Pipeline list', rows: list.map(r => planRow(r, scope)), columns: PLAN_COLS }], `sitekhojo-pipeline-list-${m.today}`)}><Download className="h-4 w-4" />Excel</button>} />
         <p className="text-sm text-slate-500"><b className="text-slate-700">{list.length} sites · {fmtNum(sum(list).qis)} QIS</b> · open pipeline and Handover Done (not yet energized). Click a date, QIS, intent, stage or owner to change it — the forecast updates instantly.</p>
         <div className="card overflow-x-auto"><PlanTable rows={list} onChanged={reload} today={m.today} /></div>
       </div>
@@ -119,7 +117,7 @@ export default function Forecast({ view = 'table' }) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-end gap-2">
-        <DealFilters value={filters} onChange={setFilters} show={['region', 'city', 'owner', 'siteType']} />
+        <DealFilters value={filters} onChange={setFilters} show={['region', 'city', 'owner', 'stage', 'siteType', 'format']} />
         <button className="btn-secondary ml-auto" onClick={() => {
           const line = (metric, kind, o) => ({ metric, kind, slipped: o.slipped?.qis ?? '', ...Object.fromEntries(m.months.map(k => [monthName(k), o.est?.[k]?.qis ?? (k === m.cur ? o.done?.qis ?? '' : '')])), fy_total: o.total?.qis ?? '', no_date: o.noDate?.qis ?? '' })
           const summary = [
