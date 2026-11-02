@@ -10,7 +10,7 @@ export const DEAL_COLUMNS = [
   ['power_available', 'Power available'], ['power_phase', 'Power phase'], ['sanctioned_load_kw', 'Sanctioned load (kW)'],
   ['power_feasibility', 'Power feasibility'], ['power_notes', 'Power notes'], ['observations', 'Observations'],
   ['remarks', 'Remarks'], ['drop_reason', 'Drop reason'], ['drop_notes', 'Drop notes'],
-  ['qis_count', 'No. of QIS'], ['expected_ho', 'Expected HO date'], ['priority_zone', 'Priority zone (P0/P1)'], ['probability', 'Probability %'],
+  ['qis_count', 'No. of QIS'], ['expected_ho', 'Expected HO date'], ['priority_zone', 'Priority zone (P0/P1)'], ['intent', 'Intent (Hot/Warm/Cold)'], ['expected_en', 'Expected energisation date'],
   ['ho_date', 'Handover date'], ['energized_on', 'Energization date'],
   ['target_priority', 'Priority location'], ['target_name', 'Priority location name'], ['target_month_label', 'Month of acquisition'], ['region', 'Region'], ['owner', 'Owner'], ['created_by_name', 'Scouted by'], ['created_at', 'Created at'], ['stage_entered_at', 'Stage since'],
 ]
@@ -24,7 +24,7 @@ export const IMPORT_FIELDS = [
   ['power_phase', 'Power phase'], ['sanctioned_load_kw', 'Sanctioned load (kW)'], ['power_feasibility', 'Power feasibility'],
   ['observations', 'Observations'], ['remarks', 'Remarks'], ['stage', 'Stage'], ['owner', 'Owner'],
   ['record_type', 'Type'], ['drop_reason', 'Drop reason'],
-  ['qis_count', 'No. of QIS'], ['expected_ho', 'Expected HO date'], ['priority_zone', 'Priority zone (P0/P1)'], ['probability', 'Probability %'],
+  ['qis_count', 'No. of QIS'], ['expected_ho', 'Expected HO date'], ['priority_zone', 'Priority zone (P0/P1)'], ['intent', 'Intent (Hot/Warm/Cold)'], ['expected_en', 'Expected energisation date'],
   ['ho_date', 'Handover date'], ['energized_on', 'Energization date'],
 ]
 

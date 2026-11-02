@@ -3,7 +3,7 @@ import { useConfig, stagesFor, ownerOptions, regionOf } from '../lib/config'
 import { useAuth } from '../lib/auth'
 import { Field } from './ui'
 import { LocationPicker, DealMarkers } from './maps'
-import { SITE_TYPES, EXTRA_FIELDS } from '../lib/format'
+import { SITE_TYPES, EXTRA_FIELDS, INTENTS, ADMIN_LIST_DATES } from '../lib/format'
 import { evaluateFeasibility, validLatLng, VERDICT } from '../lib/geo'
 import { fetchDeals, fetchNetworkPoints } from '../lib/deals'
 import { useTargets, matchPoint } from '../lib/acquisition'
@@ -126,10 +126,17 @@ export default function DealForm({ initial, initialLoc, onSubmit, submitting, mo
               </select>
             </Field>
           )}
-          {EXTRA_FIELDS.map(([k, label, type]) => (
+          {EXTRA_FIELDS.filter(([k]) => !ADMIN_LIST_DATES.includes(k)).map(([k, label, type]) => (
             <Field key={k} label={label}>
-              <input className="input" type={type} min={type === 'number' ? 0 : undefined} value={f.extra?.[k] ?? ''}
-                onChange={e => setF(x => ({ ...x, extra: { ...(x.extra || {}), [k]: e.target.value } }))} />
+              {type === 'intent' ? (
+                <select className="input" value={f.extra?.[k] ?? ''} onChange={e => setF(x => ({ ...x, extra: { ...(x.extra || {}), [k]: e.target.value } }))}>
+                  <option value="">Not set</option>
+                  {Object.entries(INTENTS).map(([v, t]) => <option key={v} value={v}>{t.label} · {t.hint}</option>)}
+                </select>
+              ) : (
+                <input className="input" type={type} min={type === 'number' ? 0 : undefined} value={f.extra?.[k] ?? ''}
+                  onChange={e => setF(x => ({ ...x, extra: { ...(x.extra || {}), [k]: e.target.value } }))} />
+              )}
             </Field>
           ))}
           <Field label="Usable area (sq ft)"><input className="input" type="number" min="0" value={f.area_sqft ?? ''} onChange={e => set('area_sqft', e.target.value)} /></Field>

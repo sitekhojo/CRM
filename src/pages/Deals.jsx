@@ -8,13 +8,14 @@ import DealFilters from '../components/DealFilters'
 import { SingleSelect } from '../components/MultiSelect'
 import PeriodBar, { periodRange, periodLabel, isoDay } from '../components/PeriodBar'
 import { StageBadge, PageLoader, Empty, Pill } from '../components/ui'
-import { fmtDate, fmtINR, daysInt, stageAgeTone, AGE_TONES, POWER_FEASIBILITY, RECORD_TYPES } from '../lib/format'
+import { fmtDate, fmtINR, daysInt, stageAgeTone, AGE_TONES, POWER_FEASIBILITY, RECORD_TYPES, INTENTS } from '../lib/format'
 import { exportRows, DEAL_COLUMNS } from '../lib/excel'
 import ImportDealsModal from '../components/ImportDealsModal'
 import StageCell from '../components/StageCell'
 import TypeCell from '../components/TypeCell'
 import OwnerCell from '../components/OwnerCell'
 import DateCell from '../components/DateCell'
+import IntentCell from '../components/IntentCell'
 import { useTargets, matchSite, PRIORITIES, monthLabel } from '../lib/acquisition'
 
 export default function Deals({ fixedType }) {
@@ -55,7 +56,7 @@ export default function Deals({ fixedType }) {
 
   const rows = useMemo(() => {
     if (!deals) return []
-    const r = applyFilters(deals, filters, user?.id).map(d => { const t = matchSite(d, targets); return { ...d, qis: d.extra?.qis_count ?? null, ho_sort: d.extra?.ho_date ?? null, en_sort: d.extra?.energized_on ?? null, target: t, target_priority: t?.priority || null, target_name: t?.name || null, target_month_label: t ? monthLabel(t.target_month) : null } })
+    const r = applyFilters(deals, filters, user?.id).map(d => { const t = matchSite(d, targets); return { ...d, qis: d.extra?.qis_count ?? null, ho_sort: d.extra?.ho_date ?? null, intent_sort: { hot: 1, warm: 2, cold: 3 }[d.extra?.intent] ?? null, en_sort: d.extra?.energized_on ?? null, target: t, target_priority: t?.priority || null, target_name: t?.name || null, target_month_label: t ? monthLabel(t.target_month) : null } })
     const { key, dir } = sort
     return [...r].sort((a, b) => {
       const x = a[key], y = b[key]
@@ -140,7 +141,7 @@ export default function Deals({ fixedType }) {
           <table className="min-w-full divide-y divide-slate-100">
             <thead className="bg-slate-50">
               <tr>
-                <SortTh k="site_code">ID</SortTh><SortTh k="record_type">Type</SortTh><SortTh k="name">Site</SortTh><SortTh k="stage_order">Stage</SortTh>
+                <SortTh k="site_code">ID</SortTh><SortTh k="record_type">Type</SortTh><SortTh k="intent_sort">Intent</SortTh><SortTh k="name">Site</SortTh><SortTh k="stage_order">Stage</SortTh>
                 <SortTh k="qis">QIS</SortTh><SortTh k="days_in_stage">Days in stage</SortTh><SortTh k="city">City</SortTh><SortTh k="rent_expectation">Rent</SortTh>
                 <th className="th">Power</th><SortTh k="ho_sort">HO date</SortTh><SortTh k="en_sort">Energized</SortTh><SortTh k="owner">Owner</SortTh><SortTh k="created_at">Created</SortTh>
               </tr>
@@ -150,6 +151,7 @@ export default function Deals({ fixedType }) {
                 <tr key={d.id} className="cursor-pointer hover:bg-slate-50" onClick={() => nav(`/app/deals/${d.id}`)}>
                   <td className="td font-mono text-xs text-slate-500">{d.site_code}</td>
                   <td className="td" onClick={e => e.stopPropagation()}><TypeCell deal={d} onChanged={reload} /></td>
+                  <td className="td" onClick={e => e.stopPropagation()}><IntentCell deal={d} onChanged={reload} /></td>
                   <td className="td max-w-[260px]"><div className="truncate font-semibold text-slate-900">{d.name}</div><div className="truncate text-xs text-slate-500">{[d.site_type, d.address].filter(Boolean).join(' · ') || '—'}{d.latitude === null && <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] font-semibold text-amber-700">No location</span>}</div>{d.target && <div className="mt-0.5 truncate text-[11px] text-slate-600" title={`Priority location · month of acquisition ${d.target_month_label}`}><span className={`mr-1 rounded px-1 font-bold ${PRIORITIES[d.target.priority]?.cls}`}>{d.target.priority}</span>{d.target.name}</div>}</td>
                   <td className="td" onClick={e => e.stopPropagation()}><StageCell deal={d} onChanged={reload} /></td>
                   <td className="td font-semibold">{d.qis ?? '—'}</td>
@@ -179,7 +181,7 @@ export default function Deals({ fixedType }) {
   )
 }
 
-const flatten = rows => rows.map(r => ({ ...r, ...(r.extra || {}) }))
+const flatten = rows => rows.map(r => ({ ...r, ...(r.extra || {}), intent: INTENTS[r.extra?.intent]?.label ?? r.extra?.intent ?? null }))
 
 function Board({ rows, stages }) {
   return (

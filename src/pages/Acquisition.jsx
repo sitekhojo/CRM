@@ -10,6 +10,7 @@ import { validLatLng } from '../lib/geo'
 import { fmtNum } from '../lib/format'
 import { Modal, PageLoader, Empty, StageBadge, useToast } from '../components/ui'
 import MultiSelect, { SingleSelect } from '../components/MultiSelect'
+import Forecast from '../components/Forecast'
 
 export const PriorityChip = ({ p, className = '' }) => (
   <span className={`inline-block rounded px-1.5 py-0.5 text-[11px] font-bold ${PRIORITIES[p]?.cls || 'bg-slate-200'} ${className}`}>{p}</span>
@@ -28,6 +29,7 @@ export default function Acquisition() {
   const [f, setF] = useState({ q: '', priority: [], city: [], month: '', status: [] })
   const [open, setOpen] = useState({})
   const [upOpen, setUpOpen] = useState(false)
+  const [tab, setTab] = useState('forecast')
 
   const m = useMemo(() => {
     if (!deals) return null
@@ -70,15 +72,22 @@ export default function Acquisition() {
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div>
           <h1 className="text-xl font-extrabold text-navy-900">Acquisition Desk</h1>
-          <p className="text-sm text-slate-500">{m.rows.length} of {m.all.length} priority locations · a lead/deal counts against a location when it lies within the location's radius</p>
+          <p className="text-sm text-slate-500">{tab === 'forecast' ? 'Handover and energisation outlook · this month to the end of the FY' : `${m.rows.length} of ${m.all.length} priority locations · a lead/deal counts against a location when it lies within its radius`}</p>
         </div>
         <div className="flex-1" />
-        <button className="btn-secondary" onClick={() => nav('/app/map?targets=1')}><MapIcon className="h-4 w-4" />View on map</button>
-        {m.all.length > 0 && <button className="btn-secondary" onClick={exportXlsx}><Download className="h-4 w-4" />Excel</button>}
-        {isAdmin && <button className="btn-primary" onClick={() => setUpOpen(true)}><Upload className="h-4 w-4" />Upload locations</button>}
+        {tab === 'locations' && <>
+          <button className="btn-secondary" onClick={() => nav('/app/map?targets=1')}><MapIcon className="h-4 w-4" />View on map</button>
+          {m.all.length > 0 && <button className="btn-secondary" onClick={exportXlsx}><Download className="h-4 w-4" />Excel</button>}
+          {isAdmin && <button className="btn-primary" onClick={() => setUpOpen(true)}><Upload className="h-4 w-4" />Upload locations</button>}
+        </>}
+      </div>
+      <div className="mb-4 flex gap-1 border-b border-slate-200">
+        {[['forecast', 'Forecast'], ['locations', `Priority locations${m.all.length ? ` (${m.all.length})` : ''}`]].map(([k, l]) => (
+          <button key={k} onClick={() => setTab(k)} className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm font-semibold ${tab === k ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>{l}</button>
+        ))}
       </div>
 
-      {m.all.length === 0 ? (
+      {tab === 'forecast' ? <Forecast /> : m.all.length === 0 ? (
         <div className="card"><Empty icon={Crosshair} title="No priority locations yet">
           Upload your P0–P4 list (name, lat/long, priority, month of acquisition). Every lead and deal is then tagged to the location it falls in.
           {isAdmin && <div className="mt-3 flex justify-center gap-2"><button className="btn-primary" onClick={() => setUpOpen(true)}><Upload className="h-4 w-4" />Upload locations</button>

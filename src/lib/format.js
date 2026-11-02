@@ -58,10 +58,29 @@ export const EXTRA_FIELDS = [
   ['qis_count', 'No. of QIS', 'number'],
   ['expected_ho', 'Expected HO date', 'date'],
   ['priority_zone', 'Priority zone (P0/P1)', 'text'],
-  ['probability', 'Probability %', 'number'],
+  ['intent', 'Intent', 'intent'],
+  ['expected_en', 'Expected energisation date', 'date'],
   ['ho_date', 'Handover date', 'date'],
   ['energized_on', 'Energization date', 'date'],
 ]
+
+/** Deal temperature (replaces probability %). */
+export const INTENTS = {
+  hot: { label: 'Hot', hint: 'High intent', cls: 'bg-red-100 text-red-700', dot: '#dc2626' },
+  warm: { label: 'Warm', hint: 'Medium intent', cls: 'bg-amber-100 text-amber-800', dot: '#d97706' },
+  cold: { label: 'Cold', hint: 'Low intent', cls: 'bg-sky-100 text-sky-700', dot: '#0284c7' },
+}
+export const normIntent = v => {
+  const s = String(v ?? '').trim().toLowerCase()
+  if (!s) return null
+  if (/hot|high/.test(s)) return 'hot'
+  if (/warm|med/.test(s)) return 'warm'
+  if (/cold|low/.test(s)) return 'cold'
+  const n = Number(s.replace('%', '')); if (!isNaN(n)) return n >= 80 ? 'hot' : n >= 50 ? 'warm' : 'cold'
+  return null
+}
+/** Fields only an admin edits, from the list (not in the edit form). */
+export const ADMIN_LIST_DATES = ['ho_date', 'energized_on']
 
 export const RECORD_TYPES = {
   lead: { label: 'Lead', cls: 'bg-sky-100 text-sky-700' },

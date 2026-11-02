@@ -1,17 +1,16 @@
 import { useState } from 'react'
 import { Pencil } from 'lucide-react'
 import { useAuth } from '../lib/auth'
-import { permissions } from '../lib/deals'
 import { supabase, errMsg } from '../lib/supabase'
 import { useToast } from './ui'
 import { fmtDate } from '../lib/format'
 
 /** Click-to-edit milestone date (extra.ho_date / extra.energized_on) in the Leads & Deals list. */
 export default function DateCell({ deal, field, label, onChanged }) {
-  const { profile } = useAuth()
+  const { isAdmin } = useAuth()
   const toast = useToast()
   const [editing, setEditing] = useState(false)
-  const can = permissions(deal, profile).canEdit
+  const can = isAdmin // handover / energization dates: admin only, from the list
   const value = deal.extra?.[field] || ''
 
   const save = async v => {

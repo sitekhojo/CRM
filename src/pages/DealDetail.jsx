@@ -14,7 +14,7 @@ import { Marker } from 'react-leaflet'
 import { hasLoc } from '../lib/geo'
 import StageChangeModal from '../components/StageChangeModal'
 import DealForm from '../components/DealForm'
-import { fmtDateTime, fmtDate, fmtINR, fmtNum, daysLabel, daysInt, stageAgeTone, timeAgo, POWER_FEASIBILITY, RECORD_TYPES, EXTRA_FIELDS } from '../lib/format'
+import { fmtDateTime, fmtDate, fmtINR, fmtNum, daysLabel, daysInt, stageAgeTone, timeAgo, POWER_FEASIBILITY, RECORD_TYPES, EXTRA_FIELDS, INTENTS } from '../lib/format'
 
 export default function DealDetail() {
   const { id } = useParams()
@@ -148,7 +148,7 @@ export default function DealDetail() {
           <InfoCard title="Site">
             <Info label="Site type" value={deal.site_type} />
             {EXTRA_FIELDS.map(([k, label, type]) => (
-              <Info key={k} label={label} value={deal.extra?.[k] === undefined || deal.extra?.[k] === null ? null : type === 'date' ? fmtDate(deal.extra[k]) : type === 'number' ? fmtNum(deal.extra[k]) : String(deal.extra[k])} />
+              <Info key={k} label={label} value={deal.extra?.[k] === undefined || deal.extra?.[k] === null ? null : type === 'date' ? fmtDate(deal.extra[k]) : type === 'intent' ? (INTENTS[deal.extra[k]] ? `${INTENTS[deal.extra[k]].label} · ${INTENTS[deal.extra[k]].hint}` : String(deal.extra[k])) : type === 'number' ? fmtNum(deal.extra[k]) : String(deal.extra[k])} />
             ))}
             <Info label="Area" value={deal.area_sqft ? `${fmtNum(deal.area_sqft)} sq ft` : null} />
             <Info label="Coordinates" value={hasLoc(deal) ? `${deal.latitude.toFixed(6)}, ${deal.longitude.toFixed(6)}` : <span className="font-semibold text-amber-600">No location yet — use Edit to pin it</span>} />
