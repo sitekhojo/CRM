@@ -93,7 +93,7 @@ export default function TeamActivity() {
   }
   const exportXlsx = () => exportWorkbook([{
     name: 'Visits',
-    columns: [['visit_date', 'Date'], ['time', 'Time'], ['member', 'Person'], ['type', 'Visit type'], ['site_code', 'Lead / deal'], ['site_name', 'Site name'], ['stage', 'Stage'], ['lead_created', 'Lead created by visit'], ['remarks', 'Remarks'], ['latitude', 'Latitude'], ['longitude', 'Longitude'], ['accuracy_m', 'GPS accuracy (m)']],
+    columns: [['visit_date', 'Date'], ['time', 'Time'], ['member', 'Person'], ['type', 'Visit type'], ['site_code', 'Lead / deal'], ['site_name', 'Site name'], ['stage', 'Stage'], ['lead_created', 'Lead created by visit'], ['no_lead_reason', 'No lead reason'], ['remarks', 'Remarks'], ['latitude', 'Latitude'], ['longitude', 'Longitude'], ['accuracy_m', 'GPS accuracy (m)']],
     rows: m.all.map(v => ({ ...v, time: fmtTime(v.visited_at), type: VISIT_TYPES[v.visit_type]?.label, site_code: v.site?.site_code || '', site_name: v.site?.name || '', stage: v.site?.stage_name || '', lead_created: v.lead_created ? 'Yes' : '' })),
   }, {
     name: 'Summary',
@@ -243,7 +243,7 @@ function VisitLine({ v, n }) {
     <div className="text-sm">
       <div className="flex flex-wrap items-center gap-1.5">
         {n && <b>#{n}</b>}<span className="text-xs text-slate-400">{fmtTime(v.visited_at)}</span><TypeChip t={v.visit_type} />
-        {v.site ? <Link to={`/app/deals/${v.site.id}`} className="font-semibold !text-brand-700 hover:underline">{v.site.site_code}</Link> : <span className="text-xs text-slate-400">Visit only</span>}
+        {v.site ? <Link to={`/app/deals/${v.site.id}`} className="font-semibold !text-brand-700 hover:underline">{v.site.site_code}</Link> : v.no_lead_reason ? <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700">No lead · {v.no_lead_reason}</span> : <span className="text-xs text-slate-400">Visit only</span>}
         {v.lead_created && <span className="text-[11px] font-semibold text-emerald-700">new lead</span>}
       </div>
       {v.site && <div className="truncate text-xs text-slate-600">{v.site.name} · {v.site.record_type === 'lead' ? 'Lead' : 'Deal'} · {v.site.stage_name}</div>}

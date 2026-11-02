@@ -8,6 +8,7 @@ export const VISIT_TYPES = {
   discom: { label: 'Discom', short: 'Discom', cls: 'bg-amber-100 text-amber-800' },
   other: { label: 'Other', short: 'Other', cls: 'bg-slate-200 text-slate-700' },
 }
+export const NO_LEAD_REASONS = ['Owner details not available', 'In discussion', 'Not feasible', 'Other']
 export const VISIT_TYPE_KEYS = Object.keys(VISIT_TYPES)
 
 /** Distinct colours for people on the map. */

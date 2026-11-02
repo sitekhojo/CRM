@@ -6,7 +6,7 @@ import { useConfig, ownerOptions } from '../lib/config'
 import { supabase, errMsg } from '../lib/supabase'
 import { haversine, hasLoc } from '../lib/geo'
 import { SITE_TYPES, fmtDist } from '../lib/format'
-import { VISIT_TYPES, VISIT_TYPE_KEYS, getGps, fmtTime, istDay, fetchVisits } from '../lib/visits'
+import { VISIT_TYPES, VISIT_TYPE_KEYS, NO_LEAD_REASONS, getGps, fmtTime, istDay, fetchVisits } from '../lib/visits'
 import { useToast } from '../components/ui'
 
 const LS = { member: 'sk_visit_member', city: 'sk_visit_city' }
@@ -28,6 +28,8 @@ export default function LogVisit() {
   const [q, setQ] = useState('')
   const [newSite, setNewSite] = useState({ name: '', city: ls(LS.city), site_type: '' })
   const [remarks, setRemarks] = useState('')
+  const [noLead, setNoLead] = useState(false)
+  const [noLeadReason, setNoLeadReason] = useState(NO_LEAD_REASONS[0])
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [done, setDone] = useState(null)
@@ -51,7 +53,8 @@ export default function LogVisit() {
     return open.filter(d => [d.site_code, d.name, d.address, d.city, d.landlord_name].some(v => v && String(v).toLowerCase().includes(s))).slice(0, 8)
   }, [open, q])
 
-  const autoLead = type === 'new_site' && !site
+  const newNoSite = type === 'new_site' && !site
+  const autoLead = newNoSite && !noLead
   const members = ownerOptions(team.filter(t => t.is_active), null)
 
   const save = async () => {
@@ -65,6 +68,7 @@ export default function LogVisit() {
       p_member: member, p_lat: gps.lat, p_lng: gps.lng, p_accuracy: gps.accuracy, p_type: type,
       p_site: site?.id || null, p_remarks: remarks || null,
       p_new_name: autoLead ? newSite.name : null, p_new_city: autoLead ? newSite.city : null, p_new_site_type: autoLead ? newSite.site_type : null,
+      p_no_lead_reason: newNoSite && noLead ? noLeadReason : null,
     })
     setBusy(false)
     if (error) return setErr(errMsg(error))
@@ -72,6 +76,7 @@ export default function LogVisit() {
     if (autoLead) lsSet(LS.city, newSite.city)
     setDone(data)
     toast(data.lead_created ? `Visit saved · lead ${data.site_code} created` : 'Visit saved')
+    setNoLead(false)
     setSite(null); setQ(''); setRemarks(''); setNewSite(s => ({ ...s, name: '', site_type: '' })); setGps(null)
     loadToday(); if (data.lead_created) reload?.()
   }
@@ -129,7 +134,7 @@ export default function LogVisit() {
         </div>
 
         <div>
-          <label className="mb-1 block text-xs font-semibold text-slate-600">Linked lead / deal {type === 'new_site' ? '(leave empty to create a new lead)' : '(optional)'}</label>
+          <label className="mb-1 block text-xs font-semibold text-slate-600">Linked lead / deal {autoLead ? '(leave empty to create a new lead)' : '(optional)'}</label>
           {site ? (
             <div className="flex items-center gap-2 rounded-lg border border-brand-300 bg-brand-50 px-3 py-2 text-sm">
               <span className="font-mono text-xs text-slate-500">{site.site_code}</span>
@@ -158,6 +163,22 @@ export default function LogVisit() {
           </>}
         </div>
 
+        {newNoSite && (
+          <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3">
+            <span className="text-sm"><span className="font-semibold text-slate-800">Don't create a lead yet</span><span className="block text-xs text-slate-500">Owner details not available, still in discussion, etc.</span></span>
+            <button type="button" role="switch" aria-checked={noLead} onClick={() => setNoLead(v => !v)}
+              className={`relative h-6 w-11 shrink-0 rounded-full transition ${noLead ? 'bg-brand-600' : 'bg-slate-300'}`}>
+              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${noLead ? 'left-[22px]' : 'left-0.5'}`} />
+            </button>
+          </label>
+        )}
+        {newNoSite && noLead && (
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-slate-600">Reason</label>
+            <div className="flex flex-wrap gap-2">{NO_LEAD_REASONS.map(r => chip(noLeadReason === r, r, () => setNoLeadReason(r)))}</div>
+            <p className="mt-1 text-xs text-slate-500">The visit is saved with its GPS point. Create the lead later from the site, or link it on your next visit.</p>
+          </div>
+        )}
         {autoLead && (
           <div className="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
             <p className="text-xs font-semibold text-emerald-800">A new lead will be created at this GPS point, with you as owner</p>
