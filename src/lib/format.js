@@ -59,6 +59,7 @@ export const EXTRA_FIELDS = [
   ['expected_ho', 'Expected HO date', 'date'],
   ['priority_zone', 'Priority zone (P0/P1)', 'text'],
   ['intent', 'Intent', 'intent'],
+  ['site_format', 'Open / Closed site', 'format'],
   ['expected_en', 'Expected energisation date', 'date'],
   ['ho_date', 'Handover date', 'date'],
   ['energized_on', 'Energization date', 'date'],
@@ -79,6 +80,10 @@ export const normIntent = v => {
   const n = Number(s.replace('%', '')); if (!isNaN(n)) return n >= 80 ? 'hot' : n >= 50 ? 'warm' : 'cold'
   return null
 }
+/** Physical site format. */
+export const SITE_FORMATS = { open: 'Open', closed: 'Closed' }
+export const normFormat = v => { const s = String(v ?? '').trim().toLowerCase(); return s.startsWith('open') ? 'open' : s.startsWith('close') ? 'closed' : null }
+
 /** Fields only an admin edits, from the list (not in the edit form). */
 export const ADMIN_LIST_DATES = ['ho_date', 'energized_on']
 

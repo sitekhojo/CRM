@@ -54,7 +54,7 @@ export default function MapPage() {
             ))}
           </div>
         </div>
-        <DealFilters value={filters} onChange={setFilters} show={['q', 'region', 'city', 'owner', 'type', 'stage', 'siteType']} qPlaceholder="Search, or paste lat, long / Maps link" />
+        <DealFilters value={filters} onChange={setFilters} show={['q', 'region', 'city', 'owner', 'type', 'stage', 'siteType', 'format']} qPlaceholder="Search, or paste lat, long / Maps link" />
       </div>
 
       {view === 'map' ? (

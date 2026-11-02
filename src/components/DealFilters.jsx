@@ -38,6 +38,10 @@ export default function DealFilters({ value, onChange, show = ['q', 'region', 'c
         <MultiSelect allLabel="All site types" noun="site types" value={value.siteType} onChange={v => set('siteType', v)}
           options={SITE_TYPES.map(t => ({ value: t, label: t }))} />
       )}
+      {show.includes('format') && (
+        <SingleSelect value={value.format || ''} onChange={v => set('format', v)}
+          options={[{ value: '', label: 'Open & closed' }, { value: 'open', label: 'Open sites' }, { value: 'closed', label: 'Closed sites' }, { value: 'none', label: 'Format not set' }]} />
+      )}
       {show.includes('date') && (
         <div className="flex items-center gap-1">
           <input type="date" className="input w-auto" value={value.from} onChange={e => set('from', e.target.value)} title="Created from" />

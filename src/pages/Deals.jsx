@@ -8,7 +8,7 @@ import DealFilters from '../components/DealFilters'
 import { SingleSelect } from '../components/MultiSelect'
 import PeriodBar, { periodRange, periodLabel, isoDay } from '../components/PeriodBar'
 import { StageBadge, PageLoader, Empty, Pill } from '../components/ui'
-import { fmtDate, fmtINR, daysInt, stageAgeTone, AGE_TONES, POWER_FEASIBILITY, RECORD_TYPES, INTENTS } from '../lib/format'
+import { fmtDate, fmtINR, daysInt, stageAgeTone, AGE_TONES, POWER_FEASIBILITY, RECORD_TYPES, INTENTS, SITE_FORMATS } from '../lib/format'
 import { exportRows, DEAL_COLUMNS } from '../lib/excel'
 import ImportDealsModal from '../components/ImportDealsModal'
 import StageCell from '../components/StageCell'
@@ -116,7 +116,7 @@ export default function Deals({ fixedType }) {
         </div>
       )}
       <div className="mb-4">
-        <DealFilters value={filters} onChange={f => setFilters({ ...f, recordType: fixedType || f.recordType })} show={['q', 'region', 'city', 'owner', ...(fixedType ? [] : ['type']), 'stage', 'siteType']} />
+        <DealFilters value={filters} onChange={f => setFilters({ ...f, recordType: fixedType || f.recordType })} show={['q', 'region', 'city', 'owner', ...(fixedType ? [] : ['type']), 'stage', 'siteType', 'format']} />
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <PeriodBar allTime value={{ kind: pkind, from: rA, to: rB }} onChange={onPeriod} label={pLabel} prefix={pmode === 'pipe' ? 'Sites in pipeline' : 'Sites added'} />
           {pkind !== 'all' && (
@@ -152,7 +152,7 @@ export default function Deals({ fixedType }) {
                   <td className="td font-mono text-xs text-slate-500">{d.site_code}</td>
                   <td className="td" onClick={e => e.stopPropagation()}><TypeCell deal={d} onChanged={reload} /></td>
                   <td className="td" onClick={e => e.stopPropagation()}><IntentCell deal={d} onChanged={reload} /></td>
-                  <td className="td max-w-[260px]"><div className="truncate font-semibold text-slate-900">{d.name}</div><div className="truncate text-xs text-slate-500">{[d.site_type, d.address].filter(Boolean).join(' · ') || '—'}{d.latitude === null && <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] font-semibold text-amber-700">No location</span>}</div>{d.target && <div className="mt-0.5 truncate text-[11px] text-slate-600" title={`Priority location · month of acquisition ${d.target_month_label}`}><span className={`mr-1 rounded px-1 font-bold ${PRIORITIES[d.target.priority]?.cls}`}>{d.target.priority}</span>{d.target.name}</div>}</td>
+                  <td className="td max-w-[260px]"><div className="truncate font-semibold text-slate-900">{d.name}</div><div className="truncate text-xs text-slate-500">{[d.site_type, SITE_FORMATS[d.extra?.site_format], d.address].filter(Boolean).join(' · ') || '—'}{d.latitude === null && <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] font-semibold text-amber-700">No location</span>}</div>{d.target && <div className="mt-0.5 truncate text-[11px] text-slate-600" title={`Priority location · month of acquisition ${d.target_month_label}`}><span className={`mr-1 rounded px-1 font-bold ${PRIORITIES[d.target.priority]?.cls}`}>{d.target.priority}</span>{d.target.name}</div>}</td>
                   <td className="td" onClick={e => e.stopPropagation()}><StageCell deal={d} onChanged={reload} /></td>
                   <td className="td font-semibold">{d.qis ?? '—'}</td>
                   <td className="td whitespace-nowrap">
@@ -181,7 +181,7 @@ export default function Deals({ fixedType }) {
   )
 }
 
-const flatten = rows => rows.map(r => ({ ...r, ...(r.extra || {}), intent: INTENTS[r.extra?.intent]?.label ?? r.extra?.intent ?? null }))
+const flatten = rows => rows.map(r => ({ ...r, ...(r.extra || {}), intent: INTENTS[r.extra?.intent]?.label ?? r.extra?.intent ?? null, site_format: SITE_FORMATS[r.extra?.site_format] ?? null }))
 
 function Board({ rows, stages }) {
   return (

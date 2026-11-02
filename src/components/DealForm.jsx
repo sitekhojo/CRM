@@ -3,7 +3,7 @@ import { useConfig, stagesFor, ownerOptions, regionOf } from '../lib/config'
 import { useAuth } from '../lib/auth'
 import { Field } from './ui'
 import { LocationPicker, DealMarkers } from './maps'
-import { SITE_TYPES, EXTRA_FIELDS, INTENTS, ADMIN_LIST_DATES } from '../lib/format'
+import { SITE_TYPES, EXTRA_FIELDS, INTENTS, ADMIN_LIST_DATES, SITE_FORMATS } from '../lib/format'
 import { evaluateFeasibility, validLatLng, VERDICT } from '../lib/geo'
 import { fetchDeals, fetchNetworkPoints } from '../lib/deals'
 import { useTargets, matchPoint } from '../lib/acquisition'
@@ -128,7 +128,13 @@ export default function DealForm({ initial, initialLoc, onSubmit, submitting, mo
           )}
           {EXTRA_FIELDS.filter(([k]) => !ADMIN_LIST_DATES.includes(k)).map(([k, label, type]) => (
             <Field key={k} label={label}>
-              {type === 'intent' ? (
+              {type === 'format' ? (
+                <select className="input" value={f.extra?.[k] ?? ''} onChange={e => setF(x => ({ ...x, extra: { ...(x.extra || {}), [k]: e.target.value } }))}>
+                  <option value="">Not set</option>
+                  <option value="open">Open — open plot / land / parking</option>
+                  <option value="closed">Closed — shop / enclosed space</option>
+                </select>
+              ) : type === 'intent' ? (
                 <select className="input" value={f.extra?.[k] ?? ''} onChange={e => setF(x => ({ ...x, extra: { ...(x.extra || {}), [k]: e.target.value } }))}>
                   <option value="">Not set</option>
                   {Object.entries(INTENTS).map(([v, t]) => <option key={v} value={v}>{t.label} · {t.hint}</option>)}

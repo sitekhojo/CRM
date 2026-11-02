@@ -4,7 +4,7 @@ import { Modal } from './ui'
 import { useConfig } from '../lib/config'
 import { supabase, errMsg } from '../lib/supabase'
 import { readSheet, normaliseRow, IMPORT_FIELDS, toBool, toNum, downloadTemplate } from '../lib/excel'
-import { normaliseSiteType, normIntent } from '../lib/format'
+import { normaliseSiteType, normIntent, normFormat } from '../lib/format'
 import { useToast } from './ui'
 
 /** Admin bulk import of deals from Excel / CSV. */
@@ -53,7 +53,7 @@ export default function ImportDealsModal({ open, onClose, onDone }) {
           record_type: String(o.record_type || '').trim().toLowerCase() === 'lead' ? 'lead' : 'deal',
           drop_reason: o.drop_reason || null,
           extra: Object.fromEntries([
-            ['qis_count', toNum(o.qis_count)], ['intent', normIntent(o.intent)], ['expected_en', toDateStr(o.expected_en)],
+            ['qis_count', toNum(o.qis_count)], ['intent', normIntent(o.intent)], ['site_format', normFormat(o.site_format)], ['expected_en', toDateStr(o.expected_en)],
             ['expected_ho', toDateStr(o.expected_ho)], ['ho_date', toDateStr(o.ho_date)], ['energized_on', toDateStr(o.energized_on)], ['priority_zone', o.priority_zone ? String(o.priority_zone) : null],
           ].filter(([, v]) => v !== null && v !== '')),
           ...(stage_id ? { stage_id } : {}), ...(owner ? { owner } : {}),

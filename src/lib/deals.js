@@ -57,7 +57,7 @@ export function workedIn(d, from, to) {
 }
 export const dayBefore = day => { const t = new Date(day + 'T12:00:00'); t.setDate(t.getDate() - 1); return localDay(t) }
 
-export const EMPTY_FILTERS = { q: '', city: [], recordType: '', stage: [], siteType: [], region: [], owner: [], member: '', from: '', to: '', overdue: false, mine: false, age: '', ho: '', en: '', openOnly: false, inPipe: '', pipeAt: '', exit: '', worked: '' }
+export const EMPTY_FILTERS = { q: '', city: [], recordType: '', stage: [], siteType: [], region: [], owner: [], member: '', from: '', to: '', overdue: false, mine: false, age: '', ho: '', en: '', openOnly: false, inPipe: '', pipeAt: '', exit: '', worked: '', format: '' }
 
 /** Apply the shared filter bar to a list of deals. */
 /** Energized stations loaded from the QIS tracker (not pipeline work — kept out of pipeline metrics). */
@@ -80,6 +80,7 @@ export function applyFilters(deals, f, userId) {
     if (f.mine && d.assigned_to !== userId && d.created_by !== userId) return false
     if (f.overdue && !d.is_overdue) return false
     if (f.openOnly && d.stage_category === 'dropped') return false
+    if (f.format && (f.format === 'none' ? d.extra?.site_format : d.extra?.site_format !== f.format)) return false
     if (f.pipeAt && !inPipeAt(d, f.pipeAt)) return false
     if (f.worked) { const [a, b] = f.worked.split(','); if (!workedIn(d, a, b)) return false }
     if (f.exit) { const [k, a, b] = f.exit.split(','); const x = exitOf(d); if (!x || x.kind !== k || !x.date || x.date < a || x.date > b) return false }
