@@ -60,11 +60,16 @@ export const dayBefore = day => { const t = new Date(day + 'T12:00:00'); t.setDa
 export const EMPTY_FILTERS = { q: '', city: [], recordType: '', stage: [], siteType: [], region: [], owner: [], member: '', from: '', to: '', overdue: false, mine: false, age: '', ho: '', en: '', openOnly: false, inPipe: '', pipeAt: '', exit: '', worked: '' }
 
 /** Apply the shared filter bar to a list of deals. */
+/** Energized stations loaded from the QIS tracker (not pipeline work — kept out of pipeline metrics). */
+export const isTrackerSite = d => d.extra?.source === 'qis_tracker'
+
 export function applyFilters(deals, f, userId) {
   const q = f.q.trim().toLowerCase()
   const from = f.from ? new Date(f.from + 'T00:00:00') : null
   const to = f.to ? new Date(f.to + 'T23:59:59') : null
+  const pipelineView = !!(f.from || f.to || f.pipeAt || f.exit || f.worked || f.inPipe)
   return deals.filter(d => {
+    if (pipelineView && isTrackerSite(d)) return false
     if (f.city?.length && !f.city.includes(d.city)) return false
     if (f.recordType && (d.record_type || 'deal') !== f.recordType) return false
     if (f.siteType?.length && !f.siteType.includes(d.site_type)) return false

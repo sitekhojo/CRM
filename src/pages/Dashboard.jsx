@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell, LabelList, Legend } from 'recharts'
 import { Layers, CalendarPlus, CalendarDays, Zap, Activity, Boxes, Network } from 'lucide-react'
-import { useDeals, applyFilters, EMPTY_FILTERS, fetchNetworkPoints, inPipeline, exitOf, inPipeAt, dayBefore, workedIn } from '../lib/deals'
+import { useDeals, applyFilters, EMPTY_FILTERS, fetchNetworkPoints, inPipeline, exitOf, inPipeAt, dayBefore, workedIn, isTrackerSite } from '../lib/deals'
 import { supabase, fetchAll } from '../lib/supabase'
 import { useConfig, stagesFor, REGIONS, leadLabel } from '../lib/config'
 import DealFilters from '../components/DealFilters'
@@ -33,7 +33,7 @@ export default function Dashboard() {
 
   const m = useMemo(() => {
     if (!deals) return null
-    const rows = applyFilters(deals, filters)
+    const rows = applyFilters(deals, filters).filter(r => !isTrackerSite(r)) // pipeline metrics only; energisation comes from the tracker
     const [pStart, pEnd] = periodRange(period)
     const inP = d => { if (!d) return false; const t = new Date(d); return t >= pStart && t <= pEnd }
     const keyId = Object.fromEntries(stages.map(s => [s.key, s.id]))
