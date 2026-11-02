@@ -57,7 +57,6 @@ export default function DealDetail() {
   const saveEdit = async payload => {
     setSaving(true)
     delete payload.stage_id
-    if (!isAdmin) delete payload.assigned_to
     const ok = await update(payload, 'Deal updated')
     setSaving(false)
     if (ok) setEditing(false)
