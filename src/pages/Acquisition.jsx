@@ -12,6 +12,7 @@ import { Modal, PageLoader, Empty, StageBadge, useToast } from '../components/ui
 import MultiSelect, { SingleSelect } from '../components/MultiSelect'
 import Forecast from '../components/Forecast'
 import FranchisePayments from '../components/FranchisePayments'
+import TeamActivity from '../components/TeamActivity'
 
 export const PriorityChip = ({ p, className = '' }) => (
   <span className={`inline-block rounded px-1.5 py-0.5 text-[11px] font-bold ${PRIORITIES[p]?.cls || 'bg-slate-200'} ${className}`}>{p}</span>
@@ -73,7 +74,7 @@ export default function Acquisition() {
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div>
           <h1 className="text-xl font-extrabold text-navy-900">Acquisition Desk</h1>
-          <p className="text-sm text-slate-500">{tab === 'payments' ? 'Proposed vs received for franchise sites energized this FY' : tab !== 'locations' ? 'Handover and energisation outlook · this month to the end of the FY' : `${m.rows.length} of ${m.all.length} priority locations · a lead/deal counts against a location when it lies within its radius`}</p>
+          <p className="text-sm text-slate-500">{tab === 'team' ? 'Where the ground team went, what they did, and who has not logged a visit' : tab === 'payments' ? 'Proposed vs received for franchise sites energized this FY' : tab !== 'locations' ? 'Handover and energisation outlook · this month to the end of the FY' : `${m.rows.length} of ${m.all.length} priority locations · a lead/deal counts against a location when it lies within its radius`}</p>
         </div>
         <div className="flex-1" />
         {tab === 'locations' && <>
@@ -83,12 +84,12 @@ export default function Acquisition() {
         </>}
       </div>
       <div className="mb-4 flex gap-1 border-b border-slate-200">
-        {[['forecast', 'Forecast'], ['list', 'Pipeline list'], ['payments', 'Franchise payments'], ['locations', `Priority locations${m.all.length ? ` (${m.all.length})` : ''}`]].map(([k, l]) => (
+        {[['forecast', 'Forecast'], ['list', 'Pipeline list'], ['payments', 'Franchise payments'], ['team', 'Team activity'], ['locations', `Priority locations${m.all.length ? ` (${m.all.length})` : ''}`]].map(([k, l]) => (
           <button key={k} onClick={() => setTab(k)} className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm font-semibold ${tab === k ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>{l}</button>
         ))}
       </div>
 
-      {tab === 'forecast' ? <Forecast /> : tab === 'list' ? <Forecast view="list" /> : tab === 'payments' ? <FranchisePayments /> : m.all.length === 0 ? (
+      {tab === 'team' ? <TeamActivity /> : tab === 'forecast' ? <Forecast /> : tab === 'list' ? <Forecast view="list" /> : tab === 'payments' ? <FranchisePayments /> : m.all.length === 0 ? (
         <div className="card"><Empty icon={Crosshair} title="No priority locations yet">
           Upload your P0–P4 list (name, lat/long, priority, month of acquisition). Every lead and deal is then tagged to the location it falls in.
           {isAdmin && <div className="mt-3 flex justify-center gap-2"><button className="btn-primary" onClick={() => setUpOpen(true)}><Upload className="h-4 w-4" />Upload locations</button>

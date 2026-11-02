@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback } from 'react'
 import OwnerCell from '../components/OwnerCell'
 import TargetMatch from '../components/TargetMatch'
+import { VISIT_TYPES, fetchSiteVisits } from '../lib/visits'
 import { useTargets, matchSite } from '../lib/acquisition'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Pencil, ArrowRightLeft, Trash2, MapPin, Phone, Mail, AlertTriangle, MessageSquare, History, ExternalLink, Radar, Check } from 'lucide-react'
+import { ArrowLeft, Pencil, ArrowRightLeft, Trash2, MapPin, Phone, Mail, AlertTriangle, MessageSquare, History, ExternalLink, Footprints, Radar, Check } from 'lucide-react'
 import { supabase, errMsg } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { useConfig, stagesFor } from '../lib/config'
@@ -25,6 +26,7 @@ export default function DealDetail() {
   const [deal, setDeal] = useState(undefined)
   const [history, setHistory] = useState([])
   const [comments, setComments] = useState([])
+  const [visits, setVisits] = useState([])
   const [stageModal, setStageModal] = useState(null) // null | {preset}
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -32,12 +34,13 @@ export default function DealDetail() {
   const { targets } = useTargets()
 
   const load = useCallback(async () => {
-    const [d, h, c] = await Promise.all([
+    const [d, h, c, v] = await Promise.all([
       supabase.from('site_overview').select('*').eq('id', id).maybeSingle(),
       supabase.from('stage_history_overview').select('*').eq('site_id', id).order('changed_at', { ascending: false }),
       supabase.from('site_comments').select('*, author:profiles(full_name)').eq('site_id', id).order('created_at', { ascending: false }),
+      fetchSiteVisits(id).catch(() => []),
     ])
-    setDeal(d.data || null); setHistory(h.data || []); setComments(c.data || [])
+    setDeal(d.data || null); setHistory(h.data || []); setComments(c.data || []); setVisits(v || [])
   }, [id])
   useEffect(() => { load() }, [load])
 
@@ -81,6 +84,7 @@ export default function DealDetail() {
   const feed = [
     ...history.map(h => ({ type: 'stage', at: h.changed_at, h })),
     ...comments.map(c => ({ type: 'comment', at: c.created_at, c })),
+    ...visits.map(v => ({ type: 'visit', at: v.visited_at, v })),
   ].sort((a, b) => new Date(b.at) - new Date(a.at))
 
   return (
@@ -194,6 +198,13 @@ export default function DealDetail() {
                   <p className="text-xs text-slate-500">{fmtDateTime(item.h.changed_at)}{item.h.days_in_from_stage !== null && item.h.from_stage_name ? ` · ${fmtNum(item.h.days_in_from_stage, 1)} days in ${item.h.from_stage_name}` : ''}</p>
                   {item.h.drop_reason && <p className="mt-1 text-sm text-red-700">Reason: {item.h.drop_reason}</p>}
                   {item.h.note && <p className="mt-1 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">{item.h.note}</p>}
+                </li>
+              ) : item.type === 'visit' ? (
+                <li key={'v' + item.v.id} className="relative">
+                  <span className="absolute -left-[27px] top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-white ring-2 ring-emerald-500"><Footprints className="h-2.5 w-2.5 text-emerald-600" /></span>
+                  <p className="text-sm"><b>{item.v.member}</b> visited · <span className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${VISIT_TYPES[item.v.visit_type]?.cls}`}>{VISIT_TYPES[item.v.visit_type]?.label}</span>{item.v.lead_created && <span className="ml-1 text-xs text-emerald-700">(lead created from this visit)</span>}</p>
+                  <p className="text-xs text-slate-500">{fmtDateTime(item.v.visited_at)} · GPS ±{Math.round(item.v.accuracy_m ?? 0)} m</p>
+                  {item.v.remarks && <p className="mt-1 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-slate-700">{item.v.remarks}</p>}
                 </li>
               ) : (
                 <li key={'c' + item.c.id} className="relative">

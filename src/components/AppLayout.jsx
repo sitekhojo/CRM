@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { NavLink, Outlet, useNavigate, Link } from 'react-router-dom'
-import { LayoutDashboard, Handshake, Target, Crosshair, Map as MapIcon, Radar, Users, Settings, Plus, LogOut, Menu, X, Search, KeyRound } from 'lucide-react'
+import { LayoutDashboard, Handshake, Target, Crosshair, Map as MapIcon, Radar, Users, Settings, Plus, LogOut, Menu, X, Search, KeyRound, MapPinPlus } from 'lucide-react'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import { Modal, Field, useToast } from './ui'
@@ -10,6 +10,7 @@ const NAV = [
   { to: '/app/leads', label: 'Leads', icon: Target },
   { to: '/app/deals', label: 'Deals', icon: Handshake },
   { to: '/app/acquisition', label: 'Acquisition Desk', icon: Crosshair },
+  { to: '/app/visit', label: 'Log visit', icon: MapPinPlus },
   { to: '/app/map', label: 'Map', icon: MapIcon },
   { to: '/app/planning', label: 'Network Planning', icon: Radar },
 ]
@@ -84,6 +85,7 @@ export default function AppLayout() {
             <input className="input bg-slate-50 pl-9" placeholder="Search deals, landlords, pincodes…" value={q} onChange={e => setQ(e.target.value)} />
           </form>
           <div className="flex-1" />
+          <Link to="/app/visit" className="btn-secondary" title="Log a field visit"><MapPinPlus className="h-4 w-4" /><span className="hidden sm:inline">Log visit</span></Link>
           <Link to="/app/deals/new?type=lead" className="btn-secondary"><Plus className="h-4 w-4" /><span className="hidden sm:inline">Create lead</span><span className="sm:hidden">Lead</span></Link>
           <Link to="/app/deals/new" className="btn-primary"><Plus className="h-4 w-4" /><span className="hidden sm:inline">Create deal</span><span className="sm:hidden">Deal</span></Link>
         </header>

@@ -301,10 +301,11 @@ function Backup() {
     setBusy(true)
     try {
       const get = (t, order = 'id') => fetchAll(() => supabase.from(t).select('*').order(order))
-      const [sites, history, comments, network, targets, team, cities, stages, drops, users] = await Promise.all([
+      const [sites, history, comments, network, targets, team, cities, stages, drops, users, visits, payments] = await Promise.all([
         get('site_overview', 'created_at'), get('stage_history_overview'), get('site_comments'), get('network_points'),
         get('target_locations'), get('team_members'), get('cities'), get('stages', 'sort_order'), get('drop_reasons'),
         fetchAll(() => supabase.from('profiles').select('id,email,full_name,role,is_active,created_at').order('created_at')),
+        get('site_visits'), get('site_payments'),
       ])
       const flat = sites.map(r => ({ ...r, ...(r.extra || {}), source: r.extra?.source === 'qis_tracker' ? 'QIS tracker import' : 'CRM', extra_json: r.extra }))
       const stamp = new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', '')
@@ -314,6 +315,8 @@ function Backup() {
         { name: 'Comments', rows: comments },
         { name: 'Network (QIS tracker)', rows: network },
         { name: 'Priority locations', rows: targets },
+        { name: 'Field visits', rows: visits },
+        { name: 'Franchise payments', rows: payments },
         { name: 'Team', rows: team },
         { name: 'Cities', rows: cities },
         { name: 'Stages', rows: stages },

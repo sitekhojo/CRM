@@ -19,6 +19,7 @@ const MapPage = lazy(() => import('./pages/MapPage'))
 const Planning = lazy(() => import('./pages/Planning'))
 const Users = lazy(() => import('./pages/Users'))
 const Settings = lazy(() => import('./pages/Settings'))
+const LogVisit = lazy(() => import('./pages/LogVisit'))
 
 function RequireAuth({ children, admin }) {
   const { session, profile, loading, isAdmin } = useAuth()
@@ -72,6 +73,7 @@ function App() {
               <Route path="all" element={<Lazy><Deals key="all" /></Lazy>} />
               <Route path="deals/new" element={<Lazy><DealNew /></Lazy>} />
               <Route path="deals/:id" element={<Lazy><DealDetail /></Lazy>} />
+              <Route path="visit" element={<Lazy><LogVisit /></Lazy>} />
               <Route path="acquisition" element={<Lazy><Acquisition /></Lazy>} />
               <Route path="map" element={<Lazy><MapPage /></Lazy>} />
               <Route path="planning" element={<Lazy><Planning /></Lazy>} />
