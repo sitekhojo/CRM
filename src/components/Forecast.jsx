@@ -6,6 +6,7 @@ import { fmtNum, fmtDate, INTENTS } from '../lib/format'
 import DealFilters from './DealFilters'
 import { Modal, PageLoader } from './ui'
 import EditCell from './EditCell'
+import DateCell from './DateCell'
 import IntentCell from './IntentCell'
 import StageCell from './StageCell'
 import OwnerCell from './OwnerCell'
@@ -201,7 +202,7 @@ export function PlanTable({ rows, onChanged, today }) {
     <table className="min-w-full text-sm">
       <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
         <tr><th className="px-3 py-2">Site</th><th className="px-2 py-2">City</th><th className="px-2 py-2">Stage</th><th className="px-2 py-2">Intent</th>
-          <th className="px-2 py-2 text-right">QIS</th><th className="px-2 py-2">Expected HO</th><th className="px-2 py-2">Expected energisation</th><th className="px-2 py-2">Owner</th></tr>
+          <th className="px-2 py-2 text-right">QIS</th><th className="px-2 py-2">Expected HO / HO date</th><th className="px-2 py-2">Expected energisation</th><th className="px-2 py-2">Owner</th></tr>
       </thead>
       <tbody className="divide-y divide-slate-100">
         {sorted.map(r => (
@@ -211,7 +212,9 @@ export function PlanTable({ rows, onChanged, today }) {
             <td className="px-2 py-2"><StageCell deal={r} onChanged={onChanged} /></td>
             <td className="px-2 py-2"><IntentCell deal={r} onChanged={onChanged} /></td>
             <td className="px-2 py-2 text-right font-semibold"><EditCell deal={r} field="qis_count" type="number" label="QIS" onChanged={onChanged} /></td>
-            <td className="px-2 py-2"><EditCell deal={r} field="expected_ho" label="Expected HO" onChanged={onChanged} className={r.stage_category === 'active' && late(r.extra?.expected_ho) ? 'font-semibold text-red-600' : r.stage_category !== 'active' ? 'text-slate-400' : ''} /></td>
+            <td className="px-2 py-2">{['approved', 'live'].includes(r.stage_category)
+              ? <div><DateCell deal={r} field="ho_date" label="Handover date" onChanged={onChanged} /><div className="text-[10px] font-semibold uppercase text-cyan-700">handed over</div></div>
+              : <EditCell deal={r} field="expected_ho" label="Expected HO" onChanged={onChanged} className={late(r.extra?.expected_ho) ? 'font-semibold text-red-600' : ''} />}</td>
             <td className="px-2 py-2"><EditCell deal={r} field="expected_en" label="Expected energisation" onChanged={onChanged} className={late(r.extra?.expected_en) ? 'font-semibold text-red-600' : ''} /></td>
             <td className="px-2 py-2"><OwnerCell deal={r} onChanged={onChanged} /></td>
           </tr>
