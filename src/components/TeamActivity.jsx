@@ -36,10 +36,18 @@ export default function TeamActivity() {
   const [people, setPeople] = useState([])
   const [visits, setVisits] = useState(null)
   const [edit, setEdit] = useState(null)
+  const [missingOpen, setMissingOpen] = useState(false)
+  const [lastSeen, setLastSeen] = useState({})
 
   const from = mode === 'week' ? addDays(day, -6) : day
   const load = useCallback(() => { setVisits(null); fetchVisits(from, day).then(setVisits).catch(e => { toast(errMsg(e), 'error'); setVisits([]) }) }, [from, day]) // eslint-disable-line
   useEffect(() => { load() }, [load])
+  useEffect(() => {
+    if (!missingOpen) return
+    fetchVisits(addDays(day, -60), day).then(vs => {
+      const o = {}; vs.forEach(v => { if (!o[v.member] || v.visit_date > o[v.member]) o[v.member] = v.visit_date }); setLastSeen(o)
+    }).catch(() => {})
+  }, [missingOpen, day])
 
   const m = useMemo(() => {
     if (!deals || !visits) return null
@@ -140,8 +148,9 @@ export default function TeamActivity() {
             <p className="text-xs text-slate-500">{m.cards.reduce((a, c) => a + c.newLeads, 0)} new leads added</p></div>
           <div className="card p-4"><p className="text-xs font-semibold text-slate-500">Follow-ups</p><p className="text-2xl font-extrabold text-sky-700">{m.inDay.filter(v => v.visit_type === 'follow_up').length}</p></div>
           <div className="card p-4"><p className="text-xs font-semibold text-slate-500">Franchisee / Discom</p><p className="text-2xl font-extrabold text-violet-700">{m.inDay.filter(v => v.visit_type === 'franchisee_meeting').length} <span className="text-slate-300">/</span> <span className="text-amber-700">{m.inDay.filter(v => v.visit_type === 'discom').length}</span></p></div>
-          <div className={`card p-4 ${m.missing.length ? 'bg-red-50' : ''}`}><p className="text-xs font-semibold text-red-700">No visits logged</p><p className="text-2xl font-extrabold text-red-700">{m.missing.length}</p>
-            <p className="truncate text-xs text-red-600" title={m.missing.map(c => c.name).join(', ')}>{m.missing.map(c => c.name).join(', ') || 'Everyone checked in'}</p></div>
+          <button disabled={!m.missing.length} onClick={() => setMissingOpen(true)} className={`card p-4 text-left ${m.missing.length ? 'bg-red-50 transition hover:shadow-md' : ''}`} title={m.missing.length ? 'See who has not logged a visit' : ''}>
+            <p className="text-xs font-semibold text-red-700">No visits logged</p><p className="text-2xl font-extrabold text-red-700">{m.missing.length}</p>
+            <p className="truncate text-xs text-red-600">{m.missing.length ? 'Click to see names' : 'Everyone checked in'}</p></button>
         </div>
 
         <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -204,6 +213,26 @@ export default function TeamActivity() {
           <p className="mt-2 text-xs text-slate-500">Priority locations on the map: <span className="font-semibold text-emerald-700">green</span> = visited on this day ({m.targetHits.filter(t => t.hit).length}), <span className="font-semibold text-red-600">red</span> = not visited ({m.targetHits.filter(t => !t.hit).length}).</p>
         )}
       </>}
+      <Modal open={missingOpen} onClose={() => setMissingOpen(false)} title={`No visits logged · ${day === today ? 'today' : fmtDay(day)} (${m.missing.length})`}
+        footer={<button className="btn-ghost" onClick={() => setMissingOpen(false)}>Close</button>}>
+        <div className="space-y-3 text-sm">
+          {[...new Set(m.missing.map(c => c.region || 'Other'))].sort().map(r => (
+            <div key={r}>
+              <p className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-400">{r}</p>
+              <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+                {m.missing.filter(c => (c.region || 'Other') === r).map(c => {
+                  const ls = lastSeen[c.name]
+                  return <li key={c.name} className="flex items-center gap-2 px-3 py-2">
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: c.color }} />
+                    <span className="flex-1 font-semibold text-slate-900">{c.name}</span>
+                    <span className="text-xs text-slate-500">{ls ? <>Last visit {fmtDay(ls)}{' '}<button className="font-semibold text-brand-700 hover:underline" onClick={() => { setMissingOpen(false); setDay(ls); setPeople([c.name]) }}>Open</button></> : 'No visit in the last 60 days'}</span>
+                  </li>
+                })}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </Modal>
       <EditVisit v={edit} deals={deals} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); load() }} />
     </div>
   )
