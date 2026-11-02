@@ -61,7 +61,7 @@ export const EMPTY_FILTERS = { q: '', city: [], recordType: '', stage: [], siteT
 
 /** Apply the shared filter bar to a list of deals. */
 /** Energized stations loaded from the QIS tracker (not pipeline work — kept out of pipeline metrics). */
-export const isTrackerSite = d => d.extra?.source === 'qis_tracker'
+export const isTrackerSite = d => d.extra?.source === 'qis_tracker' || d.extra?.source === 'payment_tracker'
 
 export function applyFilters(deals, f, userId) {
   const q = f.q.trim().toLowerCase()

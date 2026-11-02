@@ -13,7 +13,9 @@ import EditCell from './EditCell'
 import { SingleSelect } from './MultiSelect'
 import DealFilters from './DealFilters'
 
-const MODES = ['NEFT', 'RTGS', 'IMPS', 'UPI', 'Cheque', 'Cash', 'Adjustment']
+export const COMPONENTS = [['ff', 'FF', 'Franchise fee'], ['sd', 'SD', 'Security deposit'], ['ic', 'IC', 'Infra cost']]
+const compLabel = k => COMPONENTS.find(c => c[0] === k)?.[1] || 'Other'
+const MODES = ['Opening balance', 'NEFT', 'RTGS', 'IMPS', 'UPI', 'Cheque', 'Cash', 'Adjustment']
 const fyStart = () => { const n = new Date(); const y = n.getMonth() >= 3 ? n.getFullYear() : n.getFullYear() - 1; return `${y}-04-01` }
 const fyLabel = () => { const y = Number(fyStart().slice(0, 4)); return `FY${String(y + 1).slice(2)}` }
 const short = n => { const v = Number(n) || 0; return v >= 1e7 ? `₹${(v / 1e7).toFixed(2)} Cr` : v >= 1e5 ? `₹${(v / 1e5).toFixed(2)} L` : fmtINR(v) }
@@ -49,33 +51,42 @@ export default function FranchisePayments({ filters: extFilters, compact = false
       const deal = live.find(d => d.extra?.network_point_id === n.id)
         || live.filter(hasLoc).map(d => ({ d, m: haversine(n.latitude, n.longitude, d.latitude, d.longitude) })).filter(x => x.m <= 100).sort((a, b) => a.m - b.m)[0]?.d
       const pays = deal ? paidBy[deal.id] || [] : []
-      const proposed = Number(deal?.extra?.payment_proposed) || 0
+      const comp = Object.fromEntries(COMPONENTS.map(([k]) => [k, {
+        proposed: Number(deal?.extra?.[`${k}_proposed`]) || 0,
+        received: pays.filter(p => p.component === k).reduce((a, p) => a + Number(p.amount), 0),
+      }]))
+      const proposed = COMPONENTS.reduce((a, [k]) => a + comp[k].proposed, 0)
       const received = pays.reduce((a, p) => a + Number(p.amount), 0)
       return {
         key: n.id, n, deal, name: n.name, city: n.city, region: regionOf[String(n.city || '').toLowerCase()] || null,
         owner: deal?.owner || null, qis: fy.reduce((a, [, c]) => a + (Number(c) || 0), 0), enDate: fy.map(([d]) => d).sort()[0],
-        proposed, received, outstanding: Math.max(0, proposed - received), pays,
+        comp, proposed, received, outstanding: Math.max(0, proposed - received), pays,
         lastPaid: pays.map(p => p.paid_on).sort().pop() || null,
         status: !proposed ? 'noproposal' : received >= proposed ? 'paid' : received > 0 ? 'partial' : 'none',
       }
     }).filter(Boolean)
     const scoped = applyFiltersRows(rows, filters).filter(r => !status || r.status === status)
-    const tot = xs => ({ proposed: xs.reduce((a, r) => a + r.proposed, 0), received: xs.reduce((a, r) => a + r.received, 0), qis: xs.reduce((a, r) => a + r.qis, 0), sites: xs.length })
+    const tot = xs => ({ proposed: xs.reduce((a, r) => a + r.proposed, 0), received: xs.reduce((a, r) => a + r.received, 0), qis: xs.reduce((a, r) => a + r.qis, 0), sites: xs.length,
+      comp: Object.fromEntries(COMPONENTS.map(([k]) => [k, { proposed: xs.reduce((a, r) => a + r.comp[k].proposed, 0), received: xs.reduce((a, r) => a + r.comp[k].received, 0) }])) })
     const all = tot(applyFiltersRows(rows, filters))
     const thisMonth = new Date().toISOString().slice(0, 7)
-    const collectedMonth = applyFiltersRows(rows, filters).flatMap(r => r.pays).filter(p => String(p.paid_on).slice(0, 7) === thisMonth).reduce((a, p) => a + Number(p.amount), 0)
+    const collectedMonth = applyFiltersRows(rows, filters).flatMap(r => r.pays).filter(p => p.paid_on && String(p.paid_on).slice(0, 7) === thisMonth).reduce((a, p) => a + Number(p.amount), 0)
     const counts = Object.fromEntries(['paid', 'partial', 'none', 'noproposal'].map(k => [k, applyFiltersRows(rows, filters).filter(r => r.status === k).length]))
-    return { rows: scoped.sort((a, b) => b.outstanding - a.outstanding || b.qis - a.qis), all, counts, collectedMonth }
+    return { rows: scoped.sort((a, b) => b.outstanding - a.outstanding || b.qis - a.qis), all, counts, collectedMonth, tot }
   }, [deals, network, payments, filters, status, cities])
 
   if (loading || !m) return <PageLoader />
   const pct = m.all.proposed ? Math.round((100 * m.all.received) / m.all.proposed) : 0
   const refresh = () => { reload(); loadPayments() }
   const exportX = () => exportWorkbook([
-    { name: 'Franchise payments', rows: m.rows.map(r => ({ site: r.name, code: r.deal?.site_code || '', city: r.city, region: r.region, owner: r.owner, qis: r.qis, energized: r.enDate, proposed: r.proposed, received: r.received, outstanding: r.outstanding, pct: r.proposed ? Math.round((100 * r.received) / r.proposed) : '', last_paid: r.lastPaid || '' })),
-      columns: [['site', 'Site'], ['code', 'CRM ID'], ['city', 'City'], ['region', 'Region'], ['owner', 'Owner'], ['qis', `QIS energized ${fyLabel()}`], ['energized', 'First energized'], ['proposed', 'Proposed (₹)'], ['received', 'Received (₹)'], ['outstanding', 'Outstanding (₹)'], ['pct', '% collected'], ['last_paid', 'Last payment']] },
-    { name: 'Payment log', rows: m.rows.flatMap(r => r.pays.map(p => ({ site: r.name, code: r.deal?.site_code || '', paid_on: p.paid_on, amount: Number(p.amount), mode: p.mode, reference: p.reference, notes: p.notes }))),
-      columns: [['site', 'Site'], ['code', 'CRM ID'], ['paid_on', 'Paid on'], ['amount', 'Amount (₹)'], ['mode', 'Mode'], ['reference', 'Reference / UTR'], ['notes', 'Notes']] },
+    { name: 'Franchise payments', rows: m.rows.map(r => ({ site: r.name, code: r.deal?.site_code || '', city: r.city, region: r.region, owner: r.owner, qis: r.qis, energized: r.enDate,
+        ...Object.fromEntries(COMPONENTS.flatMap(([k]) => [[`${k}_p`, r.comp[k].proposed], [`${k}_r`, r.comp[k].received]])),
+        proposed: r.proposed, received: r.received, outstanding: r.outstanding, pct: r.proposed ? Math.round((100 * r.received) / r.proposed) : '', last_paid: r.lastPaid || '' })),
+      columns: [['site', 'Site'], ['code', 'CRM ID'], ['city', 'City'], ['region', 'Region'], ['owner', 'Owner'], ['qis', `QIS energized ${fyLabel()}`], ['energized', 'First energized'],
+        ...COMPONENTS.flatMap(([k, l]) => [[`${k}_p`, `${l} proposed (₹)`], [`${k}_r`, `${l} received (₹)`]]),
+        ['proposed', 'Total proposed (₹)'], ['received', 'Total received (₹)'], ['outstanding', 'Outstanding (₹)'], ['pct', '% collected'], ['last_paid', 'Last payment']] },
+    { name: 'Payment log', rows: m.rows.flatMap(r => r.pays.map(p => ({ site: r.name, code: r.deal?.site_code || '', component: compLabel(p.component), paid_on: p.paid_on || '', amount: Number(p.amount), mode: p.mode, reference: p.reference, notes: p.notes }))),
+      columns: [['site', 'Site'], ['code', 'CRM ID'], ['component', 'Component'], ['paid_on', 'Paid on'], ['amount', 'Amount (₹)'], ['mode', 'Mode'], ['reference', 'Reference / UTR'], ['notes', 'Notes']] },
   ], `sitekhojo-franchise-payments-${fyLabel()}`)
 
   return (
@@ -91,10 +102,20 @@ export default function FranchisePayments({ filters: extFilters, compact = false
         ))}
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-2 bg-emerald-500" style={{ width: `${Math.min(100, pct)}%` }} /></div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {COMPONENTS.map(([k, l, full]) => { const c = m.all.comp[k]; const q = c.proposed ? Math.round((100 * c.received) / c.proposed) : 0; return (
+          <div key={k} className="card flex items-center gap-3 p-3">
+            <span className="rounded bg-navy-900 px-1.5 py-0.5 text-xs font-bold text-white">{l}</span>
+            <div className="min-w-0 flex-1"><p className="text-xs text-slate-500">{full}</p>
+              <p className="text-sm"><b className="text-emerald-700">{short(c.received)}</b> <span className="text-slate-400">of</span> <b>{short(c.proposed)}</b> <span className="text-xs text-red-600">· {short(Math.max(0, c.proposed - c.received))} due</span></p>
+              <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className={`h-1.5 ${q >= 100 ? 'bg-emerald-500' : q >= 50 ? 'bg-amber-400' : 'bg-red-500'}`} style={{ width: `${Math.min(100, q)}%` }} /></div></div>
+            <span className="text-sm font-bold">{q}%</span>
+          </div>) })}
+      </div>
 
       <div className="flex flex-wrap items-center gap-2">
         <SingleSelect value={status} onChange={setStatus} options={[{ value: '', label: 'All payment statuses' }, { value: 'paid', label: `Fully paid (${m.counts.paid})` }, { value: 'partial', label: `Part paid (${m.counts.partial})` }, { value: 'none', label: `Nothing received (${m.counts.none})` }, { value: 'noproposal', label: `No proposed amount (${m.counts.noproposal})` }]} />
-        <span className="text-sm text-slate-500">Franchise sites with QIS energized in {fyLabel()} (QIS tracker){isAdmin ? ' · click the proposed amount to edit, “+ Payment” to log money received' : ''}</span>
+        <span className="text-sm text-slate-500">Franchise sites with QIS energized in {fyLabel()} (QIS tracker){isAdmin ? ' · click a proposed amount to edit, “+ Payment” to log money received' : ''}</span>
         <button className="btn-secondary ml-auto" onClick={exportX}><Download className="h-4 w-4" />Excel</button>
       </div>
 
@@ -102,7 +123,8 @@ export default function FranchisePayments({ filters: extFilters, compact = false
         <table className="min-w-full text-sm">
           <thead className="sticky top-0 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
             <tr><th className="px-3 py-2">Site</th><th className="px-2 py-2">City</th><th className="px-2 py-2">Owner</th><th className="px-2 py-2 text-right">QIS {fyLabel()}</th><th className="px-2 py-2">Energized</th>
-              <th className="px-2 py-2 text-right">Proposed</th><th className="px-2 py-2 text-right">Received</th><th className="px-2 py-2 text-right">Outstanding</th><th className="w-36 px-2 py-2">Collected</th><th className="px-2 py-2" /></tr>
+              {COMPONENTS.map(([k, l, full]) => <th key={k} className="px-2 py-2 text-right" title={`${full}: received / proposed`}>{l} <span className="normal-case text-slate-400">rec / prop</span></th>)}
+              <th className="px-2 py-2 text-right">Total proposed</th><th className="px-2 py-2 text-right">Received</th><th className="px-2 py-2 text-right">Outstanding</th><th className="w-32 px-2 py-2">Collected</th><th className="px-2 py-2" /></tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {m.rows.map(r => {
@@ -114,7 +136,12 @@ export default function FranchisePayments({ filters: extFilters, compact = false
                   <td className="px-2 py-2">{r.owner || '—'}</td>
                   <td className="px-2 py-2 text-right font-semibold">{r.qis}</td>
                   <td className="whitespace-nowrap px-2 py-2">{fmtDate(r.enDate)}</td>
-                  <td className="px-2 py-2 text-right">{r.deal ? <EditCell deal={r.deal} field="payment_proposed" type="number" label="Proposed amount" adminOnly format={v => fmtINR(v)} onChanged={refresh} /> : '—'}</td>
+                  {COMPONENTS.map(([k, l]) => { const c = r.comp[k]; return (
+                    <td key={k} className="whitespace-nowrap px-2 py-2 text-right">
+                      <div className={`font-semibold ${!c.proposed ? 'text-slate-400' : c.received >= c.proposed ? 'text-emerald-700' : c.received > 0 ? 'text-amber-700' : 'text-red-600'}`}>{c.received ? short(c.received) : '—'}</div>
+                      <div className="text-[11px] text-slate-500">of {r.deal ? <EditCell deal={r.deal} field={`${k}_proposed`} type="number" label={`${l} proposed`} adminOnly format={v => short(v)} onChanged={refresh} /> : '—'}</div>
+                    </td>) })}
+                  <td className="px-2 py-2 text-right">{r.proposed ? fmtINR(r.proposed) : '—'}</td>
                   <td className="px-2 py-2 text-right font-semibold text-emerald-700">{r.received ? fmtINR(r.received) : '—'}</td>
                   <td className={`px-2 py-2 text-right font-semibold ${r.outstanding ? 'text-red-600' : 'text-slate-300'}`}>{r.proposed ? fmtINR(r.outstanding) : '—'}</td>
                   <td className="px-2 py-2">{p === null ? <span className="text-xs text-amber-600">no proposal</span> : (
@@ -123,10 +150,10 @@ export default function FranchisePayments({ filters: extFilters, compact = false
                 </tr>
               )
             })}
-            {m.rows.length === 0 && <tr><td colSpan={10} className="p-6 text-center text-slate-400">No sites match.</td></tr>}
+            {m.rows.length === 0 && <tr><td colSpan={13} className="p-6 text-center text-slate-400">No sites match.</td></tr>}
           </tbody>
           {m.rows.length > 0 && (() => { const t = { p: m.rows.reduce((a, r) => a + r.proposed, 0), r: m.rows.reduce((a, r) => a + r.received, 0), q: m.rows.reduce((a, r) => a + r.qis, 0) }; return (
-            <tfoot className="border-t-2 border-slate-200 bg-slate-50 font-bold"><tr><td className="px-3 py-2">Total · {m.rows.length} sites</td><td /><td /><td className="px-2 py-2 text-right">{t.q}</td><td /><td className="px-2 py-2 text-right">{fmtINR(t.p)}</td><td className="px-2 py-2 text-right text-emerald-700">{fmtINR(t.r)}</td><td className="px-2 py-2 text-right text-red-600">{fmtINR(Math.max(0, t.p - t.r))}</td><td className="px-2 py-2 text-xs">{t.p ? Math.round((100 * t.r) / t.p) : 0}%</td><td /></tr></tfoot>) })()}
+            <tfoot className="border-t-2 border-slate-200 bg-slate-50 font-bold"><tr><td className="px-3 py-2">Total · {m.rows.length} sites</td><td /><td /><td className="px-2 py-2 text-right">{t.q}</td><td />{COMPONENTS.map(([k]) => { const c = m.tot(m.rows).comp[k]; return <td key={k} className="whitespace-nowrap px-2 py-2 text-right text-xs"><span className="text-emerald-700">{short(c.received)}</span><div className="font-normal text-slate-500">of {short(c.proposed)}</div></td> })}<td className="px-2 py-2 text-right">{fmtINR(t.p)}</td><td className="px-2 py-2 text-right text-emerald-700">{fmtINR(t.r)}</td><td className="px-2 py-2 text-right text-red-600">{fmtINR(Math.max(0, t.p - t.r))}</td><td className="px-2 py-2 text-xs">{t.p ? Math.round((100 * t.r) / t.p) : 0}%</td><td /></tr></tfoot>) })()}
         </table>
       </div>
       <PaymentsModal row={open} onClose={() => setOpen(null)} onChanged={refresh} isAdmin={isAdmin} />
@@ -140,20 +167,20 @@ function applyFiltersRows(rows, f) {
 
 function PaymentsModal({ row, onClose, onChanged, isAdmin }) {
   const toast = useToast()
-  const blank = { paid_on: new Date().toISOString().slice(0, 10), amount: '', mode: 'NEFT', reference: '', notes: '' }
+  const blank = { component: 'ff', paid_on: new Date().toISOString().slice(0, 10), amount: '', mode: 'NEFT', reference: '', notes: '' }
   const [f, setF] = useState(blank)
   const [busy, setBusy] = useState(false)
   useEffect(() => { setF(blank) }, [row?.key]) // eslint-disable-line
   if (!row) return null
   const add = async e => {
     e.preventDefault(); setBusy(true)
-    const { error } = await supabase.from('site_payments').insert({ site_id: row.deal.id, paid_on: f.paid_on, amount: Number(f.amount), mode: f.mode, reference: f.reference || null, notes: f.notes || null })
+    const { error } = await supabase.from('site_payments').insert({ site_id: row.deal.id, component: f.component, paid_on: f.paid_on || null, amount: Number(f.amount), mode: f.mode, reference: f.reference || null, notes: f.notes || null })
     setBusy(false)
     if (error) return toast(errMsg(error), 'error')
-    toast(`₹${Number(f.amount).toLocaleString('en-IN')} recorded · ${row.deal.site_code}`); setF(blank); onChanged()
+    toast(`${compLabel(f.component)} ₹${Number(f.amount).toLocaleString('en-IN')} recorded · ${row.deal.site_code}`); setF(blank); onChanged()
   }
   const del = async p => {
-    if (!confirm(`Delete payment of ${fmtINR(p.amount)} on ${fmtDate(p.paid_on)}?`)) return
+    if (!confirm(`Delete ${compLabel(p.component)} payment of ${fmtINR(p.amount)}${p.paid_on ? ` on ${fmtDate(p.paid_on)}` : ''}?`)) return
     const { error } = await supabase.from('site_payments').delete().eq('id', p.id)
     if (error) return toast(errMsg(error), 'error')
     toast('Payment deleted'); onChanged()
@@ -161,29 +188,36 @@ function PaymentsModal({ row, onClose, onChanged, isAdmin }) {
   return (
     <Modal open={!!row} onClose={onClose} wide title={`${row.name} · payments`} footer={<button className="btn-primary" onClick={onClose}>Close</button>}>
       <div className="space-y-4 text-sm">
+        <table className="w-full text-sm">
+          <thead><tr className="text-left text-xs uppercase text-slate-500"><th className="py-1" /><th className="text-right">Proposed</th><th className="text-right">Received</th><th className="text-right">Due</th></tr></thead>
+          <tbody>{COMPONENTS.map(([k, l, full]) => { const c = row.comp[k]; return (
+            <tr key={k} className="border-t border-slate-100"><td className="py-1.5"><b>{l}</b> <span className="text-xs text-slate-500">{full}</span></td><td className="text-right">{c.proposed ? fmtINR(c.proposed) : '—'}</td>
+              <td className="text-right font-semibold text-emerald-700">{c.received ? fmtINR(c.received) : '—'}</td><td className="text-right font-semibold text-red-600">{c.proposed ? fmtINR(Math.max(0, c.proposed - c.received)) : '—'}</td></tr>) })}</tbody>
+        </table>
         <div className="grid grid-cols-3 gap-3">
           <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Proposed</p><p className="text-lg font-bold">{row.proposed ? fmtINR(row.proposed) : '—'}</p></div>
           <div className="rounded-lg bg-emerald-50 p-3"><p className="text-xs text-slate-500">Received</p><p className="text-lg font-bold text-emerald-700">{fmtINR(row.received)}</p></div>
           <div className="rounded-lg bg-red-50 p-3"><p className="text-xs text-slate-500">Outstanding</p><p className="text-lg font-bold text-red-600">{row.proposed ? fmtINR(row.outstanding) : '—'}</p></div>
         </div>
         <table className="w-full">
-          <thead><tr className="text-left text-xs uppercase text-slate-500"><th className="py-1">Date</th><th className="text-right">Amount</th><th className="pl-3">Mode</th><th>Reference</th><th>Notes</th><th /></tr></thead>
+          <thead><tr className="text-left text-xs uppercase text-slate-500"><th className="py-1">Date</th><th>For</th><th className="text-right">Amount</th><th className="pl-3">Mode</th><th>Reference</th><th>Notes</th><th /></tr></thead>
           <tbody>
             {row.pays.map(p => (
-              <tr key={p.id} className="border-t border-slate-100"><td className="py-1.5">{fmtDate(p.paid_on)}</td><td className="text-right font-semibold">{fmtINR(p.amount)}</td><td className="pl-3">{p.mode || '—'}</td><td>{p.reference || '—'}</td><td className="text-slate-500">{p.notes || ''}</td>
+              <tr key={p.id} className="border-t border-slate-100"><td className="py-1.5">{p.paid_on ? fmtDate(p.paid_on) : <span className="text-xs text-slate-400">before CRM</span>}</td><td><span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-bold">{compLabel(p.component)}</span></td><td className="text-right font-semibold">{fmtINR(p.amount)}</td><td className="pl-3">{p.mode || '—'}</td><td>{p.reference || '—'}</td><td className="text-slate-500">{p.notes || ''}</td>
                 <td className="text-right">{isAdmin && <button className="btn-ghost p-1 text-slate-400 hover:text-red-600" title="Delete" onClick={() => del(p)}><Trash2 className="h-4 w-4" /></button>}</td></tr>
             ))}
-            {row.pays.length === 0 && <tr><td colSpan={6} className="py-3 text-center text-slate-400">No payments recorded yet.</td></tr>}
+            {row.pays.length === 0 && <tr><td colSpan={7} className="py-3 text-center text-slate-400">No payments recorded yet.</td></tr>}
           </tbody>
         </table>
         {isAdmin && (
-          <form onSubmit={add} className="grid gap-2 rounded-lg border border-slate-200 p-3 sm:grid-cols-5">
+          <form onSubmit={add} className="grid gap-2 rounded-lg border border-slate-200 p-3 sm:grid-cols-6">
+            <Field label="For"><select className="input" value={f.component} onChange={e => setF({ ...f, component: e.target.value })}>{COMPONENTS.map(([k, l, full]) => <option key={k} value={k}>{l} · {full}</option>)}</select></Field>
             <Field label="Date"><input className="input" type="date" required value={f.paid_on} onChange={e => setF({ ...f, paid_on: e.target.value })} /></Field>
             <Field label="Amount (₹)"><input className="input" type="number" step="0.01" required value={f.amount} onChange={e => setF({ ...f, amount: e.target.value })} /></Field>
             <Field label="Mode"><select className="input" value={f.mode} onChange={e => setF({ ...f, mode: e.target.value })}>{MODES.map(x => <option key={x}>{x}</option>)}</select></Field>
             <Field label="Reference / UTR"><input className="input" value={f.reference} onChange={e => setF({ ...f, reference: e.target.value })} /></Field>
             <Field label="Notes"><input className="input" value={f.notes} onChange={e => setF({ ...f, notes: e.target.value })} /></Field>
-            <div className="sm:col-span-5"><button className="btn-primary" disabled={busy || !f.amount}><Plus className="h-4 w-4" />{busy ? 'Saving…' : 'Add payment'}</button>
+            <div className="sm:col-span-6"><button className="btn-primary" disabled={busy || !f.amount}><Plus className="h-4 w-4" />{busy ? 'Saving…' : 'Add payment'}</button>
               <span className="ml-2 text-xs text-slate-500">Use a negative amount for a refund or reversal.</span></div>
           </form>
         )}

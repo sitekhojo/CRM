@@ -307,7 +307,7 @@ function Backup() {
         fetchAll(() => supabase.from('profiles').select('id,email,full_name,role,is_active,created_at').order('created_at')),
         get('site_visits'), get('site_payments'),
       ])
-      const flat = sites.map(r => ({ ...r, ...(r.extra || {}), source: r.extra?.source === 'qis_tracker' ? 'QIS tracker import' : 'CRM', extra_json: r.extra }))
+      const flat = sites.map(r => ({ ...r, ...(r.extra || {}), source: r.extra?.source === 'qis_tracker' ? 'QIS tracker import' : r.extra?.source === 'payment_tracker' ? 'Payment tracker import' : 'CRM', extra_json: r.extra }))
       const stamp = new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', '')
       await exportWorkbook([
         { name: 'Leads & Deals', rows: flat, columns: FULL_SITE_COLUMNS },
