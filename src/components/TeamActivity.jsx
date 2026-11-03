@@ -116,7 +116,7 @@ export default function TeamActivity() {
         <MultiSelect allLabel="All people" noun="people" value={people} onChange={setPeople} options={m.names.map(n => ({ value: n, label: n, color: m.colorOf[n] }))} />
         <div className="flex-1" />
         <Link to="/app/visit" className="btn-secondary"><MapPin className="h-4 w-4" />Log visit</Link>
-        <button className="btn-secondary" onClick={exportXlsx}><Download className="h-4 w-4" />Excel</button>
+        {isAdmin && <button className="btn-secondary" onClick={exportXlsx}><Download className="h-4 w-4" />Excel</button>}
       </div>
 
       {mode === 'week' ? (

@@ -24,6 +24,7 @@ export function AuthProvider({ children }) {
     return () => sub.subscription.unsubscribe()
   }, [loadProfile])
 
+  globalThis.__skCanExport = profile?.role === 'admin' && !!profile?.is_active
   const value = {
     session, profile,
     user: session?.user || null,

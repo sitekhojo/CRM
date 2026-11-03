@@ -116,7 +116,7 @@ export default function FranchisePayments({ filters: extFilters, compact = false
       <div className="flex flex-wrap items-center gap-2">
         <SingleSelect value={status} onChange={setStatus} options={[{ value: '', label: 'All payment statuses' }, { value: 'paid', label: `Fully paid (${m.counts.paid})` }, { value: 'partial', label: `Part paid (${m.counts.partial})` }, { value: 'none', label: `Nothing received (${m.counts.none})` }, { value: 'noproposal', label: `No proposed amount (${m.counts.noproposal})` }]} />
         <span className="text-sm text-slate-500">Franchise sites with QIS energized in {fyLabel()} (QIS tracker){isAdmin ? ' · click a proposed amount to edit, “+ Payment” to log money received' : ''}</span>
-        <button className="btn-secondary ml-auto" onClick={exportX}><Download className="h-4 w-4" />Excel</button>
+        {isAdmin && <button className="btn-secondary ml-auto" onClick={exportX}><Download className="h-4 w-4" />Excel</button>}
       </div>
 
       <div className={`card overflow-auto ${compact ? 'max-h-[520px]' : ''}`}>

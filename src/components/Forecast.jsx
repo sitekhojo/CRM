@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useDeals, applyFilters, EMPTY_FILTERS, fetchNetworkPoints, exitOf, isTrackerSite, addedDay } from '../lib/deals'
 import { useConfig } from '../lib/config'
+import { useAuth } from '../lib/auth'
 import { fmtNum, fmtDate, INTENTS } from '../lib/format'
 import DealFilters from './DealFilters'
 import { Modal, PageLoader } from './ui'
@@ -33,6 +34,7 @@ const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${Stri
 export default function Forecast({ view = 'table' }) {
   const { deals, loading, reload } = useDeals()
   const { cities = [] } = useConfig()
+  const { isAdmin } = useAuth()
   const [network, setNetwork] = useState([])
   const [filters, setFilters] = useState(EMPTY_FILTERS)
   const [detail, setDetail] = useState(null) // { title, pick: m => rows }
@@ -88,7 +90,7 @@ export default function Forecast({ view = 'table' }) {
             { value: 'next', label: `Due next month (${monthName(n)})` }, { value: 'slipped', label: 'Slipped (date passed)' },
             { value: 'nodate', label: 'Missing expected dates' }, { value: 'all', label: 'All open pipeline' },
           ]} />}
-          extra={<button className="btn-secondary" onClick={() => exportWorkbook([{ name: 'Pipeline list', rows: list.map(r => planRow(r, scope)), columns: PLAN_COLS }], `sitekhojo-pipeline-list-${m.today}`)}><Download className="h-4 w-4" />Excel</button>} />
+          extra={isAdmin && <button className="btn-secondary" onClick={() => exportWorkbook([{ name: 'Pipeline list', rows: list.map(r => planRow(r, scope)), columns: PLAN_COLS }], `sitekhojo-pipeline-list-${m.today}`)}><Download className="h-4 w-4" />Excel</button>} />
         <p className="text-sm text-slate-500"><b className="text-slate-700">{list.length} sites · {fmtNum(sum(list).qis)} QIS</b> · open pipeline and Handover Done (not yet energized). Click a date, QIS, intent, stage or owner to change it — the forecast updates instantly.</p>
         <div className="card overflow-x-auto"><PlanTable rows={list} onChanged={reload} today={m.today} /></div>
       </div>
@@ -118,7 +120,7 @@ export default function Forecast({ view = 'table' }) {
     <div className="space-y-3">
       <div className="flex flex-wrap items-end gap-2">
         <DealFilters value={filters} onChange={setFilters} show={['region', 'city', 'owner', 'stage', 'siteType', 'format']} />
-        <button className="btn-secondary ml-auto" onClick={() => {
+        {isAdmin && <button className="btn-secondary ml-auto" onClick={() => {
           const line = (metric, kind, o) => ({ metric, kind, slipped: o.slipped?.qis ?? '', ...Object.fromEntries(m.months.map(k => [monthName(k), o.est?.[k]?.qis ?? (k === m.cur ? o.done?.qis ?? '' : '')])), fy_total: o.total?.qis ?? '', no_date: o.noDate?.qis ?? '' })
           const summary = [
             { metric: 'Scouted', kind: 'Done (this month)', [monthName(m.cur)]: m.sc.done.qis },
@@ -133,7 +135,7 @@ export default function Forecast({ view = 'table' }) {
             ...m.en.slipped.list.map(r => planRow(r, 'Energisation slipped')), ...m.months.flatMap(k => m.en.est[k].list.map(r => planRow(r, `Energisation ${monthName(k)}`))), ...m.en.noDate.list.map(r => planRow(r, 'Energisation no date')),
           ]
           exportWorkbook([{ name: 'Forecast (QIS)', rows: summary, columns: cols }, { name: 'Sites by bucket', rows: sites, columns: PLAN_COLS }], `sitekhojo-forecast-${m.today}`)
-        }}><Download className="h-4 w-4" />Excel</button>
+        }}><Download className="h-4 w-4" />Excel</button>}
       </div>
       <div className="card overflow-x-auto">
         <table className="min-w-full text-sm">

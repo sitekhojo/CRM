@@ -79,7 +79,7 @@ export default function Acquisition() {
         <div className="flex-1" />
         {tab === 'locations' && <>
           <button className="btn-secondary" onClick={() => nav('/app/map?targets=1')}><MapIcon className="h-4 w-4" />View on map</button>
-          {m.all.length > 0 && <button className="btn-secondary" onClick={exportXlsx}><Download className="h-4 w-4" />Excel</button>}
+          {isAdmin && m.all.length > 0 && <button className="btn-secondary" onClick={exportXlsx}><Download className="h-4 w-4" />Excel</button>}
           {isAdmin && <button className="btn-primary" onClick={() => setUpOpen(true)}><Upload className="h-4 w-4" />Upload locations</button>}
         </>}
       </div>

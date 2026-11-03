@@ -30,7 +30,11 @@ export const IMPORT_FIELDS = [
 
 const cell = v => (v === null || v === undefined ? '' : typeof v === 'boolean' ? (v ? 'Yes' : 'No') : v)
 
+/** Only admins may download data (flag set by AuthProvider). */
+const guard = () => { if (!globalThis.__skCanExport) throw new Error('Downloads are available to admins only') }
+
 export async function exportRows(rows, columns, filename, format = 'xlsx') {
+  guard()
   const header = columns.map(c => c[1])
   const data = rows.map(r => columns.map(([k]) => {
     const v = r[k]
@@ -115,6 +119,7 @@ function download(blob, name) {
 
 /** One workbook, many sheets. sheets = [{ name, rows, columns?: [[key,label]] }] (columns default to all keys). */
 export async function exportWorkbook(sheets, filename) {
+  guard()
   const { default: ExcelJS } = await import('exceljs')
   const wb = new ExcelJS.Workbook()
   for (const sh of sheets) {
