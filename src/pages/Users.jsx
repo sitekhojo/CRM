@@ -4,6 +4,7 @@ import { supabase, errMsg } from '../lib/supabase'
 import { useConfig } from '../lib/config'
 import { useAuth } from '../lib/auth'
 import { Modal, Field, useToast } from '../components/ui'
+import LoginActivity from '../components/LoginActivity'
 import { fmtDate, timeAgo } from '../lib/format'
 
 async function adminApi(body) {
@@ -110,6 +111,7 @@ export default function Users() {
         footer={<><button className="btn-secondary" onClick={() => setPwFor(null)}>Cancel</button><button className="btn-primary" disabled={newPw.length < 8} onClick={setPassword}>Set password</button></>}>
         <Field label="New password"><input className="input font-mono" value={newPw} onChange={e => setNewPw(e.target.value)} /></Field>
       </Modal>
+      <LoginActivity />
     </div>
   )
 }

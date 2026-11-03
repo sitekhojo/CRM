@@ -1,3 +1,4 @@
+import { logSignIn } from '../lib/logins'
 import { useState } from 'react'
 import { Navigate, useLocation, Link } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
@@ -21,6 +22,7 @@ export default function Login() {
     if (mode === 'login') {
       const { error } = await signIn(email.trim(), password)
       if (error) setErr(error.message === 'Invalid login credentials' ? 'Wrong email or password.' : error.message)
+      else logSignIn()
     } else {
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: window.location.origin + '/login' })
       if (error) setErr(error.message); else setInfo('If that email has an account, a reset link is on its way.')

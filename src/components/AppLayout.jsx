@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { NavLink, Outlet, useNavigate, Link } from 'react-router-dom'
 import { LayoutDashboard, Handshake, Target, Crosshair, Map as MapIcon, Radar, Users, Settings, Plus, LogOut, Menu, X, Search, KeyRound, MapPinPlus } from 'lucide-react'
 import { useAuth } from '../lib/auth'
+import { logOpen } from '../lib/logins'
 import { supabase } from '../lib/supabase'
 import { Modal, Field, useToast } from './ui'
 
@@ -34,6 +35,7 @@ export default function AppLayout() {
   const [pwOpen, setPwOpen] = useState(false)
   const [q, setQ] = useState('')
   const nav = useNavigate()
+  useEffect(() => { if (profile?.is_active) logOpen() }, [profile?.id]) // eslint-disable-line
 
   const link = ({ to, label, icon: Icon }) => (
     <NavLink key={to} to={to} end={to === '/app/deals'} onClick={() => setOpen(false)}
