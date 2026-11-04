@@ -8,7 +8,7 @@ import { useConfig } from '../lib/config'
 import { haversine, hasLoc } from '../lib/geo'
 import { fmtINR, fmtNum, fmtDate } from '../lib/format'
 import { exportWorkbook } from '../lib/excel'
-import { Modal, PageLoader, useToast, Field } from './ui'
+import { Modal, PageLoader, useToast, Field, StageBadge } from './ui'
 import EditCell from './EditCell'
 import { SingleSelect } from './MultiSelect'
 import DealFilters from './DealFilters'
@@ -52,6 +52,16 @@ export default function FranchisePayments({ filters: extFilters, compact = false
       if (!fy.length) return null
       const deal = live.find(d => d.extra?.network_point_id === n.id)
         || live.filter(hasLoc).map(d => ({ d, m: haversine(n.latitude, n.longitude, d.latitude, d.longitude) })).filter(x => x.m <= 100).sort((a, b) => a.m - b.m)[0]?.d
+      return makeRow(n.id, deal, n.name, n.city, fy.reduce((a, [, c]) => a + (Number(c) || 0), 0), fy.map(([d]) => d).sort()[0], true)
+    }).filter(Boolean)
+    // Every other franchise deal with a proposed amount or a payment (any stage).
+    const seen = new Set(rows.map(r => r.deal?.id).filter(Boolean))
+    for (const d of deals) {
+      if (d.site_type !== 'Franchise' || seen.has(d.id)) continue
+      if (!paidBy[d.id] && !COMPONENTS.some(([k]) => Number(d.extra?.[`${k}_proposed`]))) continue
+      rows.push(makeRow('d' + d.id, d, d.name, d.city, Number(d.extra?.qis_count) || 0, d.extra?.energized_on || null, false))
+    }
+    function makeRow(key, deal, name, city, qis, enDate, fyEnergized) {
       const pays = deal ? paidBy[deal.id] || [] : []
       const comp = Object.fromEntries(COMPONENTS.map(([k]) => [k, {
         proposed: Number(deal?.extra?.[`${k}_proposed`]) || 0,
@@ -60,13 +70,14 @@ export default function FranchisePayments({ filters: extFilters, compact = false
       const proposed = COMPONENTS.reduce((a, [k]) => a + comp[k].proposed, 0)
       const received = pays.reduce((a, p) => a + Number(p.amount), 0)
       return {
-        key: n.id, n, deal, name: n.name, city: n.city, region: regionOf[String(n.city || '').toLowerCase()] || null,
-        owner: deal?.owner || null, qis: fy.reduce((a, [, c]) => a + (Number(c) || 0), 0), enDate: fy.map(([d]) => d).sort()[0],
+        key, deal, name, city, region: regionOf[String(city || '').toLowerCase()] || null, fyEnergized,
+        stage: deal?.stage_name || (fyEnergized ? 'Energized' : '—'), stageColor: deal?.stage_color, stageId: deal?.stage_id,
+        owner: deal?.owner || null, qis, enDate,
         comp, proposed, received, outstanding: Math.max(0, proposed - received), pays,
         lastPaid: pays.map(p => p.paid_on).sort().pop() || null,
         status: !proposed ? 'noproposal' : received >= proposed ? 'paid' : received > 0 ? 'partial' : 'none',
       }
-    }).filter(Boolean)
+    }
     const qq = q.trim().toLowerCase()
     const scoped = applyFiltersRows(rows, filters).filter(r => (!status || r.status === status) && (!qq || [r.name, r.deal?.name, r.deal?.site_code, r.city, r.owner].some(v => v && String(v).toLowerCase().includes(qq))))
     const tot = xs => ({ proposed: xs.reduce((a, r) => a + r.proposed, 0), received: xs.reduce((a, r) => a + r.received, 0), qis: xs.reduce((a, r) => a + r.qis, 0), sites: xs.length,
@@ -84,12 +95,12 @@ export default function FranchisePayments({ filters: extFilters, compact = false
   const userName = id => users.find(u => u.id === id)?.full_name || ''
   const payLine = p => [p.paid_on ? fmtDate(p.paid_on) : 'Before CRM', compLabel(p.component), fmtINR(p.amount), p.mode, p.reference].filter(Boolean).join(' · ')
   const exportX = () => exportWorkbook([
-    { name: 'Franchise payments', rows: m.rows.map(r => ({ site: r.name, code: r.deal?.site_code || '', city: r.city, region: r.region, owner: r.owner, qis: r.qis, energized: r.enDate,
+    { name: 'Franchise payments', rows: m.rows.map(r => ({ site: r.name, code: r.deal?.site_code || '', city: r.city, region: r.region, stage: r.stage, fy_en: r.fyEnergized ? 'Yes' : '', owner: r.owner, qis: r.qis, energized: r.enDate,
         ...Object.fromEntries(COMPONENTS.flatMap(([k]) => [[`${k}_p`, r.comp[k].proposed], [`${k}_r`, r.comp[k].received], [`${k}_d`, Math.max(0, r.comp[k].proposed - r.comp[k].received)]])),
         proposed: r.proposed, received: r.received, outstanding: r.outstanding, pct: r.proposed ? Math.round((100 * r.received) / r.proposed) : '', last_paid: r.lastPaid || '',
         n_pays: r.pays.length, utrs: [...new Set(r.pays.map(p => p.reference).filter(Boolean))].join('; '),
         details: r.pays.map(payLine).join('\n'), remarks: r.pays.map(p => p.notes).filter(Boolean).join('; ') })),
-      columns: [['site', 'Site'], ['code', 'CRM ID'], ['city', 'City'], ['region', 'Region'], ['owner', 'Owner'], ['qis', `QIS energized ${fyLabel()}`], ['energized', 'First energized'],
+      columns: [['site', 'Site'], ['code', 'CRM ID'], ['city', 'City'], ['region', 'Region'], ['stage', 'Stage'], ['fy_en', `Energized in ${fyLabel()}`], ['owner', 'Owner'], ['qis', 'QIS'], ['energized', 'First energized'],
         ...COMPONENTS.flatMap(([k, l]) => [[`${k}_p`, `${l} proposed (₹)`], [`${k}_r`, `${l} received (₹)`], [`${k}_d`, `${l} due (₹)`]]),
         ['proposed', 'Total proposed (₹)'], ['received', 'Total received (₹)'], ['outstanding', 'Outstanding (₹)'], ['pct', '% collected'], ['last_paid', 'Last payment'],
         ['n_pays', 'No. of payments'], ['utrs', 'UTR / references'], ['details', 'Payment details'], ['remarks', 'Remarks']] },
@@ -99,7 +110,7 @@ export default function FranchisePayments({ filters: extFilters, compact = false
 
   return (
     <div className="space-y-3">
-      {!extFilters && <DealFilters value={ownFilters} onChange={setOwnFilters} show={['region', 'city', 'owner']} />}
+      {!extFilters && <DealFilters value={ownFilters} onChange={setOwnFilters} show={['region', 'city', 'owner', 'stage']} />}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         {[['Proposed', short(m.all.proposed), `${m.all.sites} franchise sites · ${fmtNum(m.all.qis)} QIS`, 'text-slate-900'],
           ['Received', short(m.all.received), `${pct}% collected`, 'text-emerald-600'],
@@ -124,14 +135,14 @@ export default function FranchisePayments({ filters: extFilters, compact = false
       <div className="flex flex-wrap items-center gap-2">
         <input className="input w-full sm:w-64" placeholder="Search site, SK code, city, owner" value={q} onChange={e => setQ(e.target.value)} />
         <SingleSelect value={status} onChange={setStatus} options={[{ value: '', label: 'All payment statuses' }, { value: 'paid', label: `Fully paid (${m.counts.paid})` }, { value: 'partial', label: `Part paid (${m.counts.partial})` }, { value: 'none', label: `Nothing received (${m.counts.none})` }, { value: 'noproposal', label: `No proposed amount (${m.counts.noproposal})` }]} />
-        <span className="text-sm text-slate-500">Franchise sites with QIS energized in {fyLabel()} (QIS tracker){canPay ? ' · click a proposed amount to edit, “+ Payment” to log money received' : ''}</span>
+        <span className="text-sm text-slate-500">Franchise sites energized in {fyLabel()} (QIS tracker) plus every franchise deal with a proposal or payment, any stage{canPay ? ' · click a proposed amount to edit, “+ Payment” to log money received' : ''}</span>
         {canPay && <button className="btn-secondary ml-auto" onClick={exportX}><Download className="h-4 w-4" />Excel</button>}
       </div>
 
       <div className={`card overflow-auto ${compact ? 'max-h-[520px]' : ''}`}>
         <table className="min-w-full text-sm">
           <thead className="sticky top-0 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-            <tr><th className="px-3 py-2">Site</th><th className="px-2 py-2">City</th><th className="px-2 py-2">Owner</th><th className="px-2 py-2 text-right">QIS {fyLabel()}</th><th className="px-2 py-2">Energized</th>
+            <tr><th className="px-3 py-2">Site</th><th className="px-2 py-2">City</th><th className="px-2 py-2">Stage</th><th className="px-2 py-2">Owner</th><th className="px-2 py-2 text-right" title={`Energized in ${fyLabel()} (QIS tracker); for other stages, the deal's QIS`}>QIS</th><th className="px-2 py-2">Energized</th>
               {COMPONENTS.map(([k, l, full]) => <th key={k} className="px-2 py-2 text-right" title={`${full}: received / proposed`}>{l} <span className="normal-case text-slate-400">rec / prop</span></th>)}
               <th className="px-2 py-2 text-right">Total proposed</th><th className="px-2 py-2 text-right">Received</th><th className="px-2 py-2 text-right">Outstanding</th><th className="w-32 px-2 py-2">Collected</th><th className="px-2 py-2" /></tr>
           </thead>
@@ -142,6 +153,7 @@ export default function FranchisePayments({ filters: extFilters, compact = false
                 <tr key={r.key} className="hover:bg-slate-50">
                   <td className="max-w-[260px] px-3 py-2">{r.deal ? <Link className="block truncate font-semibold text-slate-900 hover:text-brand-700" to={`/app/deals/${r.deal.id}`}>{r.name}</Link> : <span className="font-semibold">{r.name}</span>}<div className="font-mono text-[10px] text-slate-400">{r.deal?.site_code || 'no CRM deal'}</div></td>
                   <td className="px-2 py-2">{r.city}<div className="text-[10px] text-slate-400">{r.region}</div></td>
+                  <td className="whitespace-nowrap px-2 py-2">{r.deal ? <StageBadge name={r.stage} color={r.stageColor} /> : <span className="text-xs text-slate-500">{r.stage}</span>}{r.fyEnergized && <div className="text-[10px] font-semibold text-emerald-700">energized {fyLabel()}</div>}</td>
                   <td className="px-2 py-2">{r.owner || '—'}</td>
                   <td className="px-2 py-2 text-right font-semibold">{r.qis}</td>
                   <td className="whitespace-nowrap px-2 py-2">{fmtDate(r.enDate)}</td>
@@ -159,10 +171,10 @@ export default function FranchisePayments({ filters: extFilters, compact = false
                 </tr>
               )
             })}
-            {m.rows.length === 0 && <tr><td colSpan={13} className="p-6 text-center text-slate-400">No sites match.</td></tr>}
+            {m.rows.length === 0 && <tr><td colSpan={14} className="p-6 text-center text-slate-400">No sites match.</td></tr>}
           </tbody>
           {m.rows.length > 0 && (() => { const t = { p: m.rows.reduce((a, r) => a + r.proposed, 0), r: m.rows.reduce((a, r) => a + r.received, 0), q: m.rows.reduce((a, r) => a + r.qis, 0) }; return (
-            <tfoot className="border-t-2 border-slate-200 bg-slate-50 font-bold"><tr><td className="px-3 py-2">Total · {m.rows.length} sites</td><td /><td /><td className="px-2 py-2 text-right">{t.q}</td><td />{COMPONENTS.map(([k]) => { const c = m.tot(m.rows).comp[k]; return <td key={k} className="whitespace-nowrap px-2 py-2 text-right text-xs"><span className="text-emerald-700">{short(c.received)}</span><div className="font-normal text-slate-500">of {short(c.proposed)}</div></td> })}<td className="px-2 py-2 text-right">{fmtINR(t.p)}</td><td className="px-2 py-2 text-right text-emerald-700">{fmtINR(t.r)}</td><td className="px-2 py-2 text-right text-red-600">{fmtINR(Math.max(0, t.p - t.r))}</td><td className="px-2 py-2 text-xs">{t.p ? Math.round((100 * t.r) / t.p) : 0}%</td><td /></tr></tfoot>) })()}
+            <tfoot className="border-t-2 border-slate-200 bg-slate-50 font-bold"><tr><td className="px-3 py-2">Total · {m.rows.length} sites</td><td /><td /><td /><td className="px-2 py-2 text-right">{t.q}</td><td />{COMPONENTS.map(([k]) => { const c = m.tot(m.rows).comp[k]; return <td key={k} className="whitespace-nowrap px-2 py-2 text-right text-xs"><span className="text-emerald-700">{short(c.received)}</span><div className="font-normal text-slate-500">of {short(c.proposed)}</div></td> })}<td className="px-2 py-2 text-right">{fmtINR(t.p)}</td><td className="px-2 py-2 text-right text-emerald-700">{fmtINR(t.r)}</td><td className="px-2 py-2 text-right text-red-600">{fmtINR(Math.max(0, t.p - t.r))}</td><td className="px-2 py-2 text-xs">{t.p ? Math.round((100 * t.r) / t.p) : 0}%</td><td /></tr></tfoot>) })()}
         </table>
       </div>
       <PaymentsModal row={open} onClose={() => setOpen(null)} onChanged={refresh} isAdmin={isAdmin} canPay={canPay} />
@@ -171,7 +183,8 @@ export default function FranchisePayments({ filters: extFilters, compact = false
 }
 
 function applyFiltersRows(rows, f) {
-  return rows.filter(r => (!f.city?.length || f.city.includes(r.city)) && (!f.region?.length || f.region.includes(r.region)) && (!f.owner?.length || f.owner.includes(r.owner || '')))
+  return rows.filter(r => (!f.city?.length || f.city.includes(r.city)) && (!f.region?.length || f.region.includes(r.region)) && (!f.owner?.length || f.owner.includes(r.owner || ''))
+    && (!f.stage?.length || f.stage.map(String).includes(String(r.stageId))))
 }
 
 function PaymentsModal({ row, onClose, onChanged, isAdmin, canPay }) {

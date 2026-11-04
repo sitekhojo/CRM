@@ -74,7 +74,7 @@ export default function Acquisition() {
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div>
           <h1 className="text-xl font-extrabold text-navy-900">Acquisition Desk</h1>
-          <p className="text-sm text-slate-500">{tab === 'team' ? 'Where the ground team went, what they did, and who has not logged a visit' : tab === 'payments' ? 'Proposed vs received for franchise sites energized this FY' : tab !== 'locations' ? 'Handover and energisation outlook · this month to the end of the FY' : `${m.rows.length} of ${m.all.length} priority locations · a lead/deal counts against a location when it lies within its radius`}</p>
+          <p className="text-sm text-slate-500">{tab === 'team' ? 'Where the ground team went, what they did, and who has not logged a visit' : tab === 'payments' ? 'Proposed vs received · FF, SD and infra cost for franchise sites, any stage' : tab !== 'locations' ? 'Handover and energisation outlook · this month to the end of the FY' : `${m.rows.length} of ${m.all.length} priority locations · a lead/deal counts against a location when it lies within its radius`}</p>
         </div>
         <div className="flex-1" />
         {tab === 'locations' && <>
