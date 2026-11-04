@@ -19,6 +19,18 @@ const ym = d => String(d || '').slice(0, 7)
 const monthName = k => new Date(k + '-01T12:00:00').toLocaleDateString('en-IN', { month: 'short', year: '2-digit' })
 const qisOf = r => Number(r.extra?.qis_count) || 0
 const sum = xs => ({ qis: xs.reduce((a, r) => a + qisOf(r), 0), sites: xs.length, list: xs })
+export const SITE_TYPE_CHIPS = {
+  Franchise: { short: 'FRN', cls: 'bg-indigo-100 text-indigo-800' },
+  Private: { short: 'PVT', cls: 'bg-teal-100 text-teal-800' },
+  SPP: { short: 'SPP', cls: 'bg-orange-100 text-orange-800' },
+  IOCL: { short: 'IOCL', cls: 'bg-sky-100 text-sky-800' },
+  'Metro & Railways': { short: 'M&R', cls: 'bg-fuchsia-100 text-fuchsia-800' },
+}
+const typeKey = r => r.site_type || 'Not set'
+const typeChip = t => SITE_TYPE_CHIPS[t] || { short: t === 'Not set' ? '?' : t.slice(0, 4), cls: 'bg-slate-100 text-slate-600' }
+/** QIS and site count per site type, biggest first. */
+export const byType = xs => Object.values(xs.reduce((o, r) => { const k = typeKey(r); o[k] = o[k] || { type: k, qis: 0, sites: 0 }; o[k].qis += qisOf(r); o[k].sites++; return o }, {})).sort((a, b) => b.qis - a.qis || b.sites - a.sites)
+export const SiteTypeChip = ({ t, children, className = '' }) => <span className={`rounded px-1 text-[10px] font-semibold ${typeChip(t).cls} ${className}`} title={t}>{typeChip(t).short}{children}</span>
 const byIntent = xs => Object.fromEntries(['hot', 'warm', 'cold', ''].map(k => [k, xs.filter(r => (r.extra?.intent || '') === k).reduce((a, r) => a + qisOf(r), 0)]))
 
 /** Forward-looking: this month → end of the financial year (Apr–Mar). */
@@ -39,6 +51,8 @@ export default function Forecast({ view = 'table' }) {
   const [filters, setFilters] = useState(EMPTY_FILTERS)
   const [detail, setDetail] = useState(null) // { title, pick: m => rows }
   const [scope, setScope] = useState('both')
+  const [chipBy, setChipBy] = useState('intent')
+  const [typeFilter, setTypeFilter] = useState('')
   useEffect(() => { fetchNetworkPoints().then(setNetwork).catch(() => {}) }, [])
 
   const m = useMemo(() => {
@@ -92,7 +106,8 @@ export default function Forecast({ view = 'table' }) {
           ]} />}
           extra={isAdmin && <button className="btn-secondary" onClick={() => exportWorkbook([{ name: 'Pipeline list', rows: list.map(r => planRow(r, scope)), columns: PLAN_COLS }], `sitekhojo-pipeline-list-${m.today}`)}><Download className="h-4 w-4" />Excel</button>} />
         <p className="text-sm text-slate-500"><b className="text-slate-700">{list.length} sites · {fmtNum(sum(list).qis)} QIS</b> · open pipeline and Handover Done (not yet energized). Click a date, QIS, intent, stage or owner to change it — the forecast updates instantly.</p>
-        <div className="card overflow-x-auto"><PlanTable rows={list} onChanged={reload} today={m.today} /></div>
+        <TypeSplit rows={list} value={typeFilter} onChange={setTypeFilter} />
+        <div className="card overflow-x-auto"><PlanTable rows={list.filter(r => !typeFilter || typeKey(r) === typeFilter)} onChanged={reload} today={m.today} /></div>
       </div>
     )
   }
@@ -103,7 +118,9 @@ export default function Forecast({ view = 'table' }) {
         <button className="w-full rounded-md px-2 py-1 text-right hover:bg-slate-100" onClick={() => v.list && setDetail({ title, pick })} disabled={!v.list}>
           <div className={`text-base font-bold ${tone}`}>{fmtNum(v.qis)}</div>
           <div className="text-[11px] text-slate-400">{v.sites} sites</div>
-          {intents && v.list && (() => { const b = byIntent(v.list); return (
+          {intents && v.list && chipBy === 'type' && (
+            <div className="mt-0.5 flex flex-wrap justify-end gap-1">{byType(v.list).map(x => <SiteTypeChip key={x.type} t={x.type}> {x.qis}</SiteTypeChip>)}</div>)}
+          {intents && v.list && chipBy === 'intent' && (() => { const b = byIntent(v.list); return (
             <div className="mt-0.5 flex justify-end gap-1">
               {['hot', 'warm', 'cold'].filter(k => b[k]).map(k => <span key={k} className={`rounded px-1 text-[10px] font-semibold ${INTENTS[k].cls}`} title={INTENTS[k].hint}>{INTENTS[k].label[0]} {b[k]}</span>)}
               {b[''] > 0 && <span className="rounded bg-slate-100 px-1 text-[10px] text-slate-500" title="Intent not set">? {b['']}</span>}
@@ -120,6 +137,10 @@ export default function Forecast({ view = 'table' }) {
     <div className="space-y-3">
       <div className="flex flex-wrap items-end gap-2">
         <DealFilters value={filters} onChange={setFilters} show={['region', 'city', 'owner', 'stage', 'siteType', 'format']} />
+        <div className="flex overflow-hidden rounded-lg border border-slate-300 text-sm font-semibold" title="What the small chips under each number show">
+          <span className="bg-slate-50 px-2 py-1.5 text-xs font-normal text-slate-500">Split by</span>
+          {[['intent', 'Intent'], ['type', 'Site type']].map(([k, l]) => <button key={k} onClick={() => setChipBy(k)} className={`px-3 py-1.5 ${chipBy === k ? 'bg-navy-900 text-white' : 'bg-white text-slate-600'}`}>{l}</button>)}
+        </div>
         {isAdmin && <button className="btn-secondary ml-auto" onClick={() => {
           const line = (metric, kind, o) => ({ metric, kind, slipped: o.slipped?.qis ?? '', ...Object.fromEntries(m.months.map(k => [monthName(k), o.est?.[k]?.qis ?? (k === m.cur ? o.done?.qis ?? '' : '')])), fy_total: o.total?.qis ?? '', no_date: o.noDate?.qis ?? '' })
           const summary = [
@@ -177,12 +198,14 @@ export default function Forecast({ view = 'table' }) {
       </div>
       <p className="text-xs text-slate-500">
         Estimates use each lead/deal's <b>Expected HO date</b> and <b>Expected energisation date</b> (set them on the deal or via import). Handover estimate = open pipeline (Scouting → Agreement, Hold excluded); energisation estimate = everything not yet energized, including Handover Done.
-        <b className="text-red-600"> Slipped</b> = expected date already passed. Chips show QIS by intent: <span className={`rounded px-1 ${INTENTS.hot.cls}`}>H</span> hot · <span className={`rounded px-1 ${INTENTS.warm.cls}`}>W</span> warm · <span className={`rounded px-1 ${INTENTS.cold.cls}`}>C</span> cold. Click a number to see the sites.
+        <b className="text-red-600"> Slipped</b> = expected date already passed. {chipBy === 'intent' ? <>Chips show QIS by intent: <span className={`rounded px-1 ${INTENTS.hot.cls}`}>H</span> hot · <span className={`rounded px-1 ${INTENTS.warm.cls}`}>W</span> warm · <span className={`rounded px-1 ${INTENTS.cold.cls}`}>C</span> cold.</>
+          : <>Chips show QIS by site type: {Object.keys(SITE_TYPE_CHIPS).map(t => <span key={t}><SiteTypeChip t={t} /> {t} · </span>)}<SiteTypeChip t="Not set" /> not set.</>} Click a number to see the sites.
       </p>
 
-      <Modal open={!!detail} onClose={() => setDetail(null)} wide="xl" title={detail ? `${detail.title} · ${fmtNum(sum(detail.pick(m)).qis)} QIS · ${detail.pick(m).length} sites` : ''}
-        footer={<button className="btn-primary" onClick={() => setDetail(null)}>Close</button>}>
-        {detail && <div className="max-h-[65vh] overflow-auto"><PlanTable rows={detail.pick(m)} onChanged={reload} /></div>}
+      <Modal open={!!detail} onClose={() => { setDetail(null); setTypeFilter('') }} wide="xl" title={detail ? `${detail.title} · ${fmtNum(sum(detail.pick(m)).qis)} QIS · ${detail.pick(m).length} sites` : ''}
+        footer={<button className="btn-primary" onClick={() => { setDetail(null); setTypeFilter('') }}>Close</button>}>
+        {detail && <TypeSplit rows={detail.pick(m)} value={typeFilter} onChange={setTypeFilter} />}
+        {detail && <div className="max-h-[60vh] overflow-auto"><PlanTable rows={detail.pick(m).filter(r => !typeFilter || typeKey(r) === typeFilter)} onChanged={reload} /></div>}
       </Modal>
     </div>
   )
@@ -191,6 +214,24 @@ export default function Forecast({ view = 'table' }) {
 const PLAN_COLS = [['site_code', 'ID'], ['name', 'Site'], ['record_type', 'Type'], ['city', 'City'], ['region', 'Region'], ['site_type', 'Site type'], ['stage_name', 'Stage'],
   ['intent', 'Intent'], ['qis', 'QIS'], ['expected_ho', 'Expected HO'], ['expected_en', 'Expected energisation'], ['ho_date', 'Handover date'], ['energized_on', 'Energization date'], ['owner', 'Owner'], ['bucket', 'Forecast bucket']]
 const planRow = (r, bucket) => ({ ...r, intent: INTENTS[r.extra?.intent]?.label || '', qis: qisOf(r), expected_ho: r.extra?.expected_ho || '', expected_en: r.extra?.expected_en || '', ho_date: r.extra?.ho_date || '', energized_on: r.extra?.energized_on || '', bucket })
+
+/** Site-type split of a set of sites; click a type to show only those. */
+export function TypeSplit({ rows, value, onChange }) {
+  const xs = byType(rows)
+  if (!xs.length) return null
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
+      <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Site type</span>
+      {xs.map(x => (
+        <button key={x.type} onClick={() => onChange(value === x.type ? '' : x.type)}
+          className={`rounded-lg border px-2.5 py-1 ${value === x.type ? 'border-brand-500 ring-2 ring-brand-200' : 'border-slate-200 hover:bg-slate-50'}`}>
+          <SiteTypeChip t={x.type} className="mr-1.5" /><b>{fmtNum(x.qis)}</b> QIS <span className="text-slate-400">· {x.sites} {x.sites === 1 ? 'site' : 'sites'}</span>
+        </button>
+      ))}
+      {value && <button className="text-xs font-semibold text-brand-700 hover:underline" onClick={() => onChange('')}>Show all</button>}
+    </div>
+  )
+}
 
 /** Editable planning table: stage, intent, QIS, expected HO / energisation dates, owner. */
 export function PlanTable({ rows, onChanged, today }) {
@@ -201,7 +242,7 @@ export function PlanTable({ rows, onChanged, today }) {
   return (
     <table className="min-w-full text-sm">
       <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-        <tr><th className="px-3 py-2">Site</th><th className="px-2 py-2">City</th><th className="px-2 py-2">Stage</th><th className="px-2 py-2">Intent</th>
+        <tr><th className="px-3 py-2">Site</th><th className="px-2 py-2">City</th><th className="px-2 py-2">Site type</th><th className="px-2 py-2">Stage</th><th className="px-2 py-2">Intent</th>
           <th className="px-2 py-2 text-right">QIS</th><th className="px-2 py-2">Expected HO / HO date</th><th className="px-2 py-2">Expected energisation</th><th className="px-2 py-2">Owner</th></tr>
       </thead>
       <tbody className="divide-y divide-slate-100">
@@ -209,6 +250,7 @@ export function PlanTable({ rows, onChanged, today }) {
           <tr key={r.id} className="hover:bg-slate-50">
             <td className="max-w-[260px] px-3 py-2"><Link className="block truncate font-semibold text-slate-900 hover:text-brand-700" to={`/app/deals/${r.id}`}>{r.name}</Link><div className="font-mono text-[10px] text-slate-400">{r.site_code} · {r.record_type === 'lead' ? 'Lead' : 'Deal'}</div></td>
             <td className="px-2 py-2">{r.city}</td>
+            <td className="whitespace-nowrap px-2 py-2">{r.site_type ? <><SiteTypeChip t={r.site_type} /> <span className="text-xs text-slate-600">{r.site_type}</span></> : <span className="text-slate-300">—</span>}</td>
             <td className="px-2 py-2"><StageCell deal={r} onChanged={onChanged} /></td>
             <td className="px-2 py-2"><IntentCell deal={r} onChanged={onChanged} /></td>
             <td className="px-2 py-2 text-right font-semibold"><EditCell deal={r} field="qis_count" type="number" label="QIS" onChanged={onChanged} /></td>
