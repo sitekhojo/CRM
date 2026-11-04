@@ -5,12 +5,14 @@ import { useConfig, DEFAULT_RULES, REGIONS, leadLabel } from '../lib/config'
 import { useToast, Field, StageBadge } from '../components/ui'
 import { readSheet, normaliseRow, toNum, downloadTemplate, exportRows, exportWorkbook, DEAL_COLUMNS } from '../lib/excel'
 import { NETWORK_TYPES } from './Planning'
+import { useAuth } from '../lib/auth'
+import { runFullBackup, fetchLastBackup, daysSince } from '../lib/backup'
 import { SITE_TYPES, normaliseSiteType } from '../lib/format'
 
 const TABS = [['stages', 'Pipeline stages'], ['team', 'Team & regions'], ['cities', 'Cities'], ['drops', 'Drop reasons'], ['rules', 'Feasibility rules'], ['network', 'Network data'], ['backup', 'Backup & export']]
 
 export default function Settings() {
-  const [tab, setTab] = useState('stages')
+  const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).get('tab') || 'stages')
   return (
     <div className="p-4 sm:p-6">
       <h1 className="mb-4 text-xl font-extrabold text-navy-900">Settings</h1>
@@ -291,51 +293,28 @@ function Network() {
   )
 }
 
-const FULL_SITE_COLUMNS = [['id', 'Record UUID'], ...DEAL_COLUMNS, ['region', 'Region'], ['source', 'Source'], ['stage_note', 'Stage note'], ['extra_json', 'All extra fields (JSON)'], ['updated_at', 'Updated at']]
-
 function Backup() {
   const toast = useToast()
+  const { profile } = useAuth()
   const [busy, setBusy] = useState(false)
-  const [last, setLast] = useState(() => { try { return localStorage.getItem('lastBackup') } catch { return null } })
+  const [last, setLast] = useState(null)
+  useEffect(() => { fetchLastBackup().then(setLast) }, [])
   const run = async () => {
     setBusy(true)
     try {
-      const get = (t, order = 'id') => fetchAll(() => supabase.from(t).select('*').order(order))
-      const [sites, history, comments, network, targets, team, cities, stages, drops, users, visits, payments] = await Promise.all([
-        get('site_overview', 'created_at'), get('stage_history_overview'), get('site_comments'), get('network_points'),
-        get('target_locations'), get('team_members'), get('cities'), get('stages', 'sort_order'), get('drop_reasons'),
-        fetchAll(() => supabase.from('profiles').select('id,email,full_name,role,is_active,created_at').order('created_at')),
-        get('site_visits'), get('site_payments'),
-      ])
-      const flat = sites.map(r => ({ ...r, ...(r.extra || {}), source: r.extra?.source === 'qis_tracker' ? 'QIS tracker import' : r.extra?.source === 'payment_tracker' ? 'Payment tracker import' : 'CRM', extra_json: r.extra }))
-      const stamp = new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', '')
-      await exportWorkbook([
-        { name: 'Leads & Deals', rows: flat, columns: FULL_SITE_COLUMNS },
-        { name: 'Stage history', rows: history },
-        { name: 'Comments', rows: comments },
-        { name: 'Network (QIS tracker)', rows: network },
-        { name: 'Priority locations', rows: targets },
-        { name: 'Field visits', rows: visits },
-        { name: 'Franchise payments', rows: payments },
-        { name: 'Team', rows: team },
-        { name: 'Cities', rows: cities },
-        { name: 'Stages', rows: stages },
-        { name: 'Drop reasons', rows: drops },
-        { name: 'Users', rows: users },
-        { name: 'About', rows: [{ exported_at: new Date().toISOString(), leads_and_deals: sites.length, stage_changes: history.length, comments: comments.length, network_points: network.length, priority_locations: targets.length }] },
-      ], `sitekhojo-full-backup-${stamp}`)
-      const when = new Date().toLocaleString('en-IN'); setLast(when); try { localStorage.setItem('lastBackup', when) } catch { /* ignore */ }
-      toast(`Backup downloaded · ${sites.length} leads/deals, ${history.length} stage changes`)
+      const c = await runFullBackup(profile?.full_name)
+      setLast({ at: new Date().toISOString(), by: profile?.full_name })
+      toast(`Backup downloaded · ${c.sites} leads/deals, ${c.payments} payments, ${c.visits} visits`)
     } catch (e) { toast(errMsg(e), 'error') } finally { setBusy(false) }
   }
   return (
     <div className="card max-w-3xl space-y-4 p-5">
       <div>
         <h3 className="text-base font-bold text-slate-900">Full backup</h3>
-        <p className="mt-1 text-sm text-slate-500">One Excel workbook with everything in SiteKhojo: every lead and deal (all fields, including dropped and energized), the full stage history with who changed what and when, comments, the QIS-tracker network, priority locations, team, cities, stages, drop reasons and users.</p>
+        <p className="mt-1 text-sm text-slate-500">One Excel workbook with everything in SiteKhojo: every lead and deal (all fields, including dropped and energized), the full stage history with who changed what and when, comments, franchise payments (FF / SD / IC with UTRs), field visits, the QIS-tracker network, priority locations, team, cities, stages, drop reasons, users, login activity and settings. Take one at least once a week — the <b>Backup</b> button at the top of every page does the same thing.</p>
       </div>
       <button className="btn-primary" onClick={run} disabled={busy}><Download className="h-4 w-4" />{busy ? 'Preparing backup…' : 'Download full backup (.xlsx)'}</button>
-      {last && <p className="text-xs text-slate-500">Last backup from this browser: {last}</p>}
+      <p className="text-xs text-slate-500">{last?.at ? <>Last backup: <b>{new Date(last.at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</b>{last.by ? ` by ${last.by}` : ''} ({daysSince(last.at) === 0 ? 'today' : `${daysSince(last.at)} days ago`})</> : 'No backup taken yet.'}</p>
       <div className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
         Other exports: <b>Leads</b> / <b>Deals</b> lists (Excel or CSV of the current filters), <b>Acquisition Desk</b> forecast and pipeline list, <b>Network data</b> tab, and the <b>Priority locations</b> list. Every export includes the record ID, so a backup can be re-imported or matched later.
       </div>

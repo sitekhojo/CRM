@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { NavLink, Outlet, useNavigate, Link } from 'react-router-dom'
-import { LayoutDashboard, Handshake, Target, Crosshair, Map as MapIcon, Radar, Users, Settings, Plus, LogOut, Menu, X, Search, KeyRound, MapPinPlus } from 'lucide-react'
+import { LayoutDashboard, Handshake, Target, Crosshair, Map as MapIcon, Radar, Users, Settings, Plus, LogOut, Menu, X, Search, KeyRound, MapPinPlus, DatabaseBackup } from 'lucide-react'
 import { useAuth } from '../lib/auth'
 import { logOpen } from '../lib/logins'
-import { supabase } from '../lib/supabase'
+import { runFullBackup, fetchLastBackup, daysSince, BACKUP_DUE_DAYS } from '../lib/backup'
+import { supabase, errMsg } from '../lib/supabase'
 import { Modal, Field, useToast } from './ui'
 
 const NAV = [
@@ -87,6 +88,7 @@ export default function AppLayout() {
             <input className="input bg-slate-50 pl-9" placeholder="Search deals, landlords, pincodes…" value={q} onChange={e => setQ(e.target.value)} />
           </form>
           <div className="flex-1" />
+          {isAdmin && <BackupButton />}
           <Link to="/app/visit" className="btn-secondary" title="Log a field visit"><MapPinPlus className="h-4 w-4" /><span className="hidden sm:inline">Log visit</span></Link>
           <Link to="/app/deals/new?type=lead" className="btn-secondary"><Plus className="h-4 w-4" /><span className="hidden sm:inline">Create lead</span><span className="sm:hidden">Lead</span></Link>
           <Link to="/app/deals/new" className="btn-primary"><Plus className="h-4 w-4" /><span className="hidden sm:inline">Create deal</span><span className="sm:hidden">Deal</span></Link>
@@ -98,6 +100,31 @@ export default function AppLayout() {
         <ChangePassword open={pwOpen || recovery} onClose={() => { setPwOpen(false); clearRecovery() }} />
       </div>
     </div>
+  )
+}
+
+function BackupButton() {
+  const { profile } = useAuth()
+  const toast = useToast()
+  const [busy, setBusy] = useState(false)
+  const [last, setLast] = useState(undefined)
+  useEffect(() => { fetchLastBackup().then(setLast).catch(() => setLast(null)) }, [])
+  const age = daysSince(last?.at)
+  const due = last !== undefined && (age === null || age >= BACKUP_DUE_DAYS)
+  const run = async () => {
+    setBusy(true)
+    try {
+      const c = await runFullBackup(profile?.full_name)
+      setLast({ at: new Date().toISOString(), by: profile?.full_name })
+      toast(`Full backup downloaded · ${c.sites} leads/deals, ${c.payments} payments, ${c.visits} visits`)
+    } catch (e) { toast(errMsg(e), 'error') } finally { setBusy(false) }
+  }
+  const tip = last?.at ? `Download everything in Excel · last backup ${age === 0 ? 'today' : `${age} days ago`}${last.by ? ` by ${last.by}` : ''}` : 'Download everything in Excel · no backup taken yet'
+  return (
+    <button className={`btn-secondary relative ${due ? 'border-amber-400 text-amber-800' : ''}`} onClick={run} disabled={busy} title={tip}>
+      <DatabaseBackup className="h-4 w-4" /><span className="hidden md:inline">{busy ? 'Backing up…' : 'Backup'}</span>
+      {due && !busy && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-amber-500 ring-2 ring-white" />}
+    </button>
   )
 }
 
