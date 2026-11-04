@@ -33,6 +33,7 @@ export default function FranchisePayments({ filters: extFilters, compact = false
   const [payments, setPayments] = useState(null)
   const [ownFilters, setOwnFilters] = useState(EMPTY_FILTERS)
   const [status, setStatus] = useState('')
+  const [q, setQ] = useState('')
   const [open, setOpen] = useState(null) // row for the payments modal
   const filters = extFilters || ownFilters
 
@@ -66,7 +67,8 @@ export default function FranchisePayments({ filters: extFilters, compact = false
         status: !proposed ? 'noproposal' : received >= proposed ? 'paid' : received > 0 ? 'partial' : 'none',
       }
     }).filter(Boolean)
-    const scoped = applyFiltersRows(rows, filters).filter(r => !status || r.status === status)
+    const qq = q.trim().toLowerCase()
+    const scoped = applyFiltersRows(rows, filters).filter(r => (!status || r.status === status) && (!qq || [r.name, r.deal?.name, r.deal?.site_code, r.city, r.owner].some(v => v && String(v).toLowerCase().includes(qq))))
     const tot = xs => ({ proposed: xs.reduce((a, r) => a + r.proposed, 0), received: xs.reduce((a, r) => a + r.received, 0), qis: xs.reduce((a, r) => a + r.qis, 0), sites: xs.length,
       comp: Object.fromEntries(COMPONENTS.map(([k]) => [k, { proposed: xs.reduce((a, r) => a + r.comp[k].proposed, 0), received: xs.reduce((a, r) => a + r.comp[k].received, 0) }])) })
     const all = tot(applyFiltersRows(rows, filters))
@@ -74,7 +76,7 @@ export default function FranchisePayments({ filters: extFilters, compact = false
     const collectedMonth = applyFiltersRows(rows, filters).flatMap(r => r.pays).filter(p => p.paid_on && String(p.paid_on).slice(0, 7) === thisMonth).reduce((a, p) => a + Number(p.amount), 0)
     const counts = Object.fromEntries(['paid', 'partial', 'none', 'noproposal'].map(k => [k, applyFiltersRows(rows, filters).filter(r => r.status === k).length]))
     return { rows: scoped.sort((a, b) => b.outstanding - a.outstanding || b.qis - a.qis), all, counts, collectedMonth, tot }
-  }, [deals, network, payments, filters, status, cities])
+  }, [deals, network, payments, filters, status, cities, q])
 
   if (loading || !m) return <PageLoader />
   const pct = m.all.proposed ? Math.round((100 * m.all.received) / m.all.proposed) : 0
@@ -88,7 +90,7 @@ export default function FranchisePayments({ filters: extFilters, compact = false
         ['proposed', 'Total proposed (₹)'], ['received', 'Total received (₹)'], ['outstanding', 'Outstanding (₹)'], ['pct', '% collected'], ['last_paid', 'Last payment']] },
     { name: 'Payment log', rows: m.rows.flatMap(r => r.pays.map(p => ({ site: r.name, code: r.deal?.site_code || '', component: compLabel(p.component), paid_on: p.paid_on || '', amount: Number(p.amount), mode: p.mode, reference: p.reference, notes: p.notes }))),
       columns: [['site', 'Site'], ['code', 'CRM ID'], ['component', 'Component'], ['paid_on', 'Paid on'], ['amount', 'Amount (₹)'], ['mode', 'Mode'], ['reference', 'Reference / UTR'], ['notes', 'Notes']] },
-  ], `sitekhojo-franchise-payments-${fyLabel()}`)
+  ], `sitekhojo-franchise-payments-${fyLabel()}`, { team: true })
 
   return (
     <div className="space-y-3">
@@ -115,9 +117,10 @@ export default function FranchisePayments({ filters: extFilters, compact = false
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
+        <input className="input w-full sm:w-64" placeholder="Search site, SK code, city, owner" value={q} onChange={e => setQ(e.target.value)} />
         <SingleSelect value={status} onChange={setStatus} options={[{ value: '', label: 'All payment statuses' }, { value: 'paid', label: `Fully paid (${m.counts.paid})` }, { value: 'partial', label: `Part paid (${m.counts.partial})` }, { value: 'none', label: `Nothing received (${m.counts.none})` }, { value: 'noproposal', label: `No proposed amount (${m.counts.noproposal})` }]} />
         <span className="text-sm text-slate-500">Franchise sites with QIS energized in {fyLabel()} (QIS tracker){canPay ? ' · click a proposed amount to edit, “+ Payment” to log money received' : ''}</span>
-        {isAdmin && <button className="btn-secondary ml-auto" onClick={exportX}><Download className="h-4 w-4" />Excel</button>}
+        {canPay && <button className="btn-secondary ml-auto" onClick={exportX}><Download className="h-4 w-4" />Excel</button>}
       </div>
 
       <div className={`card overflow-auto ${compact ? 'max-h-[520px]' : ''}`}>

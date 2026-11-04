@@ -25,6 +25,7 @@ export function AuthProvider({ children }) {
   }, [loadProfile])
 
   globalThis.__skCanExport = profile?.role === 'admin' && !!profile?.is_active
+  globalThis.__skActive = !!profile?.is_active
   const value = {
     session, profile,
     user: session?.user || null,
