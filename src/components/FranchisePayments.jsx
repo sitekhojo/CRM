@@ -26,7 +26,8 @@ const short = n => { const v = Number(n) || 0; return v >= 1e7 ? `₹${(v / 1e7)
  */
 export default function FranchisePayments({ filters: extFilters, compact = false }) {
   const { deals, loading, reload } = useDeals()
-  const { isAdmin } = useAuth()
+  const { isAdmin, profile } = useAuth()
+  const canPay = !!profile?.is_active
   const { cities = [] } = useConfig()
   const [network, setNetwork] = useState(null)
   const [payments, setPayments] = useState(null)
@@ -115,7 +116,7 @@ export default function FranchisePayments({ filters: extFilters, compact = false
 
       <div className="flex flex-wrap items-center gap-2">
         <SingleSelect value={status} onChange={setStatus} options={[{ value: '', label: 'All payment statuses' }, { value: 'paid', label: `Fully paid (${m.counts.paid})` }, { value: 'partial', label: `Part paid (${m.counts.partial})` }, { value: 'none', label: `Nothing received (${m.counts.none})` }, { value: 'noproposal', label: `No proposed amount (${m.counts.noproposal})` }]} />
-        <span className="text-sm text-slate-500">Franchise sites with QIS energized in {fyLabel()} (QIS tracker){isAdmin ? ' · click a proposed amount to edit, “+ Payment” to log money received' : ''}</span>
+        <span className="text-sm text-slate-500">Franchise sites with QIS energized in {fyLabel()} (QIS tracker){canPay ? ' · click a proposed amount to edit, “+ Payment” to log money received' : ''}</span>
         {isAdmin && <button className="btn-secondary ml-auto" onClick={exportX}><Download className="h-4 w-4" />Excel</button>}
       </div>
 
@@ -139,14 +140,14 @@ export default function FranchisePayments({ filters: extFilters, compact = false
                   {COMPONENTS.map(([k, l]) => { const c = r.comp[k]; return (
                     <td key={k} className="whitespace-nowrap px-2 py-2 text-right">
                       <div className={`font-semibold ${!c.proposed ? 'text-slate-400' : c.received >= c.proposed ? 'text-emerald-700' : c.received > 0 ? 'text-amber-700' : 'text-red-600'}`}>{c.received ? short(c.received) : '—'}</div>
-                      <div className="text-[11px] text-slate-500">of {r.deal ? <EditCell deal={r.deal} field={`${k}_proposed`} type="number" label={`${l} proposed`} adminOnly format={v => short(v)} onChanged={refresh} /> : '—'}</div>
+                      <div className="text-[11px] text-slate-500">of {r.deal ? <EditCell deal={r.deal} field={`${k}_proposed`} type="number" label={`${l} proposed`} format={v => short(v)} onChanged={refresh} /> : '—'}</div>
                     </td>) })}
                   <td className="px-2 py-2 text-right">{r.proposed ? fmtINR(r.proposed) : '—'}</td>
                   <td className="px-2 py-2 text-right font-semibold text-emerald-700">{r.received ? fmtINR(r.received) : '—'}</td>
                   <td className={`px-2 py-2 text-right font-semibold ${r.outstanding ? 'text-red-600' : 'text-slate-300'}`}>{r.proposed ? fmtINR(r.outstanding) : '—'}</td>
                   <td className="px-2 py-2">{p === null ? <span className="text-xs text-amber-600">no proposal</span> : (
                     <div className="flex items-center gap-2"><div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100"><div className={`h-2 ${p >= 100 ? 'bg-emerald-500' : p >= 50 ? 'bg-amber-400' : 'bg-red-500'}`} style={{ width: `${Math.min(100, p)}%` }} /></div><span className="w-9 text-right text-xs font-semibold">{p}%</span></div>)}</td>
-                  <td className="whitespace-nowrap px-2 py-2 text-right">{r.deal && <button className="btn-ghost px-2 py-1 text-xs" onClick={() => setOpen(r)}><Wallet className="h-3.5 w-3.5" />{isAdmin ? '+ Payment' : 'Payments'}{r.pays.length ? ` (${r.pays.length})` : ''}</button>}</td>
+                  <td className="whitespace-nowrap px-2 py-2 text-right">{r.deal && <button className="btn-ghost px-2 py-1 text-xs" onClick={() => setOpen(r)}><Wallet className="h-3.5 w-3.5" />{canPay ? '+ Payment' : 'Payments'}{r.pays.length ? ` (${r.pays.length})` : ''}</button>}</td>
                 </tr>
               )
             })}
@@ -156,7 +157,7 @@ export default function FranchisePayments({ filters: extFilters, compact = false
             <tfoot className="border-t-2 border-slate-200 bg-slate-50 font-bold"><tr><td className="px-3 py-2">Total · {m.rows.length} sites</td><td /><td /><td className="px-2 py-2 text-right">{t.q}</td><td />{COMPONENTS.map(([k]) => { const c = m.tot(m.rows).comp[k]; return <td key={k} className="whitespace-nowrap px-2 py-2 text-right text-xs"><span className="text-emerald-700">{short(c.received)}</span><div className="font-normal text-slate-500">of {short(c.proposed)}</div></td> })}<td className="px-2 py-2 text-right">{fmtINR(t.p)}</td><td className="px-2 py-2 text-right text-emerald-700">{fmtINR(t.r)}</td><td className="px-2 py-2 text-right text-red-600">{fmtINR(Math.max(0, t.p - t.r))}</td><td className="px-2 py-2 text-xs">{t.p ? Math.round((100 * t.r) / t.p) : 0}%</td><td /></tr></tfoot>) })()}
         </table>
       </div>
-      <PaymentsModal row={open} onClose={() => setOpen(null)} onChanged={refresh} isAdmin={isAdmin} />
+      <PaymentsModal row={open} onClose={() => setOpen(null)} onChanged={refresh} isAdmin={isAdmin} canPay={canPay} />
     </div>
   )
 }
@@ -165,7 +166,7 @@ function applyFiltersRows(rows, f) {
   return rows.filter(r => (!f.city?.length || f.city.includes(r.city)) && (!f.region?.length || f.region.includes(r.region)) && (!f.owner?.length || f.owner.includes(r.owner || '')))
 }
 
-function PaymentsModal({ row, onClose, onChanged, isAdmin }) {
+function PaymentsModal({ row, onClose, onChanged, isAdmin, canPay }) {
   const toast = useToast()
   const blank = { component: 'ff', paid_on: new Date().toISOString().slice(0, 10), amount: '', mode: 'NEFT', reference: '', notes: '' }
   const [f, setF] = useState(blank)
@@ -209,7 +210,7 @@ function PaymentsModal({ row, onClose, onChanged, isAdmin }) {
             {row.pays.length === 0 && <tr><td colSpan={7} className="py-3 text-center text-slate-400">No payments recorded yet.</td></tr>}
           </tbody>
         </table>
-        {isAdmin && (
+        {canPay && (
           <form onSubmit={add} className="grid gap-2 rounded-lg border border-slate-200 p-3 sm:grid-cols-6">
             <Field label="For"><select className="input" value={f.component} onChange={e => setF({ ...f, component: e.target.value })}>{COMPONENTS.map(([k, l, full]) => <option key={k} value={k}>{l} · {full}</option>)}</select></Field>
             <Field label="Date"><input className="input" type="date" required value={f.paid_on} onChange={e => setF({ ...f, paid_on: e.target.value })} /></Field>
@@ -218,7 +219,7 @@ function PaymentsModal({ row, onClose, onChanged, isAdmin }) {
             <Field label="Reference / UTR"><input className="input" value={f.reference} onChange={e => setF({ ...f, reference: e.target.value })} /></Field>
             <Field label="Notes"><input className="input" value={f.notes} onChange={e => setF({ ...f, notes: e.target.value })} /></Field>
             <div className="sm:col-span-6"><button className="btn-primary" disabled={busy || !f.amount}><Plus className="h-4 w-4" />{busy ? 'Saving…' : 'Add payment'}</button>
-              <span className="ml-2 text-xs text-slate-500">Use a negative amount for a refund or reversal.</span></div>
+              <span className="ml-2 text-xs text-slate-500">Use a negative amount for a refund or reversal.{!isAdmin && ' Only an admin can delete a payment, so check before saving.'}</span></div>
           </form>
         )}
       </div>
