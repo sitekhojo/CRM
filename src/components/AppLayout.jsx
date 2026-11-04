@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { NavLink, Outlet, useNavigate, Link } from 'react-router-dom'
-import { LayoutDashboard, Handshake, Target, Crosshair, Map as MapIcon, Radar, Users, Settings, Plus, LogOut, Menu, X, Search, KeyRound, MapPinPlus, DatabaseBackup } from 'lucide-react'
+import { LayoutDashboard, Handshake, Target, Crosshair, Map as MapIcon, Radar, Users, Settings, Plus, LogOut, Menu, X, Search, KeyRound, MapPinPlus, Download } from 'lucide-react'
 import { useAuth } from '../lib/auth'
 import { logOpen } from '../lib/logins'
 import { runFullBackup, fetchLastBackup, daysSince, BACKUP_DUE_DAYS } from '../lib/backup'
@@ -116,13 +116,13 @@ function BackupButton() {
     try {
       const c = await runFullBackup(profile?.full_name)
       setLast({ at: new Date().toISOString(), by: profile?.full_name })
-      toast(`Full backup downloaded · ${c.sites} leads/deals, ${c.payments} payments, ${c.visits} visits`)
+      toast(`Everything exported · ${c.sites} leads/deals, ${c.payments} payments, ${c.visits} visits`)
     } catch (e) { toast(errMsg(e), 'error') } finally { setBusy(false) }
   }
-  const tip = last?.at ? `Download everything in Excel · last backup ${age === 0 ? 'today' : `${age} days ago`}${last.by ? ` by ${last.by}` : ''}` : 'Download everything in Excel · no backup taken yet'
+  const tip = last?.at ? `Export everything in SiteKhojo to one Excel file · last backup ${age === 0 ? 'today' : `${age} days ago`}${last.by ? ` by ${last.by}` : ''}` : 'Export everything in SiteKhojo to one Excel file · no export taken yet'
   return (
     <button className={`btn-secondary relative ${due ? 'border-amber-400 text-amber-800' : ''}`} onClick={run} disabled={busy} title={tip}>
-      <DatabaseBackup className="h-4 w-4" /><span className="hidden md:inline">{busy ? 'Backing up…' : 'Backup'}</span>
+      <Download className="h-4 w-4" /><span className="hidden md:inline">{busy ? 'Exporting…' : 'Export all'}</span>
       {due && !busy && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-amber-500 ring-2 ring-white" />}
     </button>
   )

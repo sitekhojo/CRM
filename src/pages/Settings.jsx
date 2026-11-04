@@ -311,7 +311,7 @@ function Backup() {
     <div className="card max-w-3xl space-y-4 p-5">
       <div>
         <h3 className="text-base font-bold text-slate-900">Full backup</h3>
-        <p className="mt-1 text-sm text-slate-500">One Excel workbook with everything in SiteKhojo: every lead and deal (all fields, including dropped and energized), the full stage history with who changed what and when, comments, franchise payments (FF / SD / IC with UTRs), field visits, the QIS-tracker network, priority locations, team, cities, stages, drop reasons, users, login activity and settings. Take one at least once a week — the <b>Backup</b> button at the top of every page does the same thing.</p>
+        <p className="mt-1 text-sm text-slate-500">One Excel workbook with everything in SiteKhojo: every lead and deal (all fields, including dropped and energized), the full stage history with who changed what and when, comments, franchise payments (FF / SD / IC with UTRs), field visits, the QIS-tracker network, priority locations, team, cities, stages, drop reasons, users, login activity and settings. Take one at least once a week — the <b>Export all</b> button at the top of every page does the same thing.</p>
       </div>
       <button className="btn-primary" onClick={run} disabled={busy}><Download className="h-4 w-4" />{busy ? 'Preparing backup…' : 'Download full backup (.xlsx)'}</button>
       <p className="text-xs text-slate-500">{last?.at ? <>Last backup: <b>{new Date(last.at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</b>{last.by ? ` by ${last.by}` : ''} ({daysSince(last.at) === 0 ? 'today' : `${daysSince(last.at)} days ago`})</> : 'No backup taken yet.'}</p>
