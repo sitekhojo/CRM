@@ -7,9 +7,10 @@ import { isTrackerSite } from '../lib/deals'
 import { Modal, useToast } from './ui'
 import { fmtNum, fmtDate } from '../lib/format'
 
-const fyEnd = () => { const n = new Date(); const y = n.getMonth() >= 3 ? n.getFullYear() + 1 : n.getFullYear(); return `${y}-03-31` }
+// Acquisition must be done by 31 Dec of the FY (energisation follows by FY end).
+const acqDeadline = () => { const n = new Date(); const y = n.getMonth() >= 3 ? n.getFullYear() : n.getFullYear() - 1; return `${y}-12-31` }
 export const DEFAULT_PLAN = {
-  leads_per_win: 4, qis_per_site: 3, scout_by: fyEnd(), work_days: 6,
+  leads_per_win: 4, qis_per_site: 3, scout_by: acqDeadline(), work_days: 6,
   cities: [
     { city: 'Delhi', target: 525, share: 40 }, { city: 'Bengaluru', target: 934, share: 60 }, { city: 'Hyderabad', target: 480, share: 60 },
     { city: 'Gurugram', target: 205, share: 50 }, { city: 'Ghaziabad', target: 87, share: 100 }, { city: 'Faridabad', target: 20, share: 100 },
@@ -132,7 +133,7 @@ export default function FyPlan({ deals, network, cities = [], team = [], filters
         <h3 className="mb-1 text-sm font-bold text-slate-900">Scouting productivity needed · sites per working day</h3>
         <p className="mb-3 text-xs text-slate-500">
           Assumes 1 in <b>{plan.leads_per_win}</b> scouted sites converts and <b>{plan.qis_per_site} QIS</b> per site (so {plan.leads_per_win * 10} sites scouted ≈ 10 sites ≈ {plan.qis_per_site * 10} QIS),
-          {' '}<b>{m.days}</b> working days ({plan.work_days === 6 ? 'Mon–Sat' : 'Mon–Fri'}) left to scout, up to {fmtDate(plan.scout_by)}. Current pace = sites added to SiteKhojo in the last 30 days.
+          {' '}<b>{m.days}</b> working days ({plan.work_days === 6 ? 'Mon–Sat' : 'Mon–Fri'}) left to acquire, up to {fmtDate(plan.scout_by)}. Current pace = sites added to SiteKhojo in the last 30 days.
         </p>
         <div className="grid gap-4 xl:grid-cols-5">
           <div className="xl:col-span-2">
@@ -203,7 +204,7 @@ function PlanModal({ plan, onClose, onSaved }) {
       <div className="mb-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
         <label className="block"><span className="text-xs font-semibold text-slate-500">Scouted sites per win</span><input type="number" min="1" className="input" value={p.leads_per_win} onChange={e => setP({ ...p, leads_per_win: e.target.value })} /></label>
         <label className="block"><span className="text-xs font-semibold text-slate-500">QIS per site</span><input type="number" min="1" step="0.5" className="input" value={p.qis_per_site} onChange={e => setP({ ...p, qis_per_site: e.target.value })} /></label>
-        <label className="block"><span className="text-xs font-semibold text-slate-500">Scout by</span><input type="date" className="input" value={p.scout_by} onChange={e => setP({ ...p, scout_by: e.target.value })} /></label>
+        <label className="block"><span className="text-xs font-semibold text-slate-500">Acquire by</span><input type="date" className="input" value={p.scout_by} onChange={e => setP({ ...p, scout_by: e.target.value })} /></label>
         <label className="block"><span className="text-xs font-semibold text-slate-500">Working days / week</span><select className="input" value={p.work_days} onChange={e => setP({ ...p, work_days: Number(e.target.value) })}><option value={6}>6 (Mon–Sat)</option><option value={5}>5 (Mon–Fri)</option></select></label>
       </div>
       <table className="w-full text-sm">
