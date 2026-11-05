@@ -8,6 +8,7 @@ import { useConfig, stagesFor, REGIONS, leadLabel } from '../lib/config'
 import DealFilters from '../components/DealFilters'
 import PeriodBar, { periodRange, periodLabel, isoDay } from '../components/PeriodBar'
 import FranchisePayments from '../components/FranchisePayments'
+import TargetTrend from '../components/TargetTrend'
 import { Stat, StageBadge, PageLoader, Modal } from '../components/ui'
 import { fmtNum, daysLabel, daysInt, stageAgeTone, AGE_TONES, startOfWeek, startOfMonth, fmtDate } from '../lib/format'
 import { haversine, hasLoc } from '../lib/geo'
@@ -134,6 +135,38 @@ export default function Dashboard() {
 
     const stuck = rows.filter(r => ['active', 'approved', 'hold'].includes(r.stage_category)).sort((a, b) => b.days_in_stage - a.days_in_stage).slice(0, 25)
 
+    // Handover-focused view
+    const todayStr = isoDay(new Date())
+    const curYm = todayStr.slice(0, 7)
+    const nextYm = (() => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + 1); return isoDay(d).slice(0, 7) })()
+    const PENDING_KEYS = ['scouting', 'scouted', 'deployment_feasibility', 'loi_signed', 'agreement_signed']
+    const pendingStages = stages.filter(s => s.is_active && PENDING_KEYS.includes(s.key)).sort((a, b) => a.sort_order - b.sort_order)
+    const pendingIds = new Set(pendingStages.map(s => s.id))
+    const pendingRows = rows.filter(r => pendingIds.has(r.stage_id))
+    const awaitingRows = rows.filter(r => r.stage_id === keyId.ho_done)
+    const notLive = rows.filter(r => !['live', 'dropped'].includes(r.stage_category))
+    const enThisMonth = notLive.filter(r => String(r.extra?.expected_en || '').slice(0, 7) === curYm)
+    const enOverdue = notLive.filter(r => r.extra?.expected_en && r.extra.expected_en < curYm + '-01')
+    const hoNextMonth = pendingRows.filter(r => String(r.extra?.expected_ho || '').slice(0, 7) === nextYm)
+    const enNextMonth = notLive.filter(r => String(r.extra?.expected_en || '').slice(0, 7) === nextYm)
+    const handedInP = rows.filter(r => inP(hoDate(r)))
+    const hv = {
+      pending: qs(pendingRows), pendingByStage: pendingStages.map(s => ({ id: s.id, name: s.name, color: s.color, ...qs(pendingRows.filter(r => r.stage_id === s.id)) })),
+      hold: qs(rows.filter(r => r.stage_category === 'hold')), awaiting: qs(awaitingRows), handed: qs(handedInP),
+      enThisMonth: qs(enThisMonth), enOverdue: qs(enOverdue), hoNext: qs(hoNextMonth), enNext: qs(enNextMonth), curYm, nextYm,
+    }
+
+    // Target-trend series (FY, by month)
+    const byMonth = (xs, dateOf) => xs.reduce((o, r) => { const k = String(dateOf(r) || '').slice(0, 7); if (k) o[k] = (o[k] || 0) + qisOf(r); return o }, {})
+    const enActual = {}
+    for (const n of netAll) for (const [d, c] of Object.entries(n.energized_dates || {})) { const k = d.slice(0, 7); enActual[k] = (enActual[k] || 0) + (Number(c) || 0) }
+    const expMonth = d => (d && d.slice(0, 7) < curYm ? curYm : String(d || '').slice(0, 7))
+    const series = {
+      scout: { actual: byMonth(rows, r => r.created_at), expected: null },
+      ho: { actual: byMonth(rows, hoDate), expected: byMonth(pendingRows.filter(r => r.extra?.expected_ho), r => expMonth(r.extra.expected_ho)) },
+      en: { actual: enActual, expected: byMonth(notLive.filter(r => r.extra?.expected_en), r => expMonth(r.extra.expected_en)) },
+    }
+
     const out = {
       total: open.length,
       ageing: (() => {
@@ -210,7 +243,7 @@ export default function Dashboard() {
       pipeQis: rows.filter(r => ['active', 'approved'].includes(r.stage_category)).reduce((a, r) => a + (Number(r.extra?.qis_count) || 0), 0),
       liveQis: rows.filter(r => r.stage_category === 'live').reduce((a, r) => a + (Number(r.extra?.qis_count) || 0), 0),
       overdue: stuck.length,
-      cityCounts, trend, delivery, tat, team: teamRows, stuck, cycle,
+      cityCounts, trend, delivery, tat, team: teamRows, stuck, cycle, hv, series,
       dropReasons: Object.entries(by(r => r.stage_category === 'dropped' ? r.drop_reason || 'Unspecified' : null)).filter(([k]) => k !== 'null').sort((a, b) => b[1] - a[1]),
     }
     // Energized bar = energisations in the period from the QIS tracker (same as the Energized card)
@@ -241,29 +274,48 @@ export default function Dashboard() {
         </div>
       </div>
       <DealFilters value={filters} onChange={setFilters} show={['region', 'city', 'owner', 'type', 'stage', 'siteType', 'format']} />
-      <PeriodBar value={period} onChange={setPeriod} label={m.period.label} />
+      <PeriodBar value={period} onChange={setPeriod} label={m.period.label} future />
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-        <Stat label="Opening pipeline" value={fmtNum(m.period.bridge.opening.qis)} icon={Boxes} sub={`${fmtNum(m.period.bridge.opening.sites)} sites · on ${fmtDate(m.period.bridge.prev)}`}
-          onClick={() => goCard(`Opening pipeline (end of ${fmtDate(m.period.bridge.prev)})`, { at: m.period.bridge.prev })} />
-        <Stat label="+ Added" value={fmtNum(m.period.added.qis)} icon={CalendarPlus} tone="blue" sub={`${fmtNum(m.period.added.sites)} sites · ${m.period.label}`}
-          onClick={() => goCard(`Added ${m.period.label}`, { from: m.period.from, to: m.period.to })} />
-        <Stat label="− Handed over" value={fmtNum(m.period.bridge.handed.qis)} icon={CalendarDays} tone="amber" sub={`${fmtNum(m.period.bridge.handed.sites)} sites · ${m.period.label}`}
-          onClick={() => goCard(`Handed over ${m.period.label}`, { exit: `ho,${m.period.from},${m.period.to}` })} />
-        <Stat label="− Dropped" value={fmtNum(m.period.bridge.dropped.qis)} icon={Activity} tone="red" sub={`${fmtNum(m.period.bridge.dropped.sites)} sites · ${m.period.label}`}
-          onClick={() => goCard(`Dropped ${m.period.label}`, { exit: `dropped,${m.period.from},${m.period.to}` })} />
-        <Stat label="= Closing pipeline" value={fmtNum(m.period.bridge.closing.qis)} icon={Boxes} tone="teal" sub={`${fmtNum(m.period.bridge.closing.sites)} sites · on ${fmtDate(m.period.to)}`}
-          onClick={() => goCard(`Closing pipeline (end of ${fmtDate(m.period.to)})`, { at: m.period.to })} />
+      {period.kind === 'next' ? (
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <Stat label="Expected handover" value={fmtNum(m.hv.hoNext.qis)} icon={CalendarDays} tone="amber" sub={`${fmtNum(m.hv.hoNext.sites)} sites · by Expected HO date · ${m.period.label.replace('in ', '')}`}
+            onClick={() => nav('/app/acquisition?tab=list')} />
+          <Stat label="Expected energisation" value={fmtNum(m.hv.enNext.qis)} icon={Zap} tone="green" sub={`${fmtNum(m.hv.enNext.sites)} sites · by Expected energisation date`}
+            onClick={() => nav('/app/acquisition?tab=list')} />
+          <Stat label="Pending handover" value={fmtNum(m.hv.pending.qis)} icon={Boxes} tone="blue" sub={`${fmtNum(m.hv.pending.sites)} sites · in pipeline today`} onClick={() => goCard('Pending handover', { stage: m.hv.pendingByStage.map(s => s.id).join(',') })} />
+          <Stat label="Handed over, awaiting energisation" value={fmtNum(m.hv.awaiting.qis)} icon={CalendarDays} tone="teal" sub={`${fmtNum(m.hv.awaiting.sites)} sites · today`}
+            onClick={() => goCard('Handover Done · awaiting energisation', { stage: String(stages.find(s => s.key === 'ho_done')?.id || '') })} />
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+          <Stat label="Handed over" value={fmtNum(m.hv.handed.qis)} icon={CalendarDays} tone="amber" sub={`${fmtNum(m.hv.handed.sites)} sites · ${m.period.label}`}
+            onClick={() => goCard(`Handed over ${m.period.label}`, { exit: `ho,${m.period.from},${m.period.to}` })} />
+          <Stat label="Pending handover" value={fmtNum(m.hv.pending.qis)} icon={Boxes} tone="blue" sub={`${fmtNum(m.hv.pending.sites)} sites · in pipeline today`}
+            onClick={() => goCard('Pending handover', { stage: m.hv.pendingByStage.map(s => s.id).join(',') })} />
+          <Stat label="Awaiting energisation" value={fmtNum(m.hv.awaiting.qis)} icon={CalendarDays} tone="teal" sub={`${fmtNum(m.hv.awaiting.sites)} sites · Handover Done today`}
+            onClick={() => goCard('Handover Done · awaiting energisation', { stage: String(stages.find(s => s.key === 'ho_done')?.id || '') })} />
+          <Stat label="To energize this month" value={fmtNum(m.hv.enThisMonth.qis)} icon={Zap} tone="amber" sub={`${fmtNum(m.hv.enThisMonth.sites)} sites · expected${m.hv.enOverdue.sites ? ` · +${fmtNum(m.hv.enOverdue.qis)} QIS overdue` : ''}`}
+            onClick={() => nav('/app/acquisition?tab=list')} />
+          <Stat label="Energized" value={fmtNum(m.period.en.qis)} icon={Zap} tone="green" sub={`${fmtNum(m.period.en.sites)} sites · ${m.period.label} · QIS tracker`}
+            onClick={() => setEnOpen(true)} />
+        </div>
+      )}
+      <div className="card p-4">
+        <div className="mb-2 flex flex-wrap items-baseline gap-2">
+          <h3 className="text-sm font-bold text-slate-900">Pending handover by stage</h3>
+          <span className="text-xs text-slate-500">today · not dropped, not on hold{m.hv.hold.sites ? ` · ${fmtNum(m.hv.hold.qis)} QIS (${m.hv.hold.sites} sites) on hold` : ''}</span>
+          <button className="ml-auto text-xs font-semibold text-brand-700 hover:underline" onClick={() => nav('/app/map?network=1')}>Energized network: {fmtNum(m.netQis)} QIS · {fmtNum(m.netSites)} sites →</button>
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+          {m.hv.pendingByStage.map(s => (
+            <button key={s.id} onClick={() => goCard(s.name, { stage: String(s.id) })} className="rounded-lg border border-slate-200 p-3 text-left transition hover:shadow-md" style={{ borderTopColor: s.color, borderTopWidth: 3 }}>
+              <p className="truncate text-xs font-semibold text-slate-600">{s.name}</p>
+              <p className="text-xl font-extrabold text-navy-900">{fmtNum(s.qis)} <span className="text-xs font-semibold text-slate-400">QIS</span></p>
+              <p className="text-[11px] text-slate-500">{s.sites} sites</p>
+            </button>
+          ))}
+        </div>
       </div>
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-        <Stat label="Awaiting energisation" value={fmtNum(m.awaiting.qis)} icon={CalendarDays} tone="amber" sub={`${fmtNum(m.awaiting.sites)} sites · handed over, not yet energized · today`}
-          onClick={() => goCard('Awaiting energisation (Handover Done)', { stage: stages.filter(s => s.category === 'approved').map(s => s.id).join(',') })} />
-        <Stat label="Energized" value={fmtNum(m.period.en.qis)} icon={Zap} tone="green" sub={`${fmtNum(m.period.en.sites)} sites · ${m.period.label} · QIS tracker`}
-          onClick={() => setEnOpen(true)} />
-        <Stat label="Energized network" value={fmtNum(m.netQis)} icon={Network} tone="green" sub={`${fmtNum(m.netSites)} sites to date · QIS tracker`}
-          onClick={() => nav('/app/map?network=1')} />
-      </div>
-      <p className="-mt-2 text-xs text-slate-500">Pipeline = Scouting → Agreement, plus Hold. Opening + Added − Handed over − Dropped = Closing. A site leaves the pipeline when it is handed over (then waits for energisation) or dropped.</p>
 
       <Modal open={enOpen} onClose={() => setEnOpen(false)} wide title={`Energized ${m.period.label} · ${fmtNum(m.period.en.qis)} QIS · ${fmtNum(m.period.en.sites)} sites`}
         footer={<><button className="btn btn-ghost" onClick={() => nav('/app/map?network=1')}>Open on map</button><button className="btn btn-primary" onClick={() => setEnOpen(false)}>Close</button></>}>
@@ -289,79 +341,9 @@ export default function Dashboard() {
 
 
 
-      <div className="grid gap-4 xl:grid-cols-3">
-        <Panel title={<span className="flex items-center justify-between">{`Stage-wise · pipeline worked ${m.period.label} (stage today) · Energized = QIS tracker`}<Toggle value={metric} onChange={setMetric} /></span>} className="xl:col-span-2">
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={m.pipeline} margin={{ left: -20, right: 8 }}>
-              <CartesianGrid vertical={false} stroke="#f1f5f9" />
-              <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-25} textAnchor="end" height={70} />
-              <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-              <Tooltip cursor={{ fill: '#f8fafc' }} />
-              <Bar dataKey={metric} name={metric === 'qis' ? 'QIS' : 'Sites'} radius={[6, 6, 0, 0]} onClick={d => (d.cat === 'live' ? setEnOpen(true) : goCard(`${d.name} · pipeline worked ${m.period.label}`, { stage: String(d.id), worked: `${m.period.from},${m.period.to}` }))} className="cursor-pointer">
-                {m.pipeline.map(p => <Cell key={p.id} fill={p.color} />)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </Panel>
-        <Panel title={`City-wise ${metric === 'qis' ? 'QIS' : 'sites'}${period.kind === 'all' ? '' : ` added ${m.period.label}`} (excl. dropped)`}>
-          <div className="max-h-[280px] space-y-2 overflow-auto pr-1">
-            {m.cityCounts.length === 0 && <p className="text-sm text-slate-400">No data</p>}
-            {m.cityCounts.map(c => (
-              <button key={c.city} onClick={() => go(`city=${encodeURIComponent(c.city)}&open=1${period.kind === 'all' ? '' : `&from=${m.period.from}&to=${m.period.to}`}`)} className="block w-full text-left">
-                <div className="flex justify-between text-sm"><span className="font-medium">{c.city}</span>
-                  <span><b>{fmtNum(c[metric])}</b> <span className="text-xs text-slate-400">{metric === 'qis' ? `QIS · ${c.sites} sites` : `sites · ${c.qis} QIS`}</span></span></div>
-                <div className="mt-1 h-2 rounded-full bg-slate-100"><div className="h-2 rounded-full bg-brand-500" style={{ width: `${(100 * c[metric]) / Math.max(1, m.cityCounts[0][metric])}%` }} /></div>
-              </button>
-            ))}
-          </div>
-        </Panel>
-      </div>
+      <TargetTrend series={m.series} filtered={!!(filters.region.length || filters.city.length || filters.owner.length || filters.siteType.length || filters.stage.length || filters.recordType || filters.format)} />
 
-      <div className="grid gap-4 xl:grid-cols-3">
-        <Panel title="How long are QIS pending? (current stage × days in stage)" className="xl:col-span-2">
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead><tr className="border-b border-slate-100">
-                <th className="th">Stage</th><th className="th text-right">QIS</th>
-                {AGE_BUCKETS.map(([lo, hi]) => <th key={lo} className="th text-center">{hi === Infinity ? `${lo}+ days` : `${lo}–${hi} days`}</th>)}
-              </tr></thead>
-              <tbody>
-                {m.ageing.map(a => (
-                  <tr key={a.id} className="border-b border-slate-50">
-                    <td className="td"><StageBadge name={a.name} color={a.color} /></td>
-                    <td className="td text-right font-semibold">{a.qis}<span className="block text-[11px] font-normal text-slate-400">{a.sites} sites</span></td>
-                    {a.cells.map(c => (
-                      <td key={c.lo} className="px-1 py-1 text-center">
-                        {c.sites ? (
-                          <button onClick={() => go(`stage=${a.id}&age=${c.lo}-${c.hi === Infinity ? '' : c.hi}`)} title="Open these sites"
-                            className={`w-full rounded-md px-2 py-1.5 text-sm font-bold transition hover:ring-2 hover:ring-slate-300 ${c.cls}`}>
-                            {c.qis}<span className="block text-[10px] font-medium opacity-70">{c.sites} {c.sites === 1 ? "site" : "sites"}</span>
-                          </button>
-                        ) : <span className="text-slate-200">·</span>}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="mt-2 text-xs text-slate-500">Colour = how long the QIS have been in their current stage. Click a cell to open those sites.</p>
-        </Panel>
-        <Panel title={`${metric === 'qis' ? 'QIS' : 'Sites'} added — last 12 weeks`}>
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={m.trend} margin={{ left: -25, right: 4 }}>
-              <CartesianGrid vertical={false} stroke="#f1f5f9" />
-              <XAxis dataKey="week" tick={{ fontSize: 10 }} interval={1} />
-              <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-              <Tooltip cursor={{ fill: '#f8fafc' }} />
-              <Bar dataKey="count" name={metric === 'qis' ? 'QIS' : 'Sites'} fill="#10b981" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </Panel>
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-3">
-        <Panel title="Longest pending in current stage (top 25)" className="xl:col-span-2">
+        <Panel title="Longest pending in current stage (top 25)">
           {m.stuck.length === 0 ? <p className="py-6 text-center text-sm text-slate-400">Nothing pending.</p> : (
             <div className="max-h-80 overflow-auto">
               <table className="min-w-full text-sm">
@@ -381,14 +363,8 @@ export default function Dashboard() {
             </div>
           )}
         </Panel>
-        <Panel title="Drop reasons">
-          {m.dropReasons.length === 0 ? <p className="py-6 text-center text-sm text-slate-400">No dropped deals</p> : (
-            <ul className="space-y-2 text-sm">{m.dropReasons.map(([r, n]) => <li key={r} className="flex justify-between"><span>{r}</span><b>{n}</b></li>)}</ul>
-          )}
-        </Panel>
-      </div>
 
-      <Panel title={<span className="flex items-center justify-between">Franchise payments · sites energized this FY<Link to="/app/acquisition?tab=payments" className="text-xs font-semibold text-brand-700 hover:underline">Open in Acquisition Desk →</Link></span>}>
+      <Panel title={<span className="flex items-center justify-between">Franchise payments<Link to="/app/acquisition?tab=payments" className="text-xs font-semibold text-brand-700 hover:underline">Open in Acquisition Desk →</Link></span>}>
         <FranchisePayments filters={filters} compact />
       </Panel>
 
