@@ -9,6 +9,7 @@ import DealFilters from '../components/DealFilters'
 import PeriodBar, { periodRange, periodLabel, isoDay } from '../components/PeriodBar'
 import FranchisePayments from '../components/FranchisePayments'
 import TargetTrend from '../components/TargetTrend'
+import FyPlan from '../components/FyPlan'
 import { Stat, StageBadge, PageLoader, Modal } from '../components/ui'
 import { fmtNum, daysLabel, daysInt, stageAgeTone, AGE_TONES, startOfWeek, startOfMonth, fmtDate } from '../lib/format'
 import { haversine, hasLoc } from '../lib/geo'
@@ -340,6 +341,8 @@ export default function Dashboard() {
 
 
 
+
+      <FyPlan deals={deals} network={network} cities={cities} team={team} filters={filters} />
 
       <TargetTrend series={m.series} filtered={!!(filters.region.length || filters.city.length || filters.owner.length || filters.siteType.length || filters.stage.length || filters.recordType || filters.format)} />
 
