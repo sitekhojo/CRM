@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ComposedChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
 import { Flag, Pencil, Plus, Trash2 } from 'lucide-react'
 import { supabase, errMsg } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
@@ -10,7 +9,7 @@ import { fmtNum, fmtDate } from '../lib/format'
 // Acquisition must be done by 31 Dec of the FY (energisation follows by FY end).
 const acqDeadline = () => { const n = new Date(); const y = n.getMonth() >= 3 ? n.getFullYear() : n.getFullYear() - 1; return `${y}-12-31` }
 export const DEFAULT_PLAN = {
-  leads_per_win: 4, qis_per_site: 3, scout_by: acqDeadline(), work_days: 6,
+  company_target: 3034, leads_per_win: 4, qis_per_site: 3, scout_by: acqDeadline(), work_days: 6,
   cities: [
     { city: 'Delhi', target: 525, share: 40 }, { city: 'Bengaluru', target: 934, share: 60 }, { city: 'Hyderabad', target: 480, share: 60 },
     { city: 'Gurugram', target: 205, share: 50 }, { city: 'Ghaziabad', target: 87, share: 100 }, { city: 'Faridabad', target: 20, share: 100 },
@@ -40,6 +39,7 @@ export default function FyPlan({ deals, network, cities = [], team = [], filters
   const { isAdmin } = useAuth()
   const { plan, reload } = usePlan()
   const [edit, setEdit] = useState(false)
+  const [zone, setZone] = useState('All')
   const now = new Date()
   const cur = ymOf(now.toISOString())
   const next = (() => { const d = new Date(now.getFullYear(), now.getMonth() + 1, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` })()
@@ -80,109 +80,122 @@ export default function FyPlan({ deals, network, cities = [], team = [], filters
   }, [plan, deals, network, cities, filters, cur, next]) // eslint-disable-line
 
   if (!m) return <div className="card p-6 text-center text-sm text-slate-400">Loading FY plan…</div>
-  const chart = m.list.filter(x => x.target).map(x => ({ city: x.city, need: r1(x.needDay || 0), pace: r1(x.paceDay) }))
-  const tone = x => (!x.needDay ? 'text-slate-400' : x.paceDay >= x.needDay ? 'text-emerald-700' : x.paceDay >= x.needDay * 0.7 ? 'text-amber-700' : 'text-red-600')
+  const zones = ['All', ...REGION_ORDER.filter(z => m.list.some(x => x.region === z))]
+  const list = zone === 'All' ? m.list : m.list.filter(x => x.region === zone)
+  const T = sumUp(list, m.days)
+  const company = Number(plan.company_target) || 0
+  const exit = zone === 'All' && company ? company : T.target
+  const zoneOf = z => sumUp(z === 'All' ? m.list : m.list.filter(x => x.region === z), m.days)
+  const maxAcq = Math.max(1, ...list.map(x => x.acq))
+  const enPct = exit ? Math.round((100 * T.energised) / exit) : 0
   return (
-    <div className="space-y-4">
-      <div className="card p-4 sm:p-5">
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <h3 className="mr-auto flex items-center gap-2 text-sm font-bold text-slate-900"><Flag className="h-4 w-4" />FY exit plan by city · what the acquisition team still has to find (QIS)</h3>
-          {isAdmin && <button className="btn-secondary px-2.5 py-1 text-xs" onClick={() => setEdit(true)}><Pencil className="h-3.5 w-3.5" />Edit targets & split</button>}
+    <div className="card overflow-hidden">
+      {/* header */}
+      <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 bg-gradient-to-r from-navy-900 to-slate-800 px-5 py-4 text-white">
+        <div className="mr-auto">
+          <h3 className="flex items-center gap-2 text-base font-bold"><Flag className="h-4 w-4" />FY exit plan</h3>
+          <p className="text-xs text-slate-300">What the acquisition team still has to find · acquire by {fmtDate(plan.scout_by)}</p>
         </div>
-        <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-5">
-          <K l="FY exit target" v={fmtNum(m.total.target)} s={`${fmtNum(m.total.energised)} energised today`} />
-          <K l="Acquisition team target" v={fmtNum(r1(m.total.acq), 1)} s={`of ${fmtNum(m.total.short)} short; rest via SPP`} cls="text-navy-900" />
-          <K l="Already handed over" v={fmtNum(m.total.ho)} s="Handover Done, awaiting energisation" cls="text-teal-700" />
-          <K l={`Visibility ${monthLbl(cur)} + ${monthLbl(next)}`} v={fmtNum(m.total.vis)} s="pending sites by Expected HO date" cls="text-amber-700" />
-          <K l="Pending acquisition" v={fmtNum(Math.round(m.total.toAcquire))} s="no pipeline visibility yet — must be scouted" cls="text-red-600" />
+        <div className="flex rounded-lg bg-white/10 p-0.5">
+          {zones.map(z => { const v = zoneOf(z).toAcquire; return (
+            <button key={z} onClick={() => setZone(z)} className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${zone === z ? 'bg-white text-navy-900 shadow' : 'text-slate-200 hover:bg-white/10'}`}>
+              {z === 'All' ? 'All zones' : z}<span className={`ml-1.5 rounded px-1 text-[10px] ${zone === z ? 'bg-red-100 text-red-700' : 'bg-white/15'}`}>{fmtNum(Math.round(v))}</span>
+            </button>) })}
         </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-              <tr>
-                <th className="px-3 py-2 text-left">City</th><th className="px-2 py-2 text-right">Energised today</th><th className="px-2 py-2 text-right">FY target</th><th className="px-2 py-2 text-right">Short of target</th>
-                <th className="px-2 py-2 text-right">Acq. share</th><th className="px-2 py-2 text-right">Acq. team target</th><th className="px-2 py-2 text-right">Already HO'd</th>
-                <th className="bg-sky-50 px-2 py-2 text-right">Pending pipeline</th><th className="px-2 py-2 text-right">{monthLbl(cur)} visibility</th><th className="px-2 py-2 text-right">{monthLbl(next)} visibility</th>
-                <th className="px-2 py-2 text-right">Total visibility</th><th className="bg-red-50 px-2 py-2 text-right">Pending acquisition</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {m.list.map(x => (
-                <tr key={x.city} className="hover:bg-slate-50">
-                  <td className="px-3 py-2 font-semibold">{x.city}<div className="text-[10px] font-normal text-slate-400">{x.region} · {x.owner}</div></td>
-                  <td className="px-2 py-2 text-right">{fmtNum(x.energised)}</td><td className="px-2 py-2 text-right">{fmtNum(x.target)}</td><td className="px-2 py-2 text-right">{fmtNum(x.short)}</td>
-                  <td className="px-2 py-2 text-right text-slate-500">{x.share}%</td><td className="px-2 py-2 text-right font-semibold">{fmtNum(r1(x.acq), 1)}</td><td className="px-2 py-2 text-right text-teal-700">{fmtNum(x.ho)}</td>
-                  <td className="bg-sky-50/60 px-2 py-2 text-right font-semibold">{fmtNum(r1(x.pendingPipe), 1)}</td><td className="px-2 py-2 text-right">{x.visCur || '—'}</td><td className="px-2 py-2 text-right">{x.visNext || '—'}</td>
-                  <td className="px-2 py-2 text-right">{x.vis || '—'}</td>
-                  <td className={`px-2 py-2 text-right text-base font-extrabold ${x.toAcquire >= 30 ? 'bg-fuchsia-100 text-fuchsia-800' : x.toAcquire ? 'bg-emerald-50 text-emerald-800' : 'bg-emerald-50 text-emerald-700'}`}>{fmtNum(Math.round(x.toAcquire))}</td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot className="border-t-2 border-slate-200 bg-slate-50 font-bold">
-              <tr><td className="px-3 py-2">Total</td><td className="px-2 py-2 text-right">{fmtNum(m.total.energised)}</td><td className="px-2 py-2 text-right">{fmtNum(m.total.target)}</td><td className="px-2 py-2 text-right">{fmtNum(m.total.short)}</td><td />
-                <td className="px-2 py-2 text-right">{fmtNum(r1(m.total.acq), 1)}</td><td className="px-2 py-2 text-right">{fmtNum(m.total.ho)}</td><td className="px-2 py-2 text-right">{fmtNum(r1(m.total.pendingPipe), 1)}</td>
-                <td className="px-2 py-2 text-right">{fmtNum(m.total.visCur)}</td><td className="px-2 py-2 text-right">{fmtNum(m.total.visNext)}</td><td className="px-2 py-2 text-right">{fmtNum(m.total.vis)}</td><td className="px-2 py-2 text-right text-red-600">{fmtNum(Math.round(m.total.toAcquire))}</td></tr>
-            </tfoot>
-          </table>
-        </div>
-        <p className="mt-2 text-xs text-slate-500">Energised today = QIS tracker. Short = target − energised. Acq. team target = short × acquisition share (the rest goes to SPP). Already HO'd = Handover Done, not yet energized.
-          Pending pipeline = acq. target − already HO'd. Visibility = pending sites (Scouting → Agreement) with an Expected HO date in {monthLbl(cur)} or {monthLbl(next)}. <b>Pending acquisition</b> = pending pipeline − visibility: QIS with no pipeline yet. Pink = 30+ QIS still to find.</p>
+        {isAdmin && <button className="rounded-lg bg-white/10 px-2.5 py-1.5 text-xs font-semibold hover:bg-white/20" onClick={() => setEdit(true)}><Pencil className="mr-1 inline h-3.5 w-3.5" />Edit</button>}
       </div>
 
-      <div className="card p-4 sm:p-5">
-        <h3 className="mb-1 text-sm font-bold text-slate-900">Scouting productivity needed · sites per working day</h3>
-        <p className="mb-3 text-xs text-slate-500">
-          Assumes 1 in <b>{plan.leads_per_win}</b> scouted sites converts and <b>{plan.qis_per_site} QIS</b> per site (so {plan.leads_per_win * 10} sites scouted ≈ 10 sites ≈ {plan.qis_per_site * 10} QIS),
-          {' '}<b>{m.days}</b> working days ({plan.work_days === 6 ? 'Mon–Sat' : 'Mon–Fri'}) left to acquire, up to {fmtDate(plan.scout_by)}. Current pace = sites added to SiteKhojo in the last 30 days.
-        </p>
-        <div className="grid gap-4 xl:grid-cols-5">
-          <div className="xl:col-span-2">
-            <ResponsiveContainer width="100%" height={290}>
-              <ComposedChart data={chart} layout="vertical" margin={{ left: 10, right: 16 }}>
-                <CartesianGrid horizontal={false} stroke="#f1f5f9" />
-                <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals />
-                <YAxis type="category" dataKey="city" tick={{ fontSize: 11 }} width={80} />
-                <Tooltip formatter={(v, n) => [`${v} sites/day`, n]} />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Bar dataKey="need" name="Needed per day" fill="#ef4444" radius={[0, 4, 4, 0]} barSize={10} />
-                <Bar dataKey="pace" name="Current pace per day" fill="#10b981" radius={[0, 4, 4, 0]} barSize={10} />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="overflow-x-auto xl:col-span-3">
-            <table className="min-w-full text-sm">
-              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                <tr><th className="px-3 py-2 text-left">City · owner</th><th className="px-2 py-2 text-right">QIS to find</th><th className="px-2 py-2 text-right">Sites to win</th><th className="px-2 py-2 text-right">Sites to scout</th>
-                  <th className="px-2 py-2 text-right">Needed / day</th><th className="px-2 py-2 text-right">Needed / week</th><th className="px-2 py-2 text-right">Pace / day <span className="normal-case text-slate-400">(30d)</span></th></tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {m.list.map(x => (
-                  <tr key={x.city}>
-                    <td className="px-3 py-2 font-semibold">{x.city}<div className="text-[10px] font-normal text-slate-400">{x.owner}</div></td>
-                    <td className="px-2 py-2 text-right">{fmtNum(Math.round(x.toAcquire))}</td><td className="px-2 py-2 text-right">{fmtNum(Math.ceil(x.sitesWin))}</td>
-                    <td className="px-2 py-2 text-right font-semibold">{fmtNum(Math.ceil(x.sitesScout))}</td>
-                    <td className="px-2 py-2 text-right text-base font-extrabold text-red-600">{x.needDay ? fmtNum(x.needDay, 1) : '—'}</td>
-                    <td className="px-2 py-2 text-right">{x.needDay ? fmtNum(x.needDay * plan.work_days, 1) : '—'}</td>
-                    <td className={`px-2 py-2 text-right font-bold ${tone(x)}`}>{fmtNum(x.paceDay, 1)}<div className="text-[10px] font-normal text-slate-400">{x.scouted30} in 30d</div></td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot className="border-t-2 border-slate-200 bg-slate-50 font-bold">
-                <tr><td className="px-3 py-2">Total</td><td className="px-2 py-2 text-right">{fmtNum(Math.round(m.total.toAcquire))}</td><td className="px-2 py-2 text-right">{fmtNum(Math.ceil(m.total.sitesWin))}</td><td className="px-2 py-2 text-right">{fmtNum(Math.ceil(m.total.sitesScout))}</td>
-                  <td className="px-2 py-2 text-right text-red-600">{m.total.needDay ? fmtNum(m.total.needDay, 1) : '—'}</td><td className="px-2 py-2 text-right">{m.total.needDay ? fmtNum(m.total.needDay * plan.work_days, 1) : '—'}</td><td className="px-2 py-2 text-right">{fmtNum(m.total.paceDay, 1)}</td></tr>
-              </tfoot>
-            </table>
-            <p className="mt-2 text-xs text-slate-500">Pace colour: <span className="font-semibold text-emerald-700">green</span> at or above what's needed · <span className="font-semibold text-amber-700">amber</span> 70–99% · <span className="font-semibold text-red-600">red</span> below 70%.</p>
-          </div>
+      {/* flow strip */}
+      <div className="grid grid-cols-2 gap-px bg-slate-100 sm:grid-cols-3 lg:grid-cols-6">
+        <Flow l="FY exit target" v={fmtNum(exit)} s={zone === 'All' && company && company !== T.target ? `${fmtNum(T.target)} cities + ${fmtNum(company - T.target)} SPP / other` : `${list.length} cities`} />
+        <Flow l="Energised today" v={fmtNum(T.energised)} s={<span className="flex items-center gap-1.5"><span className="h-1.5 w-12 overflow-hidden rounded-full bg-slate-200"><span className="block h-1.5 bg-emerald-500" style={{ width: `${Math.min(100, enPct)}%` }} /></span>{enPct}% of exit</span>} cls="text-emerald-700" />
+        <Flow l="Acquisition target" v={fmtNum(Math.round(T.acq))} s={`of ${fmtNum(T.short)} short · rest SPP`} cls="text-navy-900" />
+        <Flow l="Already handed over" v={fmtNum(T.ho)} s="awaiting energisation" cls="text-teal-600" dot="bg-teal-500" />
+        <Flow l={`Visibility ${monthLbl(cur)} + ${monthLbl(next)}`} v={fmtNum(T.vis)} s={`${fmtNum(T.visCur)} + ${fmtNum(T.visNext)} by expected HO`} cls="text-amber-600" dot="bg-amber-400" />
+        <Flow l="Still to acquire" v={fmtNum(Math.round(T.toAcquire))} s="no pipeline yet" cls="text-red-600" dot="bg-red-500" big />
+      </div>
+
+      {/* city rows */}
+      <div className="px-5 py-3">
+        <div className="mb-1 flex items-center gap-4 text-[11px] text-slate-500">
+          <span className="w-36">City</span><span className="hidden w-28 text-right md:block">Energised / target</span><span className="flex-1">Acquisition target, split</span><span className="w-20 text-right">To acquire</span>
         </div>
+        <div className="divide-y divide-slate-100">
+          {list.map(x => {
+            const seg = [[x.ho, 'bg-teal-500', 'Handed over'], [x.visCur, 'bg-amber-400', `${monthLbl(cur)} visibility`], [x.visNext, 'bg-amber-200', `${monthLbl(next)} visibility`], [x.toAcquire, 'bg-red-400', 'To acquire']]
+            const used = Math.min(x.acq, x.ho + x.vis + x.toAcquire)
+            const w = v => `${(100 * Math.min(v, x.acq)) / maxAcq}%`
+            const ep = x.target ? Math.round((100 * x.energised) / x.target) : 0
+            return (
+              <div key={x.city} className="flex items-center gap-4 py-2.5">
+                <div className="w-36 min-w-0"><p className="truncate font-semibold text-slate-900">{x.city}</p><p className="truncate text-[11px] text-slate-400">{x.owner}</p></div>
+                <div className="hidden w-28 text-right md:block"><p className="text-sm"><b>{fmtNum(x.energised)}</b><span className="text-slate-400"> / {fmtNum(x.target)}</span></p>
+                  <div className="ml-auto mt-1 h-1 w-20 overflow-hidden rounded-full bg-slate-100"><div className="h-1 bg-emerald-500" style={{ width: `${Math.min(100, ep)}%` }} /></div></div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline gap-2 text-xs text-slate-500"><b className="text-sm text-slate-800">{fmtNum(r1(x.acq), 1)}</b> QIS <span>· {x.share}% of {fmtNum(x.short)} short</span>
+                    {x.share === 0 && <span className="rounded bg-orange-50 px-1.5 text-[10px] font-semibold text-orange-700">all SPP</span>}</div>
+                  <div className="mt-1 flex h-3.5 overflow-hidden rounded-full bg-slate-100" title={seg.map(([v, , l]) => `${l}: ${fmtNum(r1(v), 1)}`).join(' · ')}>
+                    {used > 0 && seg.map(([v, c, l]) => v > 0 && <div key={l} className={`${c} h-full border-r border-white/70 last:border-0`} style={{ width: w(v) }} title={`${l}: ${fmtNum(r1(v), 1)} QIS`} />)}
+                  </div>
+                  <div className="mt-0.5 flex gap-3 text-[10px] text-slate-500">
+                    {x.ho > 0 && <span><span className="text-teal-600">●</span> HO'd {fmtNum(x.ho)}</span>}
+                    {x.visCur > 0 && <span><span className="text-amber-400">●</span> {monthLbl(cur)} {fmtNum(x.visCur)}</span>}
+                    {x.visNext > 0 && <span><span className="text-amber-200">●</span> {monthLbl(next)} {fmtNum(x.visNext)}</span>}
+                  </div>
+                </div>
+                <div className="w-20 text-right"><p className={`text-xl font-extrabold ${x.toAcquire >= 30 ? 'text-red-600' : x.toAcquire ? 'text-amber-600' : 'text-emerald-600'}`}>{fmtNum(Math.round(x.toAcquire))}</p><p className="text-[10px] text-slate-400">QIS</p></div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* productivity */}
+      <div className="border-t border-slate-100 bg-slate-50/70 px-5 py-4">
+        <div className="mb-3 flex flex-wrap items-end gap-x-6 gap-y-1">
+          <h3 className="mr-auto text-sm font-bold text-slate-900">Scouting needed to close the gap{zone !== 'All' ? ` · ${zone}` : ''}</h3>
+          <Mini l="Sites to scout" v={fmtNum(Math.ceil(T.sitesScout))} s={`→ ${fmtNum(Math.ceil(T.sitesWin))} sites won`} />
+          <Mini l="Needed / day" v={T.needDay ? fmtNum(T.needDay, 1) : '—'} cls="text-red-600" s={`${m.days} working days left`} />
+          <Mini l="Pace / day" v={fmtNum(T.paceDay, 1)} cls={T.needDay && T.paceDay >= T.needDay ? 'text-emerald-600' : 'text-amber-600'} s={`${T.scouted30} sites in 30 days`} />
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {list.filter(x => x.acq > 0).map(x => {
+            const pct = x.needDay ? Math.round((100 * x.paceDay) / x.needDay) : 100
+            const col = !x.needDay ? 'bg-emerald-500' : pct >= 100 ? 'bg-emerald-500' : pct >= 70 ? 'bg-amber-400' : 'bg-red-500'
+            return (
+              <div key={x.city} className="rounded-xl border border-slate-200 bg-white p-3">
+                <div className="flex items-baseline justify-between"><p className="truncate font-semibold text-slate-900">{x.city}</p><p className="truncate pl-2 text-[11px] text-slate-400">{x.owner}</p></div>
+                {x.needDay ? <>
+                  <p className="mt-1 text-xs text-slate-500"><b className="text-lg font-extrabold text-slate-900">{fmtNum(x.needDay, 1)}</b> sites/day needed · <b>{fmtNum(x.needDay * plan.work_days, 1)}</b>/wk</p>
+                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className={`h-1.5 ${col}`} style={{ width: `${Math.min(100, pct)}%` }} /></div>
+                  <p className="mt-1 flex justify-between text-[11px] text-slate-500"><span>pace {fmtNum(x.paceDay, 1)}/day · {pct}%</span><span>{fmtNum(Math.ceil(x.sitesScout))} to scout</span></p>
+                </> : <p className="mt-2 text-xs font-semibold text-emerald-600">Covered — nothing left to scout</p>}
+              </div>
+            )
+          })}
+        </div>
+        <p className="mt-2 text-[11px] text-slate-400">1 in {plan.leads_per_win} scouted sites converts · {plan.qis_per_site} QIS per site · {plan.work_days === 6 ? 'Mon–Sat' : 'Mon–Fri'} · pace = sites added in the last 30 days. Visibility = pending sites with an Expected HO date in {monthLbl(cur)}/{monthLbl(next)}.</p>
       </div>
       {edit && <PlanModal plan={plan} onClose={() => setEdit(false)} onSaved={() => { setEdit(false); reload() }} />}
     </div>
   )
 }
 
-const K = ({ l, v, s, cls = 'text-slate-900' }) => (
-  <div className="rounded-lg bg-slate-50 p-3"><p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{l}</p><p className={`text-xl font-extrabold ${cls}`}>{v}</p><p className="text-[11px] text-slate-500">{s}</p></div>
+const REGION_ORDER = ['North', 'South', 'West', 'East']
+function sumUp(list, days) {
+  const s = k => list.reduce((a, x) => a + (x[k] || 0), 0)
+  const scout = s('sitesScout')
+  return { energised: s('energised'), target: s('target'), short: s('short'), acq: s('acq'), ho: s('ho'), visCur: s('visCur'), visNext: s('visNext'), vis: s('vis'), toAcquire: s('toAcquire'), sitesWin: s('sitesWin'), sitesScout: scout, needDay: days ? scout / days : null, paceDay: s('paceDay'), scouted30: s('scouted30') }
+}
+const Flow = ({ l, v, s, cls = 'text-slate-900', dot, big }) => (
+  <div className={`bg-white px-4 py-3 ${big ? 'bg-red-50/60' : ''}`}>
+    <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{dot && <span className={`h-2 w-2 rounded-full ${dot}`} />}{l}</p>
+    <p className={`text-2xl font-extrabold leading-tight ${cls}`}>{v}</p>
+    <div className="text-[11px] text-slate-500">{s}</div>
+  </div>
+)
+const Mini = ({ l, v, s, cls = 'text-slate-900' }) => (
+  <div className="text-right"><p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{l}</p><p className={`text-lg font-extrabold leading-tight ${cls}`}>{v}</p><p className="text-[10px] text-slate-400">{s}</p></div>
 )
 
 function PlanModal({ plan, onClose, onSaved }) {
@@ -192,7 +205,7 @@ function PlanModal({ plan, onClose, onSaved }) {
   const setC = (i, k, v) => setP(x => ({ ...x, cities: x.cities.map((c, j) => (j === i ? { ...c, [k]: v } : c)) }))
   const save = async () => {
     setBusy(true)
-    const value = { ...p, leads_per_win: Number(p.leads_per_win) || 4, qis_per_site: Number(p.qis_per_site) || 3, work_days: Number(p.work_days) === 5 ? 5 : 6,
+    const value = { ...p, company_target: Number(p.company_target) || 0, leads_per_win: Number(p.leads_per_win) || 4, qis_per_site: Number(p.qis_per_site) || 3, work_days: Number(p.work_days) === 5 ? 5 : 6,
       cities: p.cities.filter(c => c.city.trim()).map(c => ({ city: c.city.trim(), target: Number(c.target) || 0, share: Math.min(100, Math.max(0, Number(c.share) || 0)) })) }
     const { error } = await supabase.from('app_settings').upsert({ key: 'fy_plan', value, updated_at: new Date().toISOString() })
     setBusy(false)
@@ -201,6 +214,7 @@ function PlanModal({ plan, onClose, onSaved }) {
   }
   return (
     <Modal open onClose={onClose} wide title="FY exit targets and acquisition split" footer={<><button className="btn-ghost" onClick={onClose}>Cancel</button><button className="btn-primary" disabled={busy} onClick={save}>{busy ? 'Saving…' : 'Save'}</button></>}>
+      <label className="mb-3 block text-sm"><span className="text-xs font-semibold text-slate-500">Company FY exit target (QIS) — city targets below + SPP / other</span><input type="number" min="0" className="input" value={p.company_target ?? ''} onChange={e => setP({ ...p, company_target: e.target.value })} /></label>
       <div className="mb-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
         <label className="block"><span className="text-xs font-semibold text-slate-500">Scouted sites per win</span><input type="number" min="1" className="input" value={p.leads_per_win} onChange={e => setP({ ...p, leads_per_win: e.target.value })} /></label>
         <label className="block"><span className="text-xs font-semibold text-slate-500">QIS per site</span><input type="number" min="1" step="0.5" className="input" value={p.qis_per_site} onChange={e => setP({ ...p, qis_per_site: e.target.value })} /></label>
