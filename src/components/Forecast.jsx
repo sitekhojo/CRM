@@ -11,6 +11,7 @@ import DateCell from './DateCell'
 import IntentCell from './IntentCell'
 import StageCell from './StageCell'
 import OwnerCell from './OwnerCell'
+import RemarksCell, { fetchRemarks, latestRemark } from './RemarksCell'
 import { SingleSelect } from './MultiSelect'
 import { Download } from 'lucide-react'
 import { exportWorkbook } from '../lib/excel'
@@ -104,7 +105,7 @@ export default function Forecast({ view = 'table' }) {
             { value: 'next', label: `Due next month (${monthName(n)})` }, { value: 'slipped', label: 'Slipped (date passed)' },
             { value: 'nodate', label: 'Missing expected dates' }, { value: 'all', label: 'All open pipeline' },
           ]} />}
-          extra={isAdmin && <button className="btn-secondary" onClick={() => exportWorkbook([{ name: 'Pipeline list', rows: list.map(r => planRow(r, scope)), columns: PLAN_COLS }], `sitekhojo-pipeline-list-${m.today}`)}><Download className="h-4 w-4" />Excel</button>} />
+          extra={isAdmin && <button className="btn-secondary" onClick={async () => { const rem = await fetchRemarks(list.map(r => r.id)); exportWorkbook([{ name: 'Pipeline list', rows: list.map(r => planRow(r, scope, rem)), columns: PLAN_COLS }], `sitekhojo-pipeline-list-${m.today}`) }}><Download className="h-4 w-4" />Excel</button>} />
         <p className="text-sm text-slate-500"><b className="text-slate-700">{list.length} sites · {fmtNum(sum(list).qis)} QIS</b> · open pipeline and Handover Done (not yet energized). Click a date, QIS, intent, stage or owner to change it — the forecast updates instantly.</p>
         <TypeSplit rows={list} value={typeFilter} onChange={setTypeFilter} />
         <div className="card overflow-x-auto"><PlanTable rows={list.filter(r => !typeFilter || typeKey(r) === typeFilter)} onChanged={reload} today={m.today} /></div>
@@ -212,8 +213,9 @@ export default function Forecast({ view = 'table' }) {
 }
 
 const PLAN_COLS = [['site_code', 'ID'], ['name', 'Site'], ['record_type', 'Type'], ['city', 'City'], ['region', 'Region'], ['site_type', 'Site type'], ['stage_name', 'Stage'],
-  ['intent', 'Intent'], ['qis', 'QIS'], ['expected_ho', 'Expected HO'], ['expected_en', 'Expected energisation'], ['ho_date', 'Handover date'], ['energized_on', 'Energization date'], ['owner', 'Owner'], ['bucket', 'Forecast bucket']]
-const planRow = (r, bucket) => ({ ...r, intent: INTENTS[r.extra?.intent]?.label || '', qis: qisOf(r), expected_ho: r.extra?.expected_ho || '', expected_en: r.extra?.expected_en || '', ho_date: r.extra?.ho_date || '', energized_on: r.extra?.energized_on || '', bucket })
+  ['intent', 'Intent'], ['qis', 'QIS'], ['expected_ho', 'Expected HO'], ['expected_en', 'Expected energisation'], ['ho_date', 'Handover date'], ['energized_on', 'Energization date'], ['owner', 'Owner'], ['bucket', 'Forecast bucket'], ['latest_remark', 'Latest remark'], ['remark_history', 'Remarks history']]
+const remarkLine = c => `${new Date(c.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}${c.said_by ? ` (${c.said_by})` : ''}: ${c.body}`
+const planRow = (r, bucket, rem = {}) => ({ ...r, latest_remark: latestRemark(rem[r.id]), remark_history: (rem[r.id] || []).map(remarkLine).join('\n'), intent: INTENTS[r.extra?.intent]?.label || '', qis: qisOf(r), expected_ho: r.extra?.expected_ho || '', expected_en: r.extra?.expected_en || '', ho_date: r.extra?.ho_date || '', energized_on: r.extra?.energized_on || '', bucket })
 
 /** Site-type split of a set of sites; click a type to show only those. */
 export function TypeSplit({ rows, value, onChange }) {
@@ -238,6 +240,10 @@ export function TypeSplit({ rows, value, onChange }) {
 /** Editable planning table: stage, intent, QIS, expected HO / energisation dates, owner. */
 export function PlanTable({ rows, onChanged, today }) {
   const t = today || todayIso()
+  const [remarks, setRemarks] = useState({})
+  const idsKey = rows.map(r => r.id).sort().join(',')
+  const loadRemarks = () => fetchRemarks(rows.map(r => r.id)).then(setRemarks).catch(() => {})
+  useEffect(() => { loadRemarks() }, [idsKey]) // eslint-disable-line
   const sorted = [...rows].sort((a, b) => String(a.extra?.expected_ho || a.extra?.expected_en || '9').localeCompare(String(b.extra?.expected_ho || b.extra?.expected_en || '9')))
   const late = (d, active = true) => active && d && d < t
   if (!rows.length) return <p className="p-6 text-center text-sm text-slate-400">No sites here.</p>
@@ -245,7 +251,7 @@ export function PlanTable({ rows, onChanged, today }) {
     <table className="min-w-full text-sm">
       <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
         <tr><th className="px-3 py-2">Site</th><th className="px-2 py-2">City</th><th className="px-2 py-2">Site type</th><th className="px-2 py-2">Stage</th><th className="px-2 py-2">Intent</th>
-          <th className="px-2 py-2 text-right">QIS</th><th className="px-2 py-2">Expected HO / HO date</th><th className="px-2 py-2">Expected energisation</th><th className="px-2 py-2">Owner</th></tr>
+          <th className="px-2 py-2 text-right">QIS</th><th className="px-2 py-2">Expected HO / HO date</th><th className="px-2 py-2">Expected energisation</th><th className="px-2 py-2">Owner</th><th className="px-2 py-2">Remarks <span className="normal-case text-slate-400">(latest)</span></th></tr>
       </thead>
       <tbody className="divide-y divide-slate-100">
         {sorted.map(r => (
@@ -261,11 +267,12 @@ export function PlanTable({ rows, onChanged, today }) {
               : <EditCell deal={r} field="expected_ho" label="Expected HO" onChanged={onChanged} className={late(r.extra?.expected_ho) ? 'font-semibold text-red-600' : ''} />}</td>
             <td className="px-2 py-2"><EditCell deal={r} field="expected_en" label="Expected energisation" onChanged={onChanged} className={late(r.extra?.expected_en) ? 'font-semibold text-red-600' : ''} /></td>
             <td className="px-2 py-2"><OwnerCell deal={r} onChanged={onChanged} /></td>
+            <td className="px-2 py-1"><RemarksCell deal={r} list={remarks[r.id]} onChanged={loadRemarks} /></td>
           </tr>
         ))}
       </tbody>
       <tfoot className="border-t-2 border-slate-200 bg-slate-50 font-bold">
-        <tr><td className="px-3 py-2" colSpan={5}>Total · {rows.length} {rows.length === 1 ? 'site' : 'sites'}</td><td className="px-2 py-2 text-right">{fmtNum(rows.reduce((a, r) => a + qisOf(r), 0))}</td><td colSpan={3} /></tr>
+        <tr><td className="px-3 py-2" colSpan={5}>Total · {rows.length} {rows.length === 1 ? 'site' : 'sites'}</td><td className="px-2 py-2 text-right">{fmtNum(rows.reduce((a, r) => a + qisOf(r), 0))}</td><td colSpan={4} /></tr>
       </tfoot>
     </table>
   )

@@ -209,7 +209,7 @@ export default function DealDetail() {
               ) : (
                 <li key={'c' + item.c.id} className="relative">
                   <span className="absolute -left-[27px] top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-white ring-2 ring-sky-400"><MessageSquare className="h-2.5 w-2.5 text-sky-500" /></span>
-                  <p className="text-sm"><b>{item.c.author?.full_name || 'Someone'}</b> <span className="text-xs text-slate-500">{timeAgo(item.c.created_at)}</span></p>
+                  <p className="text-sm"><b>{item.c.author?.full_name || 'Someone'}</b> <span className="text-xs text-slate-500">{fmtDateTime(item.c.created_at)} · {timeAgo(item.c.created_at)}</span>{item.c.said_by && <span className="text-xs text-slate-600"> · conveyed by <b>{item.c.said_by}</b></span>}{item.c.kind === 'sync' && <span className="ml-1 rounded bg-brand-50 px-1.5 text-[10px] font-semibold text-brand-700">sync-up call</span>}</p>
                   <p className="mt-1 whitespace-pre-wrap rounded-lg bg-sky-50 px-3 py-2 text-sm text-slate-700">{item.c.body}</p>
                 </li>
               ))}
