@@ -222,13 +222,15 @@ export function TypeSplit({ rows, value, onChange }) {
   return (
     <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
       <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Site type</span>
+      <button onClick={() => onChange('')} className={`rounded-lg border px-2.5 py-1 ${!value ? 'border-navy-900 bg-navy-900 text-white' : 'border-slate-200 hover:bg-slate-50'}`}>
+        Total <b>{fmtNum(xs.reduce((a, x) => a + x.qis, 0))}</b> QIS <span className={!value ? 'text-slate-300' : 'text-slate-400'}>· {rows.length} {rows.length === 1 ? 'site' : 'sites'}</span>
+      </button>
       {xs.map(x => (
         <button key={x.type} onClick={() => onChange(value === x.type ? '' : x.type)}
           className={`rounded-lg border px-2.5 py-1 ${value === x.type ? 'border-brand-500 ring-2 ring-brand-200' : 'border-slate-200 hover:bg-slate-50'}`}>
           <SiteTypeChip t={x.type} className="mr-1.5" /><b>{fmtNum(x.qis)}</b> QIS <span className="text-slate-400">· {x.sites} {x.sites === 1 ? 'site' : 'sites'}</span>
         </button>
       ))}
-      {value && <button className="text-xs font-semibold text-brand-700 hover:underline" onClick={() => onChange('')}>Show all</button>}
     </div>
   )
 }
@@ -262,6 +264,9 @@ export function PlanTable({ rows, onChanged, today }) {
           </tr>
         ))}
       </tbody>
+      <tfoot className="border-t-2 border-slate-200 bg-slate-50 font-bold">
+        <tr><td className="px-3 py-2" colSpan={5}>Total · {rows.length} {rows.length === 1 ? 'site' : 'sites'}</td><td className="px-2 py-2 text-right">{fmtNum(rows.reduce((a, r) => a + qisOf(r), 0))}</td><td colSpan={3} /></tr>
+      </tfoot>
     </table>
   )
 }
