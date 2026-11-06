@@ -6,7 +6,7 @@ import { useDeals, applyFilters, EMPTY_FILTERS, fetchNetworkPoints, inPipeline, 
 import { supabase, fetchAll } from '../lib/supabase'
 import { useConfig, stagesFor, REGIONS, leadLabel } from '../lib/config'
 import DealFilters from '../components/DealFilters'
-import PeriodBar, { periodRange, periodLabel, isoDay } from '../components/PeriodBar'
+import PeriodBar, { nextMonths, periodRange, periodLabel, isoDay } from '../components/PeriodBar'
 import FranchisePayments from '../components/FranchisePayments'
 import TargetTrend, { fyMonths } from '../components/TargetTrend'
 import FyPlan from '../components/FyPlan'
@@ -41,7 +41,8 @@ export default function Dashboard() {
     if (!deals) return null
     const rows = applyFilters(deals, filters).filter(r => !isTrackerSite(r)) // pipeline metrics only; energisation comes from the tracker
     const [pStart, pEnd] = periodRange(period)
-    const inP = d => { if (!d) return false; const t = new Date(d); return t >= pStart && t <= pEnd }
+    const selYm = period.kind === 'next' ? new Set(nextMonths(period)) : null
+    const inP = d => { if (!d) return false; const t = new Date(d); return t >= pStart && t <= pEnd && (!selYm || selYm.has(isoDay(t).slice(0, 7))) }
     const keyId = Object.fromEntries(stages.map(s => [s.key, s.id]))
     const firstEntry = (siteId, stageId) => (history || []).find(x => x.site_id === siteId && x.to_stage_id === stageId)?.changed_at
     const hoDate = r => r.extra?.ho_date || firstEntry(r.id, keyId.ho_done) || (r.stage_id === keyId.ho_done ? r.stage_entered_at : null)
@@ -151,8 +152,8 @@ export default function Dashboard() {
     const notLive = rows.filter(r => !['live', 'dropped'].includes(r.stage_category))
     const enThisMonth = notLive.filter(r => String(r.extra?.expected_en || '').slice(0, 7) === curYm)
     const enOverdue = notLive.filter(r => r.extra?.expected_en && r.extra.expected_en < curYm + '-01')
-    const hoNextMonth = pendingRows.filter(r => String(r.extra?.expected_ho || '').slice(0, 7) === nextYm)
-    const enNextMonth = notLive.filter(r => String(r.extra?.expected_en || '').slice(0, 7) === nextYm)
+    const hoNextMonth = pendingRows.filter(r => selYm?.has(String(r.extra?.expected_ho || '').slice(0, 7)))
+    const enNextMonth = notLive.filter(r => selYm?.has(String(r.extra?.expected_en || '').slice(0, 7)))
     const handedInP = rows.filter(r => inP(hoDate(r)))
     // Pending handover follows the period: sites whose Expected HO falls in it (whole pipeline for "All time")
     const dueTo = (() => {
@@ -165,8 +166,8 @@ export default function Dashboard() {
     const dueFrom = isoDay(pStart)
     const allPending = period.kind === 'all'
     const exp = r => r.extra?.expected_ho || ''
-    const dueRows = allPending ? pendingRows : pendingRows.filter(r => exp(r) >= dueFrom && exp(r) <= dueTo)
-    const slipRows = allPending || dueTo < todayStr ? [] : pendingRows.filter(r => exp(r) && exp(r) < dueFrom)
+    const dueRows = allPending ? pendingRows : pendingRows.filter(r => exp(r) >= dueFrom && exp(r) <= dueTo && (!selYm || selYm.has(exp(r).slice(0, 7))))
+    const slipRows = allPending || selYm || dueTo < todayStr ? [] : pendingRows.filter(r => exp(r) && exp(r) < dueFrom)
     const noDateRows = allPending ? [] : pendingRows.filter(r => !exp(r))
     const hv = {
       allPending, dueTo, due: qs(dueRows), slip: qs(slipRows), noDate: qs(noDateRows),
@@ -327,7 +328,7 @@ export default function Dashboard() {
       <div className="card p-4">
         <div className="mb-2 flex flex-wrap items-baseline gap-2">
           <h3 className="text-sm font-bold text-slate-900">Pending handover by stage</h3>
-          <span className="text-xs text-slate-500">{m.hv.allPending ? 'whole pipeline today' : `Expected HO ${m.period.label}`} · not dropped, not on hold{!m.hv.allPending && m.hv.slip.sites ? <> · <button className="font-semibold text-red-600 hover:underline" onClick={() => openList('Pending handover · Expected HO date already passed', m.hv.lists.slip)}>{fmtNum(m.hv.slip.qis)} QIS overdue</button></> : null}{!m.hv.allPending && m.hv.noDate.sites ? <> · <button className="font-semibold text-slate-600 hover:underline" onClick={() => openList('Pending handover · no Expected HO date', m.hv.lists.noDate)}>{fmtNum(m.hv.noDate.qis)} QIS with no Expected HO date</button></> : null}{m.hv.hold.sites ? ` · ${fmtNum(m.hv.hold.qis)} QIS (${m.hv.hold.sites} sites) on hold` : ''}</span>
+          <span className="text-xs text-slate-500">{m.hv.allPending ? 'whole pipeline today' : `Expected HO ${m.period.label.replace(/^expected /, '')}`} · not dropped, not on hold{!m.hv.allPending && m.hv.slip.sites ? <> · <button className="font-semibold text-red-600 hover:underline" onClick={() => openList('Pending handover · Expected HO date already passed', m.hv.lists.slip)}>{fmtNum(m.hv.slip.qis)} QIS overdue</button></> : null}{!m.hv.allPending && m.hv.noDate.sites ? <> · <button className="font-semibold text-slate-600 hover:underline" onClick={() => openList('Pending handover · no Expected HO date', m.hv.lists.noDate)}>{fmtNum(m.hv.noDate.qis)} QIS with no Expected HO date</button></> : null}{m.hv.hold.sites ? ` · ${fmtNum(m.hv.hold.qis)} QIS (${m.hv.hold.sites} sites) on hold` : ''}</span>
           <button className="ml-auto text-xs font-semibold text-brand-700 hover:underline" onClick={() => nav('/app/map?network=1')}>Energized network: {fmtNum(m.netQis)} QIS · {fmtNum(m.netSites)} sites →</button>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
