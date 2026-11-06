@@ -169,8 +169,29 @@ export default function Dashboard() {
     const dueRows = allPending ? pendingRows : pendingRows.filter(r => exp(r) >= dueFrom && exp(r) <= dueTo && (!selYm || selYm.has(exp(r).slice(0, 7))))
     const slipRows = allPending || selYm || dueTo < todayStr ? [] : pendingRows.filter(r => exp(r) && exp(r) < dueFrom)
     const noDateRows = allPending ? [] : pendingRows.filter(r => !exp(r))
+    // Weekly view of handovers in the period: weeks of the month (1–7, 8–14, 15–21, 22–end), monthly beyond 4 months
+    const hoWeeks = (() => {
+      if (allPending) return []
+      let months = []
+      for (let d = new Date(dueFrom.slice(0, 7) + '-01T12:00:00'); isoDay(d).slice(0, 7) <= dueTo.slice(0, 7); d.setMonth(d.getMonth() + 1)) months.push(isoDay(d).slice(0, 7))
+      if (selYm) months = months.filter(k => selYm.has(k))
+      const monthly = months.length > 4
+      const out = []
+      for (const k of months) {
+        const last = new Date(+k.slice(0, 4), +k.slice(5, 7), 0).getDate()
+        const mon = new Date(k + '-01T12:00:00').toLocaleDateString('en-IN', { month: 'short' })
+        const spans = monthly ? [[1, last]] : [[1, 7], [8, 14], [15, 21], [22, last]]
+        spans.forEach(([a, b], i) => {
+          const from = `${k}-${String(a).padStart(2, '0')}`, to = `${k}-${String(b).padStart(2, '0')}`
+          const due = dueRows.filter(r => exp(r) >= from && exp(r) <= to)
+          const done = rows.filter(r => { const h = String(hoDate(r) || '').slice(0, 10); return h >= from && h <= to })
+          out.push({ key: from, label: monthly ? mon : `W${i + 1} · ${a}–${b} ${mon}`, from, to, now: todayStr >= from && todayStr <= to, past: to < todayStr, due, done, ...qs(due), doneQis: qs(done).qis })
+        })
+      }
+      return out
+    })()
     const hv = {
-      allPending, dueTo, due: qs(dueRows), slip: qs(slipRows), noDate: qs(noDateRows),
+      allPending, dueTo, weeks: hoWeeks, due: qs(dueRows), slip: qs(slipRows), noDate: qs(noDateRows),
       lists: { pending: pendingRows, due: dueRows, slip: slipRows, noDate: noDateRows, enThisMonth, enOverdue, hoNext: hoNextMonth, enNext: enNextMonth, handed: handedInP },
       pending: qs(pendingRows), pendingByStage: pendingStages.map(s => ({ id: s.id, name: s.name, color: s.color, rows: dueRows.filter(r => r.stage_id === s.id), ...qs(dueRows.filter(r => r.stage_id === s.id)) })),
       hold: qs(rows.filter(r => r.stage_category === 'hold')), awaiting: qs(awaitingRows), handed: qs(handedInP),
@@ -340,6 +361,21 @@ export default function Dashboard() {
             </button>
           ))}
         </div>
+        {m.hv.weeks.length > 0 && (
+          <div className="mt-3 border-t border-slate-100 pt-3">
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{m.hv.weeks.length && !m.hv.weeks[0].label.startsWith('W') ? 'By month' : 'By week'} · pending by Expected HO{m.hv.weeks.some(w => w.doneQis) ? ' · ✓ handed over' : ''}</p>
+            <div className="flex gap-1.5 overflow-x-auto pb-1">
+              {m.hv.weeks.map(w => (
+                <button key={w.key} onClick={() => openList(`Pending handover · Expected HO ${w.label.replace(' · ', ' ')}`, w.due)}
+                  className={`min-w-[7.5rem] shrink-0 rounded-lg border px-2.5 py-1.5 text-left transition hover:shadow-md ${w.now ? 'border-sky-400 bg-sky-50' : 'border-slate-200'} ${w.past && !w.sites ? 'opacity-60' : ''}`}>
+                  <p className={`text-[11px] font-semibold ${w.now ? 'text-sky-700' : 'text-slate-500'}`}>{w.label}{w.now && <span className="ml-1 rounded bg-sky-600 px-1 text-[9px] font-bold uppercase text-white">Now</span>}</p>
+                  <p className="text-sm font-extrabold text-navy-900">{fmtNum(w.qis)} <span className="text-[10px] font-semibold text-slate-400">QIS · {w.sites} sites</span></p>
+                  {w.doneQis > 0 && <p className="text-[10px] font-semibold text-teal-600" onClick={e => { e.stopPropagation(); openList(`Handed over · ${w.label.replace(' · ', ' ')}`, w.done) }}>✓ {fmtNum(w.doneQis)} handed over</p>}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <Modal open={!!list} onClose={() => setList(null)} wide="xl"
