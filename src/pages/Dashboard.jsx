@@ -10,12 +10,13 @@ import PeriodBar, { periodRange, periodLabel, isoDay } from '../components/Perio
 import FranchisePayments from '../components/FranchisePayments'
 import TargetTrend, { fyMonths } from '../components/TargetTrend'
 import FyPlan from '../components/FyPlan'
+import { PlanTable, TypeSplit } from '../components/Forecast'
 import { Stat, StageBadge, PageLoader, Modal } from '../components/ui'
 import { fmtNum, daysLabel, daysInt, stageAgeTone, AGE_TONES, startOfWeek, startOfMonth, fmtDate } from '../lib/format'
 import { haversine, hasLoc } from '../lib/geo'
 
 export default function Dashboard() {
-  const { deals, loading } = useDeals()
+  const { deals, loading, reload } = useDeals()
   const { stages = [], users = [], team = [], cities = [] } = useConfig()
   const [history, setHistory] = useState(null)
   const [filters, setFilters] = useState(EMPTY_FILTERS)
@@ -23,6 +24,8 @@ export default function Dashboard() {
   const [network, setNetwork] = useState([])
   const [metric, setMetric] = useState('qis') // chart unit: 'qis' | 'sites'
   const [enOpen, setEnOpen] = useState(false)
+  const [list, setList] = useState(null)
+  const [listType, setListType] = useState('')
   const [grain, setGrain] = useState('month') // energisation / HO trend: 'week' | 'month'
   const [showHo, setShowHo] = useState(false)
   const nav = useNavigate()
@@ -152,7 +155,8 @@ export default function Dashboard() {
     const enNextMonth = notLive.filter(r => String(r.extra?.expected_en || '').slice(0, 7) === nextYm)
     const handedInP = rows.filter(r => inP(hoDate(r)))
     const hv = {
-      pending: qs(pendingRows), pendingByStage: pendingStages.map(s => ({ id: s.id, name: s.name, color: s.color, ...qs(pendingRows.filter(r => r.stage_id === s.id)) })),
+      lists: { pending: pendingRows, enThisMonth, enOverdue, hoNext: hoNextMonth, enNext: enNextMonth, handed: handedInP },
+      pending: qs(pendingRows), pendingByStage: pendingStages.map(s => ({ id: s.id, name: s.name, color: s.color, rows: pendingRows.filter(r => r.stage_id === s.id), ...qs(pendingRows.filter(r => r.stage_id === s.id)) })),
       hold: qs(rows.filter(r => r.stage_category === 'hold')), awaiting: qs(awaitingRows), handed: qs(handedInP),
       enThisMonth: qs(enThisMonth), enOverdue: qs(enOverdue), hoNext: qs(hoNextMonth), enNext: qs(enNextMonth), curYm, nextYm,
     }
@@ -256,6 +260,7 @@ export default function Dashboard() {
   if (loading || !m) return <PageLoader />
   const listPath = t => (t === 'lead' ? '/app/leads' : t === 'deal' ? '/app/deals' : '/app/all')
   const go = q => nav(`${listPath(filters.recordType)}?${q}`)
+  const openList = (title, rows) => { setListType(''); setList({ title, rows }) }
   const goCard = (card, extra) => {
     const p = new URLSearchParams({ card, ...extra })
     if (filters.city.length) p.set('city', filters.city.join(','))
@@ -281,19 +286,19 @@ export default function Dashboard() {
       {period.kind === 'next' ? (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
           <Stat label="Expected handover" value={fmtNum(m.hv.hoNext.qis)} icon={CalendarDays} tone="amber" sub={`${fmtNum(m.hv.hoNext.sites)} sites · by Expected HO date`}
-            onClick={() => nav('/app/acquisition?tab=list')} />
+            onClick={() => openList(`Expected handover · ${m.period.label}`, m.hv.lists.hoNext)} />
           <Stat label="Expected energisation" value={fmtNum(m.hv.enNext.qis)} icon={Zap} tone="green" sub={`${fmtNum(m.hv.enNext.sites)} sites · by Expected energisation date`}
-            onClick={() => nav('/app/acquisition?tab=list')} />
-          <Stat label="Pending handover" value={fmtNum(m.hv.pending.qis)} icon={Boxes} tone="blue" sub={`${fmtNum(m.hv.pending.sites)} sites · in pipeline today`} onClick={() => goCard('Pending handover', { stage: m.hv.pendingByStage.map(s => s.id).join(',') })} />
+            onClick={() => openList(`Expected energisation · ${m.period.label}`, m.hv.lists.enNext)} />
+          <Stat label="Pending handover" value={fmtNum(m.hv.pending.qis)} icon={Boxes} tone="blue" sub={`${fmtNum(m.hv.pending.sites)} sites · in pipeline today`} onClick={() => openList('Pending handover · in pipeline today', m.hv.lists.pending)} />
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <Stat label="Handed over" value={fmtNum(m.hv.handed.qis)} icon={CalendarDays} tone="amber" sub={`${fmtNum(m.hv.handed.sites)} sites · ${m.period.label}`}
-            onClick={() => goCard(`Handed over ${m.period.label}`, { exit: `ho,${m.period.from},${m.period.to}` })} />
+            onClick={() => openList(`Handed over ${m.period.label}`, m.hv.lists.handed)} />
           <Stat label="Pending handover" value={fmtNum(m.hv.pending.qis)} icon={Boxes} tone="blue" sub={`${fmtNum(m.hv.pending.sites)} sites · in pipeline today`}
-            onClick={() => goCard('Pending handover', { stage: m.hv.pendingByStage.map(s => s.id).join(',') })} />
+            onClick={() => openList('Pending handover · in pipeline today', m.hv.lists.pending)} />
           <Stat label="To energize this month" value={fmtNum(m.hv.enThisMonth.qis)} icon={Zap} tone="amber" sub={`${fmtNum(m.hv.enThisMonth.sites)} sites · expected${m.hv.enOverdue.sites ? ` · +${fmtNum(m.hv.enOverdue.qis)} QIS overdue` : ''}`}
-            onClick={() => nav('/app/acquisition?tab=list')} />
+            onClick={() => openList('To energize this month · by Expected energisation date', m.hv.lists.enThisMonth)} />
           <Stat label="Energized" value={fmtNum(m.period.en.qis)} icon={Zap} tone="green" sub={`${fmtNum(m.period.en.sites)} sites · ${m.period.label} · QIS tracker`}
             onClick={() => setEnOpen(true)} />
         </div>
@@ -306,7 +311,7 @@ export default function Dashboard() {
         </div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
           {m.hv.pendingByStage.map(s => (
-            <button key={s.id} onClick={() => goCard(s.name, { stage: String(s.id) })} className="rounded-lg border border-slate-200 p-3 text-left transition hover:shadow-md" style={{ borderTopColor: s.color, borderTopWidth: 3 }}>
+            <button key={s.id} onClick={() => openList(`${s.name} · pending handover`, s.rows)} className="rounded-lg border border-slate-200 p-3 text-left transition hover:shadow-md" style={{ borderTopColor: s.color, borderTopWidth: 3 }}>
               <p className="truncate text-xs font-semibold text-slate-600">{s.name}</p>
               <p className="text-xl font-extrabold text-navy-900">{fmtNum(s.qis)} <span className="text-xs font-semibold text-slate-400">QIS</span></p>
               <p className="text-[11px] text-slate-500">{s.sites} sites</p>
@@ -315,6 +320,12 @@ export default function Dashboard() {
         </div>
       </div>
 
+      <Modal open={!!list} onClose={() => setList(null)} wide="xl"
+        title={list ? `${list.title} · ${fmtNum(list.rows.reduce((a, r) => a + (Number(r.extra?.qis_count) || 0), 0))} QIS · ${list.rows.length} sites` : ''}
+        footer={<button className="btn-primary" onClick={() => setList(null)}>Close</button>}>
+        {list && <TypeSplit rows={list.rows} value={listType} onChange={setListType} />}
+        {list && <div className="max-h-[62vh] overflow-auto"><PlanTable rows={list.rows.filter(r => !listType || (r.site_type || 'Not set') === listType)} onChanged={reload} /></div>}
+      </Modal>
       <Modal open={enOpen} onClose={() => setEnOpen(false)} wide title={`Energized ${m.period.label} · ${fmtNum(m.period.en.qis)} QIS · ${fmtNum(m.period.en.sites)} sites`}
         footer={<><button className="btn btn-ghost" onClick={() => nav('/app/map?network=1')}>Open on map</button><button className="btn btn-primary" onClick={() => setEnOpen(false)}>Close</button></>}>
         {m.period.en.list.length === 0 ? <p className="text-sm text-slate-400">Nothing energized in this period.</p> : (
