@@ -84,8 +84,10 @@ function UpcomingPicker({ value, onChange }) {
   const on = value.kind === 'next'
   const sel = on ? nextMonths(value) : []
   const set = ms => onChange({ ...value, kind: 'next', months: [...ms].sort() })
-  const toggle = m => { const n = sel.includes(m) ? sel.filter(x => x !== m) : [...sel, m]; if (n.length) set(n) }
-  const allOn = sel.length === all.length
+  const clear = () => onChange({ ...value, kind: 'month', months: [] }) // nothing ticked: back to This month
+  const toggle = m => { const n = sel.includes(m) ? sel.filter(x => x !== m) : [...sel, m]; n.length ? set(n) : clear() }
+  const allOn = on && sel.length === all.length
+  const someOn = on && sel.length > 0 && !allOn
   return (
     <div className="relative" ref={box}>
       <button onClick={() => setOpen(o => !o)} title="What's expected ahead: handovers and energisations by expected date"
@@ -98,18 +100,22 @@ function UpcomingPicker({ value, onChange }) {
       {open && (
         <div className="absolute left-0 z-30 mt-1 w-60 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
           {all.length > 1 && (
-            <button onClick={() => set(all)} className={`mb-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm font-semibold ${on && allOn ? 'bg-sky-50 text-sky-800' : 'text-slate-700 hover:bg-slate-50'}`}>
-              Rest of {fyName(all[0])}<span className="text-xs font-normal text-slate-500">{mName(all[0])}–{mName(all[all.length - 1])}</span>
-            </button>
+            <label className={`mb-1 flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold ${allOn ? 'bg-sky-50 text-sky-800' : 'text-slate-700 hover:bg-slate-50'}`}>
+              <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-sky-700" checked={allOn}
+                ref={el => { if (el) el.indeterminate = someOn }} onChange={() => (allOn ? clear() : set(all))} />
+              <span className="flex-1">All of {fyName(all[0])}</span>
+              <span className="text-xs font-normal text-slate-500">{mName(all[0])}–{mName(all[all.length - 1])}</span>
+            </label>
           )}
           <div className="border-t border-slate-100 pt-1">
             {all.map(m => (
               <label key={m} className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-1.5 text-sm hover:bg-slate-50">
-                <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-sky-700" checked={sel.includes(m)} onChange={() => (on ? toggle(m) : set([m]))} />
+                <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-sky-700" checked={sel.includes(m)} onChange={() => toggle(m)} />
                 <span className={sel.includes(m) ? 'font-semibold text-slate-900' : 'text-slate-600'}>{mName(m, { month: 'long', year: 'numeric' })}</span>
               </label>
             ))}
           </div>
+          {on && <button onClick={() => { clear(); setOpen(false) }} className="mt-1 w-full border-t border-slate-100 pt-1.5 text-center text-xs font-semibold text-slate-500 hover:text-slate-800">Clear · back to This month</button>}
         </div>
       )}
     </div>
