@@ -114,7 +114,7 @@ export default function FyPlan({ deals, network, cities = [], team = [], filters
       <div className="grid grid-cols-2 gap-px bg-slate-100 sm:grid-cols-3 lg:grid-cols-6">
         <Flow l="FY exit target" v={fmtNum(exit)} s={zone === 'All' && company && company !== T.target ? `${fmtNum(T.target)} cities + ${fmtNum(company - T.target)} SPP / other` : `${list.length} cities`} />
         <Flow l="Energised today" v={fmtNum(netEnergised)} s={<span className="flex items-center gap-1.5" title={`${fmtNum(T.energised)} QIS in the ${list.length} plan cities`}><span className="h-1.5 w-12 overflow-hidden rounded-full bg-slate-200"><span className="block h-1.5 bg-emerald-500" style={{ width: `${Math.min(100, enPct)}%` }} /></span>{enPct}% of exit · {fmtNum(T.energised)} in plan cities</span>} cls="text-emerald-700" />
-        <Flow l="Acquisition target" v={fmtNum(Math.ceil(T.acq))} s={`of ${fmtNum(T.short)} short · rest SPP`} cls="text-navy-900" />
+        <Flow l="Acquisition target" v={fmtNum(Math.ceil(T.acq))} s={zone === 'All' && company ? `of ${fmtNum(Math.max(0, company - netEnergised))} short (${fmtNum(company)} − ${fmtNum(netEnergised)}) · rest SPP` : `of ${fmtNum(T.short)} short · rest SPP`} cls="text-navy-900" />
         <Flow l="Already handed over" v={fmtNum(T.ho)} s="awaiting energisation" cls="text-teal-600" dot="bg-teal-500" />
         <Flow l={`Visibility ${monthLbl(cur)} + ${monthLbl(next)}`} v={fmtNum(T.vis)} s={`${fmtNum(T.visCur)} + ${fmtNum(T.visNext)} by expected HO`} cls="text-amber-600" dot="bg-amber-400" />
         <Flow l="Still to scout" v={fmtNum(Math.ceil(T.toAcquire))} s="acquisition target − handed over" cls="text-red-600" dot="bg-red-500" big />
