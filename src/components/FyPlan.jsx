@@ -66,13 +66,14 @@ export default function FyPlan({ deals, network, cities = [], team = [], filters
       const visCur = pending.filter(r => ymOf(r.extra?.expected_ho) === cur).reduce((a, r) => a + qisOf(r), 0)
       const visNext = pending.filter(r => ymOf(r.extra?.expected_ho) === next).reduce((a, r) => a + qisOf(r), 0)
       const vis = visCur + visNext
-      const toAcquire = Math.max(0, pendingPipe - vis)
+      const toAcquire = pendingPipe // only handed-over QIS are netted off; Nov/Dec visibility still has to be acquired
+      const noPipe = Math.max(0, pendingPipe - vis)
       const sitesWin = Math.ceil(toAcquire / (Number(plan.qis_per_site) || 3))
       const sitesScout = sitesWin * (Number(plan.leads_per_win) || 4)
       const scouted30 = inCity.filter(r => new Date(r.created_at) >= since).length
       const needDay = days ? Math.ceil(sitesScout / days) : null
       const paceDay = scouted30 / days30
-      return { city: c.city, owner: owner[lc] || '—', region: region[lc] || '—', energised, target, short, share, acq, ho, pendingPipe, visCur, visNext, vis, toAcquire, sitesWin, sitesScout, needDay, paceDay, scouted30 }
+      return { noPipe, city: c.city, owner: owner[lc] || '—', region: region[lc] || '—', energised, target, short, share, acq, ho, pendingPipe, visCur, visNext, vis, toAcquire, sitesWin, sitesScout, needDay, paceDay, scouted30 }
     })
     const sum = k => list.reduce((a, x) => a + (x[k] || 0), 0)
     const total = { energised: sum('energised'), target: sum('target'), short: sum('short'), acq: sum('acq'), ho: sum('ho'), pendingPipe: sum('pendingPipe'), visCur: sum('visCur'), visNext: sum('visNext'), vis: sum('vis'), toAcquire: sum('toAcquire'), sitesWin: sum('sitesWin'), sitesScout: sum('sitesScout'), needDay: days ? sum('sitesScout') / days : null, paceDay: sum('paceDay'), scouted30: sum('scouted30') }
@@ -115,8 +116,8 @@ export default function FyPlan({ deals, network, cities = [], team = [], filters
         <Flow l="Energised today" v={fmtNum(netEnergised)} s={<span className="flex items-center gap-1.5" title={`${fmtNum(T.energised)} QIS in the ${list.length} plan cities`}><span className="h-1.5 w-12 overflow-hidden rounded-full bg-slate-200"><span className="block h-1.5 bg-emerald-500" style={{ width: `${Math.min(100, enPct)}%` }} /></span>{enPct}% of exit · {fmtNum(T.energised)} in plan cities</span>} cls="text-emerald-700" />
         <Flow l="Acquisition target" v={fmtNum(Math.ceil(T.acq))} s={`of ${fmtNum(T.short)} short · rest SPP`} cls="text-navy-900" />
         <Flow l="Already handed over" v={fmtNum(T.ho)} s="awaiting energisation" cls="text-teal-600" dot="bg-teal-500" />
-        <Flow l={`Visibility ${monthLbl(cur)} + ${monthLbl(next)}`} v={fmtNum(T.vis)} s={`${fmtNum(T.visCur)} + ${fmtNum(T.visNext)} by expected HO`} cls="text-amber-600" dot="bg-amber-400" />
-        <Flow l="Still to acquire" v={fmtNum(Math.ceil(T.toAcquire))} s="no pipeline yet" cls="text-red-600" dot="bg-red-500" big />
+        <Flow l="Still to acquire" v={fmtNum(Math.ceil(T.toAcquire))} s="acquisition target − handed over" cls="text-red-600" dot="bg-red-500" big />
+        <Flow l={`of which in pipeline ${monthLbl(cur)} + ${monthLbl(next)}`} v={fmtNum(T.vis)} s={`${fmtNum(T.visCur)} + ${fmtNum(T.visNext)} by expected HO · not yet acquired`} cls="text-amber-600" dot="bg-amber-400" />
       </div>
 
       {/* city rows */}
@@ -126,8 +127,8 @@ export default function FyPlan({ deals, network, cities = [], team = [], filters
         </div>
         <div className="divide-y divide-slate-100">
           {list.map(x => {
-            const seg = [[x.ho, 'bg-teal-500', 'Handed over'], [x.visCur, 'bg-amber-400', `${monthLbl(cur)} visibility`], [x.visNext, 'bg-amber-200', `${monthLbl(next)} visibility`], [x.toAcquire, 'bg-red-400', 'To acquire']]
-            const used = Math.min(x.acq, x.ho + x.vis + x.toAcquire)
+            const seg = [[x.ho, 'bg-teal-500', 'Handed over'], [x.visCur, 'bg-amber-400', `${monthLbl(cur)} visibility`], [x.visNext, 'bg-amber-200', `${monthLbl(next)} visibility`], [x.noPipe, 'bg-red-400', 'No pipeline yet']]
+            const used = Math.min(x.acq, x.ho + x.vis + x.noPipe)
             const w = v => `${(100 * Math.min(v, x.acq)) / maxAcq}%`
             const ep = x.target ? Math.round((100 * x.energised) / x.target) : 0
             return (
@@ -179,7 +180,7 @@ export default function FyPlan({ deals, network, cities = [], team = [], filters
             )
           })}
         </div>
-        <p className="mt-2 text-[11px] text-slate-400">1 in {plan.leads_per_win} scouted sites converts · {plan.qis_per_site} QIS per site · {plan.work_days === 6 ? 'Mon–Sat' : 'Mon–Fri'} · pace = sites added in the last 30 days. Visibility = pending sites with an Expected HO date in {monthLbl(cur)}/{monthLbl(next)}.</p>
+        <p className="mt-2 text-[11px] text-slate-400">1 in {plan.leads_per_win} scouted sites converts · {plan.qis_per_site} QIS per site · {plan.work_days === 6 ? 'Mon–Sat' : 'Mon–Fri'} · pace = sites added in the last 30 days. To acquire = acquisition target − handed over (sites in the Nov/Dec pipeline still count until they're handed over).</p>
       </div>
       {edit && <PlanModal plan={plan} onClose={() => setEdit(false)} onSaved={() => { setEdit(false); reload() }} />}
     </div>
