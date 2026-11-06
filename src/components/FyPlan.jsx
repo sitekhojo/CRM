@@ -66,7 +66,7 @@ export default function FyPlan({ deals, network, cities = [], team = [], filters
       const visCur = pending.filter(r => ymOf(r.extra?.expected_ho) === cur).reduce((a, r) => a + qisOf(r), 0)
       const visNext = pending.filter(r => ymOf(r.extra?.expected_ho) === next).reduce((a, r) => a + qisOf(r), 0)
       const vis = visCur + visNext
-      const toAcquire = pendingPipe // only handed-over QIS are netted off; Nov/Dec visibility still has to be acquired
+      const toAcquire = Math.max(0, acq - ho - vis) // acquisition target − handed over − Nov/Dec visibility
       const noPipe = Math.max(0, pendingPipe - vis)
       const sitesWin = Math.ceil(toAcquire / (Number(plan.qis_per_site) || 3))
       const sitesScout = sitesWin * (Number(plan.leads_per_win) || 4)
@@ -129,7 +129,7 @@ export default function FyPlan({ deals, network, cities = [], team = [], filters
           <Flow l="Acquisition target" v={fmtNum(Math.ceil(T.acq))} s="city short × acquisition share" cls="text-navy-900" />
           <Flow l="Already handed over" v={fmtNum(T.ho)} s="awaiting energisation" cls="text-teal-600" dot="bg-teal-500" />
           <Flow l={`Visibility ${monthLbl(cur)} + ${monthLbl(next)}`} v={fmtNum(T.vis)} s={`${fmtNum(T.visCur)} + ${fmtNum(T.visNext)} by expected HO`} cls="text-amber-600" dot="bg-amber-400" />
-          <Flow l="Still to scout" v={fmtNum(Math.ceil(T.toAcquire))} s="target − handed over" cls="text-red-600" dot="bg-red-500" big />
+          <Flow l="Still to scout" v={fmtNum(Math.ceil(T.toAcquire))} s="target − handed over − visibility" cls="text-red-600" dot="bg-red-500" big />
         </Group>
       </div>
 
