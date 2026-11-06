@@ -59,7 +59,7 @@ export default function FyPlan({ deals, network, cities = [], team = [], filters
       const energised = network.filter(n => n.point_type === 'own_station' && String(n.city || '').toLowerCase() === lc).reduce((a, n) => a + (Number(n.weight) || 0), 0)
       const target = Number(c.target) || 0, share = Number(c.share) || 0
       const short = Math.max(0, target - energised)
-      const acq = (short * share) / 100
+      const acq = Math.ceil((short * share) / 100) // whole QIS, rounded up
       const ho = inCity.filter(r => r.stage_key === 'ho_done' || r.stage_name === 'Handover Done').reduce((a, r) => a + qisOf(r), 0)
       const pendingPipe = Math.max(0, acq - ho)
       const pending = inCity.filter(r => r.stage_category === 'active' || r.stage_name === 'Agreement Signed')
@@ -67,10 +67,10 @@ export default function FyPlan({ deals, network, cities = [], team = [], filters
       const visNext = pending.filter(r => ymOf(r.extra?.expected_ho) === next).reduce((a, r) => a + qisOf(r), 0)
       const vis = visCur + visNext
       const toAcquire = Math.max(0, pendingPipe - vis)
-      const sitesWin = toAcquire / (Number(plan.qis_per_site) || 3)
+      const sitesWin = Math.ceil(toAcquire / (Number(plan.qis_per_site) || 3))
       const sitesScout = sitesWin * (Number(plan.leads_per_win) || 4)
       const scouted30 = inCity.filter(r => new Date(r.created_at) >= since).length
-      const needDay = days ? sitesScout / days : null
+      const needDay = days ? Math.ceil(sitesScout / days) : null
       const paceDay = scouted30 / days30
       return { city: c.city, owner: owner[lc] || '—', region: region[lc] || '—', energised, target, short, share, acq, ho, pendingPipe, visCur, visNext, vis, toAcquire, sitesWin, sitesScout, needDay, paceDay, scouted30 }
     })
@@ -103,7 +103,7 @@ export default function FyPlan({ deals, network, cities = [], team = [], filters
         <div className="flex rounded-lg bg-white/10 p-0.5">
           {zones.map(z => { const v = zoneOf(z).toAcquire; return (
             <button key={z} onClick={() => setZone(z)} className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${zone === z ? 'bg-white text-navy-900 shadow' : 'text-slate-200 hover:bg-white/10'}`}>
-              {z === 'All' ? 'All zones' : z}<span className={`ml-1.5 rounded px-1 text-[10px] ${zone === z ? 'bg-red-100 text-red-700' : 'bg-white/15'}`}>{fmtNum(Math.round(v))}</span>
+              {z === 'All' ? 'All zones' : z}<span className={`ml-1.5 rounded px-1 text-[10px] ${zone === z ? 'bg-red-100 text-red-700' : 'bg-white/15'}`}>{fmtNum(Math.ceil(v))}</span>
             </button>) })}
         </div>
         {isAdmin && <button className="rounded-lg bg-white/10 px-2.5 py-1.5 text-xs font-semibold hover:bg-white/20" onClick={() => setEdit(true)}><Pencil className="mr-1 inline h-3.5 w-3.5" />Edit</button>}
@@ -113,10 +113,10 @@ export default function FyPlan({ deals, network, cities = [], team = [], filters
       <div className="grid grid-cols-2 gap-px bg-slate-100 sm:grid-cols-3 lg:grid-cols-6">
         <Flow l="FY exit target" v={fmtNum(exit)} s={zone === 'All' && company && company !== T.target ? `${fmtNum(T.target)} cities + ${fmtNum(company - T.target)} SPP / other` : `${list.length} cities`} />
         <Flow l="Energised today" v={fmtNum(netEnergised)} s={<span className="flex items-center gap-1.5" title={`${fmtNum(T.energised)} QIS in the ${list.length} plan cities`}><span className="h-1.5 w-12 overflow-hidden rounded-full bg-slate-200"><span className="block h-1.5 bg-emerald-500" style={{ width: `${Math.min(100, enPct)}%` }} /></span>{enPct}% of exit · {fmtNum(T.energised)} in plan cities</span>} cls="text-emerald-700" />
-        <Flow l="Acquisition target" v={fmtNum(Math.round(T.acq))} s={`of ${fmtNum(T.short)} short · rest SPP`} cls="text-navy-900" />
+        <Flow l="Acquisition target" v={fmtNum(Math.ceil(T.acq))} s={`of ${fmtNum(T.short)} short · rest SPP`} cls="text-navy-900" />
         <Flow l="Already handed over" v={fmtNum(T.ho)} s="awaiting energisation" cls="text-teal-600" dot="bg-teal-500" />
         <Flow l={`Visibility ${monthLbl(cur)} + ${monthLbl(next)}`} v={fmtNum(T.vis)} s={`${fmtNum(T.visCur)} + ${fmtNum(T.visNext)} by expected HO`} cls="text-amber-600" dot="bg-amber-400" />
-        <Flow l="Still to acquire" v={fmtNum(Math.round(T.toAcquire))} s="no pipeline yet" cls="text-red-600" dot="bg-red-500" big />
+        <Flow l="Still to acquire" v={fmtNum(Math.ceil(T.toAcquire))} s="no pipeline yet" cls="text-red-600" dot="bg-red-500" big />
       </div>
 
       {/* city rows */}
@@ -136,10 +136,10 @@ export default function FyPlan({ deals, network, cities = [], team = [], filters
                 <div className="hidden w-28 text-right md:block"><p className="text-sm"><b>{fmtNum(x.energised)}</b><span className="text-slate-400"> / {fmtNum(x.target)}</span></p>
                   <div className="ml-auto mt-1 h-1 w-20 overflow-hidden rounded-full bg-slate-100"><div className="h-1 bg-emerald-500" style={{ width: `${Math.min(100, ep)}%` }} /></div></div>
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-baseline gap-2 text-xs text-slate-500"><b className="text-sm text-slate-800">{fmtNum(r1(x.acq), 1)}</b> QIS <span>· {x.share}% of {fmtNum(x.short)} short</span>
+                  <div className="flex items-baseline gap-2 text-xs text-slate-500"><b className="text-sm text-slate-800">{fmtNum(x.acq)}</b> QIS <span>· {x.share}% of {fmtNum(x.short)} short</span>
                     {x.share === 0 && <span className="rounded bg-orange-50 px-1.5 text-[10px] font-semibold text-orange-700">all SPP</span>}</div>
-                  <div className="mt-1 flex h-3.5 overflow-hidden rounded-full bg-slate-100" title={seg.map(([v, , l]) => `${l}: ${fmtNum(r1(v), 1)}`).join(' · ')}>
-                    {used > 0 && seg.map(([v, c, l]) => v > 0 && <div key={l} className={`${c} h-full border-r border-white/70 last:border-0`} style={{ width: w(v) }} title={`${l}: ${fmtNum(r1(v), 1)} QIS`} />)}
+                  <div className="mt-1 flex h-3.5 overflow-hidden rounded-full bg-slate-100" title={seg.map(([v, , l]) => `${l}: ${fmtNum(Math.ceil(v))}`).join(' · ')}>
+                    {used > 0 && seg.map(([v, c, l]) => v > 0 && <div key={l} className={`${c} h-full border-r border-white/70 last:border-0`} style={{ width: w(v) }} title={`${l}: ${fmtNum(Math.ceil(v))} QIS`} />)}
                   </div>
                   <div className="mt-0.5 flex gap-3 text-[10px] text-slate-500">
                     {x.ho > 0 && <span><span className="text-teal-600">●</span> HO'd {fmtNum(x.ho)}</span>}
@@ -147,7 +147,7 @@ export default function FyPlan({ deals, network, cities = [], team = [], filters
                     {x.visNext > 0 && <span><span className="text-amber-200">●</span> {monthLbl(next)} {fmtNum(x.visNext)}</span>}
                   </div>
                 </div>
-                <div className="w-20 text-right"><p className={`text-xl font-extrabold ${x.toAcquire >= 30 ? 'text-red-600' : x.toAcquire ? 'text-amber-600' : 'text-emerald-600'}`}>{fmtNum(Math.round(x.toAcquire))}</p><p className="text-[10px] text-slate-400">QIS</p></div>
+                <div className="w-20 text-right"><p className={`text-xl font-extrabold ${x.toAcquire >= 30 ? 'text-red-600' : x.toAcquire ? 'text-amber-600' : 'text-emerald-600'}`}>{fmtNum(Math.ceil(x.toAcquire))}</p><p className="text-[10px] text-slate-400">QIS</p></div>
               </div>
             )
           })}
@@ -159,8 +159,8 @@ export default function FyPlan({ deals, network, cities = [], team = [], filters
         <div className="mb-3 flex flex-wrap items-end gap-x-6 gap-y-1">
           <h3 className="mr-auto text-sm font-bold text-slate-900">Scouting needed to close the gap{zone !== 'All' ? ` · ${zone}` : ''}</h3>
           <Mini l="Sites to scout" v={fmtNum(Math.ceil(T.sitesScout))} s={`→ ${fmtNum(Math.ceil(T.sitesWin))} sites won`} />
-          <Mini l="Needed / day" v={T.needDay ? fmtNum(T.needDay, 1) : '—'} cls="text-red-600" s={`${m.days} working days left`} />
-          <Mini l="Pace / day" v={fmtNum(T.paceDay, 1)} cls={T.needDay && T.paceDay >= T.needDay ? 'text-emerald-600' : 'text-amber-600'} s={`${T.scouted30} sites in 30 days`} />
+          <Mini l="Needed / day" v={T.needDay ? fmtNum(Math.ceil(T.needDay)) : '—'} cls="text-red-600" s={`${m.days} working days left`} />
+          <Mini l="Pace / day" v={fmtNum(Math.ceil(T.paceDay))} cls={T.needDay && T.paceDay >= T.needDay ? 'text-emerald-600' : 'text-amber-600'} s={`${T.scouted30} sites in 30 days`} />
         </div>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           {list.filter(x => x.acq > 0).map(x => {
@@ -170,9 +170,9 @@ export default function FyPlan({ deals, network, cities = [], team = [], filters
               <div key={x.city} className="rounded-xl border border-slate-200 bg-white p-3">
                 <div className="flex items-baseline justify-between"><p className="truncate font-semibold text-slate-900">{x.city}</p><p className="truncate pl-2 text-[11px] text-slate-400">{x.owner}</p></div>
                 {x.needDay ? <>
-                  <p className="mt-1 text-xs text-slate-500"><b className="text-lg font-extrabold text-slate-900">{fmtNum(x.needDay, 1)}</b> sites/day needed · <b>{fmtNum(x.needDay * plan.work_days, 1)}</b>/wk</p>
+                  <p className="mt-1 text-xs text-slate-500"><b className="text-lg font-extrabold text-slate-900">{fmtNum(Math.ceil(x.needDay))}</b> sites/day needed · <b>{fmtNum(Math.ceil(x.needDay) * plan.work_days)}</b>/wk</p>
                   <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className={`h-1.5 ${col}`} style={{ width: `${Math.min(100, pct)}%` }} /></div>
-                  <p className="mt-1 flex justify-between text-[11px] text-slate-500"><span>pace {fmtNum(x.paceDay, 1)}/day · {pct}%</span><span>{fmtNum(Math.ceil(x.sitesScout))} to scout</span></p>
+                  <p className="mt-1 flex justify-between text-[11px] text-slate-500"><span>pace {fmtNum(Math.ceil(x.paceDay))}/day · {pct}%</span><span>{fmtNum(Math.ceil(x.sitesScout))} to scout</span></p>
                 </> : <p className="mt-2 text-xs font-semibold text-emerald-600">Covered — nothing left to scout</p>}
               </div>
             )
