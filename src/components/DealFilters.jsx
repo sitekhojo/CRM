@@ -8,7 +8,7 @@ import MultiSelect, { SingleSelect } from './MultiSelect'
 export default function DealFilters({ value, onChange, show = ['q', 'region', 'city', 'owner', 'type', 'stage', 'siteType', 'date'], extra, prefix, qPlaceholder = 'Search…' }) {
   const { cities = [], stages = [], team = [] } = useConfig()
   const cityOpts = cities.filter(c => c.is_active && (!value.region?.length || value.region.includes(c.region)))
-  const ownerOpts = team.filter(t => t.is_active && (!value.region?.length || value.region.includes(t.region)))
+  const ownerOpts = team.filter(t => t.is_active && (!value.region?.length || value.region.includes(t.region) || !REGIONS.includes(t.region)))
   const set = (k, v) => onChange({ ...value, [k]: v })
   const active = Object.entries(value).some(([k, v]) => !(k === 'recordType' && !show.includes('type')) && (Array.isArray(v) ? v.length > 0 : !!v && v !== EMPTY_FILTERS[k]))
   return (
