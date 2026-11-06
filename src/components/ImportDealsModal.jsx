@@ -93,7 +93,7 @@ export default function ImportDealsModal({ open, onClose, onDone }) {
         {rows && !result && <button className="btn-primary" disabled={busy || rows.length === bad.length} onClick={run}>{busy ? 'Importing…' : `Import ${rows.length - bad.length} deals`}</button>}
       </>}>
       <div className="space-y-4 text-sm">
-        <p className="text-slate-600">Required columns: <b>Site name, City</b>. Latitude/Longitude recommended (sites without them won't show on the map). Optional: Type (Lead / Deal — default Deal), Site type (Franchise, Private, SPP, IOCL, Metro &amp; Railways), Stage (by name), Owner (team member name — blank = the city's default owner) and all other fields.
+        <p className="text-slate-600">Required columns: <b>Site name, City</b>. Latitude/Longitude recommended (sites without them won't show on the map). Optional: Type (Lead / Deal — default Deal), Site type (Franchise, Private, SPP; IOCL / Metro / Railways count as SPP), Stage (by name), Owner (team member name — blank = the city's default owner) and all other fields.
           <button className="ml-1 font-semibold text-brand-700 hover:underline" onClick={() => downloadTemplate(IMPORT_FIELDS, 'sitekhojo-import-template')}>Download template</button></p>
         <label className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-slate-300 p-6 text-slate-500 hover:border-brand-500">
           <FileSpreadsheet className="h-8 w-8" />Choose .xlsx or .csv file

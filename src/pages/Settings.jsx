@@ -275,7 +275,7 @@ function Network() {
           <button className="btn-secondary" onClick={() => downloadTemplate(NET_FIELDS, 'sitekhojo-network-template')}><Download className="h-4 w-4" />Template</button>
           {points?.length > 0 && <button className="btn-secondary" onClick={() => exportRows(points, NET_FIELDS, 'sitekhojo-network-points')}><Download className="h-4 w-4" />Export</button>}
         </div>
-        <p className="mt-2 text-xs text-slate-500">Columns: Type (own_station / competitor / demand_hotspot / restricted), Name, City, Site type (Franchise / Private / SPP / IOCL / Metro & Railways), Latitude, Longitude, Weight = no. of QIS (optional), Notes (optional).</p>
+        <p className="mt-2 text-xs text-slate-500">Columns: Type (own_station / competitor / demand_hotspot / restricted), Name, City, Site type (Franchise / Private / SPP; IOCL / Metro / Railways count as SPP), Latitude, Longitude, Weight = no. of QIS (optional), Notes (optional).</p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {Object.entries(NETWORK_TYPES).map(([k, t]) => {

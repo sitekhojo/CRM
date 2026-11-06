@@ -24,8 +24,6 @@ export const SITE_TYPE_CHIPS = {
   Franchise: { short: 'FRN', cls: 'bg-indigo-100 text-indigo-800' },
   Private: { short: 'PVT', cls: 'bg-teal-100 text-teal-800' },
   SPP: { short: 'SPP', cls: 'bg-orange-100 text-orange-800' },
-  IOCL: { short: 'IOCL', cls: 'bg-sky-100 text-sky-800' },
-  'Metro & Railways': { short: 'M&R', cls: 'bg-fuchsia-100 text-fuchsia-800' },
 }
 const typeKey = r => r.site_type || 'Not set'
 const typeChip = t => SITE_TYPE_CHIPS[t] || { short: t === 'Not set' ? '?' : t.slice(0, 4), cls: 'bg-slate-100 text-slate-600' }
