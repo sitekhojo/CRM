@@ -170,7 +170,7 @@ export default function Dashboard() {
     const slipRows = allPending || selYm || dueTo < todayStr ? [] : pendingRows.filter(r => exp(r) && exp(r) < dueFrom)
     const noDateRows = allPending ? [] : pendingRows.filter(r => !exp(r))
     // Weekly view of handovers in the period: weeks of the month (1–7, 8–14, 15–21, 22–end), monthly beyond 4 months
-    const hoWeeks = (() => {
+    const weekSpans = (() => {
       if (allPending) return []
       let months = []
       for (let d = new Date(dueFrom.slice(0, 7) + '-01T12:00:00'); isoDay(d).slice(0, 7) <= dueTo.slice(0, 7); d.setMonth(d.getMonth() + 1)) months.push(isoDay(d).slice(0, 7))
@@ -183,15 +183,25 @@ export default function Dashboard() {
         const spans = monthly ? [[1, last]] : [[1, 7], [8, 14], [15, 21], [22, last]]
         spans.forEach(([a, b], i) => {
           const from = `${k}-${String(a).padStart(2, '0')}`, to = `${k}-${String(b).padStart(2, '0')}`
-          const due = dueRows.filter(r => exp(r) >= from && exp(r) <= to)
-          const done = rows.filter(r => { const h = String(hoDate(r) || '').slice(0, 10); return h >= from && h <= to })
-          out.push({ key: from, label: monthly ? mon : `W${i + 1} · ${a}–${b} ${mon}`, from, to, now: todayStr >= from && todayStr <= to, past: to < todayStr, due, done, ...qs(due), doneQis: qs(done).qis })
+          out.push({ key: from, label: monthly ? mon : `W${i + 1} · ${a}–${b} ${mon}`, from, to, now: todayStr >= from && todayStr <= to, past: to < todayStr })
         })
       }
       return out
     })()
+    const inSpan = (d, w) => { const x = String(d || '').slice(0, 10); return x >= w.from && x <= w.to }
+    const hoWeeks = weekSpans.map(w => {
+      const due = dueRows.filter(r => inSpan(exp(r), w))
+      const done = rows.filter(r => inSpan(hoDate(r), w))
+      return { ...w, due, done, ...qs(due), doneQis: qs(done).qis }
+    })
+    // Energisation: still-to-energise sites by Expected energisation date; ✓ = energised that week (QIS tracker)
+    const enWeeks = weekSpans.map(w => {
+      const due = notLive.filter(r => inSpan(r.extra?.expected_en, w))
+      const doneQis = netAll.reduce((a, n) => a + Object.entries(n.energized_dates || {}).reduce((b, [d, c]) => b + (inSpan(d, w) ? Number(c) || 0 : 0), 0), 0)
+      return { ...w, due, done: [], ...qs(due), doneQis }
+    })
     const hv = {
-      allPending, dueTo, weeks: hoWeeks, due: qs(dueRows), slip: qs(slipRows), noDate: qs(noDateRows),
+      allPending, dueTo, weeks: hoWeeks, enWeeks, due: qs(dueRows), slip: qs(slipRows), noDate: qs(noDateRows),
       lists: { pending: pendingRows, due: dueRows, slip: slipRows, noDate: noDateRows, enThisMonth, enOverdue, hoNext: hoNextMonth, enNext: enNextMonth, handed: handedInP },
       pending: qs(pendingRows), pendingByStage: pendingStages.map(s => ({ id: s.id, name: s.name, color: s.color, rows: dueRows.filter(r => r.stage_id === s.id), ...qs(dueRows.filter(r => r.stage_id === s.id)) })),
       hold: qs(rows.filter(r => r.stage_category === 'hold')), awaiting: qs(awaitingRows), handed: qs(handedInP),
@@ -362,18 +372,12 @@ export default function Dashboard() {
           ))}
         </div>
         {m.hv.weeks.length > 0 && (
-          <div className="mt-3 border-t border-slate-100 pt-3">
-            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{m.hv.weeks.length && !m.hv.weeks[0].label.startsWith('W') ? 'By month' : 'By week'} · pending by Expected HO{m.hv.weeks.some(w => w.doneQis) ? ' · ✓ handed over' : ''}</p>
-            <div className="flex gap-1.5 overflow-x-auto pb-1">
-              {m.hv.weeks.map(w => (
-                <button key={w.key} onClick={() => openList(`Pending handover · Expected HO ${w.label.replace(' · ', ' ')}`, w.due)}
-                  className={`min-w-[7.5rem] shrink-0 rounded-lg border px-2.5 py-1.5 text-left transition hover:shadow-md ${w.now ? 'border-sky-400 bg-sky-50' : 'border-slate-200'} ${w.past && !w.sites ? 'opacity-60' : ''}`}>
-                  <p className={`text-[11px] font-semibold ${w.now ? 'text-sky-700' : 'text-slate-500'}`}>{w.label}{w.now && <span className="ml-1 rounded bg-sky-600 px-1 text-[9px] font-bold uppercase text-white">Now</span>}</p>
-                  <p className="text-sm font-extrabold text-navy-900">{fmtNum(w.qis)} <span className="text-[10px] font-semibold text-slate-400">QIS · {w.sites} sites</span></p>
-                  {w.doneQis > 0 && <p className="text-[10px] font-semibold text-teal-600" onClick={e => { e.stopPropagation(); openList(`Handed over · ${w.label.replace(' · ', ' ')}`, w.done) }}>✓ {fmtNum(w.doneQis)} handed over</p>}
-                </button>
-              ))}
-            </div>
+          <div className="mt-3 space-y-2.5 border-t border-slate-100 pt-3">
+            <WeekRow title="Handover" note="pending by Expected HO" tone="amber" weeks={m.hv.weeks}
+              onOpen={w => openList(`Pending handover · Expected HO ${w.label.replace(' · ', ' ')}`, w.due)}
+              onDone={w => openList(`Handed over · ${w.label.replace(' · ', ' ')}`, w.done)} />
+            <WeekRow title="Energisation" note="to energise by Expected energisation date" tone="green" weeks={m.hv.enWeeks}
+              onOpen={w => openList(`To energise · Expected energisation ${w.label.replace(' · ', ' ')}`, w.due)} doneLabel="energised" />
           </div>
         )}
       </div>
@@ -518,3 +522,26 @@ const Toggle = ({ value, onChange }) => (
   </span>
 )
 const avg = xs => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null)
+
+/** One row of week (or month) boxes: pending QIS by expected date, with a ✓ for what is already done that week. */
+function WeekRow({ title, note, tone, weeks, onOpen, onDone, doneLabel = 'handed over' }) {
+  const monthly = weeks.length && !weeks[0].label.startsWith('W')
+  const t = tone === 'green' ? { bar: 'bg-emerald-500', now: 'border-emerald-400 bg-emerald-50', txt: 'text-emerald-700', pill: 'bg-emerald-600' } : { bar: 'bg-amber-400', now: 'border-sky-400 bg-sky-50', txt: 'text-sky-700', pill: 'bg-sky-600' }
+  return (
+    <div>
+      <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+        <span className={`h-2 w-2 rounded-full ${t.bar}`} /><span className="text-slate-600">{title}</span> · {monthly ? 'by month' : 'by week'} · {note}{weeks.some(w => w.doneQis) ? ` · ✓ ${doneLabel}` : ''}
+      </p>
+      <div className="flex gap-1.5 overflow-x-auto pb-1">
+        {weeks.map(w => (
+          <button key={w.key} onClick={() => onOpen(w)}
+            className={`min-w-[7.5rem] shrink-0 rounded-lg border px-2.5 py-1.5 text-left transition hover:shadow-md ${w.now ? t.now : 'border-slate-200'} ${w.past && !w.sites ? 'opacity-60' : ''}`}>
+            <p className={`text-[11px] font-semibold ${w.now ? t.txt : 'text-slate-500'}`}>{w.label}{w.now && <span className={`ml-1 rounded px-1 text-[9px] font-bold uppercase text-white ${t.pill}`}>Now</span>}</p>
+            <p className="text-sm font-extrabold text-navy-900">{fmtNum(w.qis)} <span className="text-[10px] font-semibold text-slate-400">QIS · {w.sites} sites</span></p>
+            {w.doneQis > 0 && <p className="text-[10px] font-semibold text-teal-600" onClick={onDone ? e => { e.stopPropagation(); onDone(w) } : undefined}>✓ {fmtNum(w.doneQis)} {doneLabel}</p>}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
