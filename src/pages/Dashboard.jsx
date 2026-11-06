@@ -331,12 +331,11 @@ export default function Dashboard() {
       <PeriodBar value={period} onChange={setPeriod} label={m.period.label} future />
 
       {period.kind === 'next' ? (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3">
           <Stat label="Expected handover" value={fmtNum(m.hv.hoNext.qis)} icon={CalendarDays} tone="amber" sub={`${fmtNum(m.hv.hoNext.sites)} sites · by Expected HO date`}
             onClick={() => openList(`Expected handover · ${m.period.label}`, m.hv.lists.hoNext)} />
           <Stat label="Expected energisation" value={fmtNum(m.hv.enNext.qis)} icon={Zap} tone="green" sub={`${fmtNum(m.hv.enNext.sites)} sites · by Expected energisation date`}
             onClick={() => openList(`Expected energisation · ${m.period.label}`, m.hv.lists.enNext)} />
-          <Stat label="Pending handover" value={fmtNum(m.hv.pending.qis)} icon={Boxes} tone="blue" sub={`${fmtNum(m.hv.pending.sites)} sites · in pipeline today`} onClick={() => openList('Pending handover · in pipeline today', m.hv.lists.pending)} />
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -441,29 +440,27 @@ export default function Dashboard() {
         <FranchisePayments filters={filters} compact />
       </Panel>
 
-      <Panel title={`Team performance · by site owner · ${m.period.label}`}>
+      <Panel title={`Team performance · by zone · ${m.period.label}`}>
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead><tr className="border-b border-slate-100">
-              <th className="th">Owner</th><th className="th">Region</th><th className="th text-right">QIS added</th><th className="th text-right">Of those, still Scouting → Handover</th>
+              <th className="th">Zone</th><th className="th">Zonal head</th><th className="th text-right">QIS added</th><th className="th text-right">Of those, still Scouting → Handover</th>
               <th className="th text-right">Handed over</th><th className="th text-right">Energized</th><th className="th text-right">Dropped</th>
             </tr></thead>
             <tbody>
-              {m.team.map((t, i) => (
-                <tr key={t.id} className={`hover:bg-slate-50 ${i && m.team[i - 1].region !== t.region ? 'border-t-2 border-slate-200' : 'border-b border-slate-50'}`}>
+              {byZone(m.team).map(z => (
+                <tr key={z.zone} className="border-b border-slate-50 hover:bg-slate-50">
                   <td className="td font-semibold">
-                    <button className="hover:underline" onClick={() => t.id !== '_none' && goCard(`Sites owned by ${t.name}`, { owner: t.name })}>{t.name}</button>
-                    {t.lead && <span className="ml-1 rounded bg-brand-50 px-1 text-[10px] font-semibold text-brand-700">{t.lead}</span>}
-                    {!t.active && t.id !== '_none' && <span className="ml-1 text-xs text-slate-400">(inactive)</span>}
+                    {REGIONS.includes(z.zone) ? <button className="hover:underline" onClick={() => goCard(`${z.zone} zone sites`, { region: z.zone })}>{z.zone}</button> : z.zone}
                   </td>
-                  <td className="td text-slate-500">{t.region}</td>
-                  <QS v={t.added} bold /><QS v={t.stillOpen} /><QS v={t.ho} cls="text-amber-700" /><QS v={t.won} cls="text-emerald-700" /><QS v={t.dropped} cls="text-slate-500" />
+                  <td className="td text-slate-600">{z.head || '—'}<span className="ml-1 text-[11px] text-slate-400">{z.members > 1 ? `+ ${z.members - 1} in team` : ''}</span></td>
+                  <QS v={z.added} bold /><QS v={z.stillOpen} /><QS v={z.ho} cls="text-amber-700" /><QS v={z.won} cls="text-emerald-700" /><QS v={z.dropped} cls="text-slate-500" />
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <p className="mt-2 text-xs text-slate-500">All columns follow the selected period: added = created in the period; handed over / energized / dropped = happened in the period. Click a name to see their sites. Data as of {fmtDate(new Date())}.</p>
+        <p className="mt-2 text-xs text-slate-500">Each zone adds up every site owned by its zonal head and team. Columns follow the selected period: added = created in the period; handed over / energized / dropped = happened in the period. Click a zone to see its sites.</p>
       </Panel>
 
       <Panel title={<span className="flex flex-wrap items-center gap-2">
@@ -544,4 +541,20 @@ function WeekRow({ title, note, tone, weeks, onOpen, onDone, doneLabel = 'handed
       </div>
     </div>
   )
+}
+
+/** Roll team rows up to one row per zone (zonal head + team). */
+function byZone(team) {
+  const KEYS = ['added', 'stillOpen', 'ho', 'won', 'dropped']
+  const zones = {}
+  for (const t of team) {
+    const zone = t.id === '_none' ? 'Unassigned' : t.region || '—'
+    const z = zones[zone] || (zones[zone] = { zone, head: null, members: 0, ...Object.fromEntries(KEYS.map(k => [k, { qis: 0, sites: 0 }])) })
+    if (t.lead && !z.head) z.head = t.name
+    if (t.id !== '_none') z.members++
+    for (const k of KEYS) { z[k].qis += t[k]?.qis || 0; z[k].sites += t[k]?.sites || 0 }
+  }
+  for (const z of Object.values(zones)) if (!z.head && z.members === 1) z.head = team.find(t => (t.region || '—') === z.zone)?.name
+  const rank = z => { const i = REGIONS.indexOf(z.zone); return i < 0 ? (z.zone === 'Unassigned' ? 99 : 50) : i }
+  return Object.values(zones).filter(z => z.zone !== 'Unassigned' || KEYS.some(k => z[k].sites)).sort((a, b) => rank(a) - rank(b))
 }
