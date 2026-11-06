@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useDeals, applyFilters, EMPTY_FILTERS, fetchNetworkPoints, exitOf, isTrackerSite, addedDay } from '../lib/deals'
+import { useDeals, applyFilters, EMPTY_FILTERS, fetchNetworkPoints, exitOf, isTrackerSite, addedDay, isBulkImport } from '../lib/deals'
 import { useConfig } from '../lib/config'
 import { useAuth } from '../lib/auth'
 import { fmtNum, fmtDate, INTENTS } from '../lib/format'
@@ -76,7 +76,7 @@ export default function Forecast({ view = 'table' }) {
       noDate: sum(notLive.filter(r => !r.extra?.expected_en)),
       est: Object.fromEntries(months.map(k => [k, sum(notLive.filter(r => ym(r.extra?.expected_en) === k && r.extra.expected_en >= today))])),
     }
-    const sc = { done: sum(rows.filter(r => ym(addedDay(r)) === cur)) }
+    const sc = { done: sum(rows.filter(r => !isBulkImport(r) && ym(addedDay(r)) === cur)) }
     const tot = o => sum(months.flatMap(k => o.est[k].list))
     return { months, cur, today, ho: { ...ho, total: tot(ho) }, en: { ...en, total: tot(en) }, sc, openPipe, notLive }
   }, [deals, filters, network, cities])

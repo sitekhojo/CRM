@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell, LabelList, Legend } from 'recharts'
 import { Layers, CalendarPlus, CalendarDays, Zap, Activity, Boxes, Network } from 'lucide-react'
-import { useDeals, applyFilters, EMPTY_FILTERS, fetchNetworkPoints, inPipeline, exitOf, inPipeAt, dayBefore, workedIn, isTrackerSite } from '../lib/deals'
+import { useDeals, applyFilters, EMPTY_FILTERS, fetchNetworkPoints, inPipeline, exitOf, inPipeAt, dayBefore, workedIn, isTrackerSite, isBulkImport } from '../lib/deals'
 import { supabase, fetchAll } from '../lib/supabase'
 import { useConfig, stagesFor, REGIONS, leadLabel } from '../lib/config'
 import DealFilters from '../components/DealFilters'
@@ -122,7 +122,7 @@ export default function Dashboard() {
     const names = [...new Set([...team.filter(t => t.is_active).map(t => t.name), ...rows.map(r => r.owner).filter(Boolean)])]
     const teamRows = [...names.map(n => ({ name: n, t: team.find(x => x.name === n) })), { name: null, t: null }].map(({ name, t }) => {
       const owned = rows.filter(r => (r.owner || null) === name)
-      const added = owned.filter(r => inP(r.created_at))
+      const added = owned.filter(r => !isBulkImport(r) && inP(r.created_at))
       return {
         id: name || '_none', name: name || 'Unassigned', region: t?.region || owned[0]?.region || '—', lead: t?.is_lead ? leadLabel(t.region) : null, active: t ? t.is_active : !!name,
         added: qs(added),
@@ -163,7 +163,7 @@ export default function Dashboard() {
     for (const n of netAll) for (const [d, c] of Object.entries(n.energized_dates || {})) { const k = d.slice(0, 7); enActual[k] = (enActual[k] || 0) + (Number(c) || 0) }
     const expMonth = d => (d && d.slice(0, 7) < curYm ? curYm : String(d || '').slice(0, 7))
     const series = {
-      scout: { actual: byMonth(rows, r => r.created_at), expected: null },
+      scout: { actual: byMonth(rows.filter(r => !isBulkImport(r)), r => r.created_at), expected: null },
       ho: { actual: byMonth(rows, hoDate), expected: byMonth(pendingRows.filter(r => r.extra?.expected_ho), r => expMonth(r.extra.expected_ho)) },
       en: { actual: enActual, expected: byMonth(notLive.filter(r => r.extra?.expected_en), r => expMonth(r.extra.expected_en)),
         base: netAll.reduce((a, n) => a + (Number(n.weight) || 0), 0) - fyMonths().reduce((a, k) => a + (enActual[k] || 0), 0) },
@@ -183,7 +183,7 @@ export default function Dashboard() {
         }).filter(x => x.sites > 0)
       })(),
       period: (() => {
-        const added = rows.filter(r => inP(r.created_at))
+        const added = rows.filter(r => !isBulkImport(r) && inP(r.created_at))
         const stillOpen = added.filter(r => ['active', 'approved'].includes(r.stage_category))
         const ho = rows.filter(r => inP(hoDate(r)))
         // energized in period: QIS-tracker dates + CRM energized sites that are not in the tracker
