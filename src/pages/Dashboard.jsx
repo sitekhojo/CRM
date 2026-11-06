@@ -8,7 +8,7 @@ import { useConfig, stagesFor, REGIONS, leadLabel } from '../lib/config'
 import DealFilters from '../components/DealFilters'
 import PeriodBar, { periodRange, periodLabel, isoDay } from '../components/PeriodBar'
 import FranchisePayments from '../components/FranchisePayments'
-import TargetTrend from '../components/TargetTrend'
+import TargetTrend, { fyMonths } from '../components/TargetTrend'
 import FyPlan from '../components/FyPlan'
 import { Stat, StageBadge, PageLoader, Modal } from '../components/ui'
 import { fmtNum, daysLabel, daysInt, stageAgeTone, AGE_TONES, startOfWeek, startOfMonth, fmtDate } from '../lib/format'
@@ -165,7 +165,8 @@ export default function Dashboard() {
     const series = {
       scout: { actual: byMonth(rows, r => r.created_at), expected: null },
       ho: { actual: byMonth(rows, hoDate), expected: byMonth(pendingRows.filter(r => r.extra?.expected_ho), r => expMonth(r.extra.expected_ho)) },
-      en: { actual: enActual, expected: byMonth(notLive.filter(r => r.extra?.expected_en), r => expMonth(r.extra.expected_en)) },
+      en: { actual: enActual, expected: byMonth(notLive.filter(r => r.extra?.expected_en), r => expMonth(r.extra.expected_en)),
+        base: netAll.reduce((a, n) => a + (Number(n.weight) || 0), 0) - fyMonths().reduce((a, k) => a + (enActual[k] || 0), 0) },
     }
 
     const out = {

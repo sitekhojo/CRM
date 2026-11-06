@@ -5,6 +5,7 @@ import { supabase, errMsg } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { Modal, useToast } from './ui'
 import { fmtNum } from '../lib/format'
+import { usePlan } from './FyPlan'
 
 export const METRICS = [['scout', 'Scouted', '#0ea5e9'], ['ho', 'Handover', '#f59e0b'], ['en', 'Energisation', '#10b981']]
 const ym = d => String(d || '').slice(0, 7)
@@ -28,6 +29,7 @@ export function useTargets() {
 export default function TargetTrend({ series, filtered }) {
   const { isAdmin } = useAuth()
   const { targets, reload } = useTargets()
+  const { plan } = usePlan()
   const [metric, setMetric] = useState('en')
   const [edit, setEdit] = useState(false)
   const months = fyMonths()
@@ -35,13 +37,18 @@ export default function TargetTrend({ series, filtered }) {
   const color = METRICS.find(x => x[0] === metric)[2]
 
   const d = useMemo(() => {
-    if (!targets) return null
+    if (!targets || !plan) return null
     const s = series[metric]
-    let tCum = 0, aCum = 0, pCum = null
-    const hasTargets = months.some(k => Number(targets[k]?.[metric]))
-    const rows = months.map(k => {
+    // Energisation is shown as the whole network: opening network (1 Apr) + energised this FY, against the FY exit target.
+    const base = metric === 'en' ? s.base || 0 : 0
+    const exit = metric === 'en' && !filtered ? Number(plan.company_target) || null : null
+    const monthly = months.some(k => Number(targets[k]?.[metric]))
+    const hasTargets = monthly || !!exit
+    let tCum = 0, aCum = 0, pCum = null, prevT = base
+    const rows = months.map((k, i) => {
       const t = Number(targets[k]?.[metric]) || 0
       tCum += t
+      const tgt = monthly ? base + tCum : exit ? Math.round(base + ((exit - base) * (i + 1)) / 12) : null
       const a = s.actual[k] || 0
       if (k <= cur) aCum += a
       let proj = null
@@ -50,14 +57,15 @@ export default function TargetTrend({ series, filtered }) {
         pCum += (k === cur ? a : 0) + (s.expected[k] || 0)
         proj = pCum
       }
-      return { k, label: mLabel(k), target: hasTargets ? tCum : null, tMonth: t, actual: k <= cur ? aCum : null, aMonth: k <= cur ? a : null, projected: proj, eMonth: s.expected?.[k] || 0 }
+      const tStep = tgt === null ? 0 : tgt - prevT; if (tgt !== null) prevT = tgt
+      return { k, label: mLabel(k), target: tgt, tMonth: tStep, actual: k <= cur ? base + aCum : null, aMonth: k <= cur ? a : null, projected: proj === null ? null : base + proj, eMonth: s.expected?.[k] || 0 }
     })
-    const fyTarget = tCum
-    const done = aCum
+    const fyTarget = exit || (hasTargets ? rows[rows.length - 1].target : 0)
+    const done = base + aCum
     const projectedEnd = s.expected ? rows[rows.length - 1].projected ?? done : done
-    const targetToDate = rows.filter(r => r.k <= cur).reduce((a, r) => a + r.tMonth, 0)
-    return { rows, hasTargets, fyTarget, done, projectedEnd, pipeline: projectedEnd - done, gap: Math.max(0, fyTarget - projectedEnd), targetToDate }
-  }, [targets, series, metric]) // eslint-disable-line
+    const targetToDate = hasTargets ? rows.find(r => r.k === cur)?.target ?? 0 : 0
+    return { rows, hasTargets, fyTarget, done, fyDone: aCum, base, projectedEnd, pipeline: projectedEnd - done, gap: Math.max(0, fyTarget - projectedEnd), targetToDate, isExit: !!exit }
+  }, [targets, plan, series, metric, filtered]) // eslint-disable-line
 
   if (!d) return <div className="card p-6 text-center text-sm text-slate-400">Loading…</div>
   const name = METRICS.find(x => x[0] === metric)[1]
@@ -72,12 +80,12 @@ export default function TargetTrend({ series, filtered }) {
       </div>
 
       <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-5">
-        <Kpi label="FY target" v={d.hasTargets ? fmtNum(d.fyTarget) : '—'} sub={d.hasTargets ? `${fmtNum(d.targetToDate)} due by end of ${mLabel(cur)}` : 'not set yet'} />
-        <Kpi label="Achieved so far" v={fmtNum(d.done)} cls="text-navy-900" sub={d.hasTargets && d.targetToDate ? `${Math.round((100 * d.done) / d.targetToDate)}% of target to date` : 'this FY'} />
+        <Kpi label={d.isExit ? 'FY exit target' : 'FY target'} v={d.hasTargets ? fmtNum(d.fyTarget) : '—'} sub={d.hasTargets ? `${fmtNum(d.targetToDate)} due by end of ${mLabel(cur)}` : 'not set yet'} />
+        <Kpi label={metric === 'en' ? 'Energised today' : 'Achieved so far'} v={fmtNum(d.done)} cls="text-navy-900" sub={metric === 'en' ? `+${fmtNum(d.fyDone)} this FY on ${fmtNum(d.base)} at 1 Apr` : d.hasTargets && d.targetToDate ? `${Math.round((100 * d.done) / d.targetToDate)}% of target to date` : 'this FY'} />
         <Kpi label="In pipeline (expected)" v={series[metric].expected ? fmtNum(d.pipeline) : '—'} cls="text-amber-700" sub={series[metric].expected ? `by expected ${metric === 'ho' ? 'HO' : 'energisation'} dates, rest of FY` : 'n/a for scouting'} />
         <Kpi label="Heading to" v={fmtNum(d.projectedEnd)} cls="text-sky-700" sub="by end of FY at this rate" />
-        <Kpi label={metric === 'scout' ? 'Still to scout' : 'Additional to scout'} v={d.hasTargets ? fmtNum(d.gap) : '—'} cls={d.gap ? 'text-red-600' : 'text-emerald-700'}
-          sub={!d.hasTargets ? 'set targets to see the gap' : d.gap ? `QIS short of the FY target` : 'on track for the FY target'} />
+        <Kpi label={metric === 'scout' ? 'Still to scout' : 'Gap to target'} v={d.hasTargets ? fmtNum(d.gap) : '—'} cls={d.gap ? 'text-red-600' : 'text-emerald-700'}
+          sub={!d.hasTargets ? (metric === 'en' && filtered ? 'exit target is company-wide · clear filters' : 'set targets to see the gap') : d.gap ? `QIS still needed beyond the pipeline` : 'on track for the FY target'} />
       </div>
 
       <ResponsiveContainer width="100%" height={300}>
