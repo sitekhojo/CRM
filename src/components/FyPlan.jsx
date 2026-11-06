@@ -116,14 +116,14 @@ export default function FyPlan({ deals, network, cities = [], team = [], filters
         <Flow l="Energised today" v={fmtNum(netEnergised)} s={<span className="flex items-center gap-1.5" title={`${fmtNum(T.energised)} QIS in the ${list.length} plan cities`}><span className="h-1.5 w-12 overflow-hidden rounded-full bg-slate-200"><span className="block h-1.5 bg-emerald-500" style={{ width: `${Math.min(100, enPct)}%` }} /></span>{enPct}% of exit · {fmtNum(T.energised)} in plan cities</span>} cls="text-emerald-700" />
         <Flow l="Acquisition target" v={fmtNum(Math.ceil(T.acq))} s={`of ${fmtNum(T.short)} short · rest SPP`} cls="text-navy-900" />
         <Flow l="Already handed over" v={fmtNum(T.ho)} s="awaiting energisation" cls="text-teal-600" dot="bg-teal-500" />
-        <Flow l="Still to acquire" v={fmtNum(Math.ceil(T.toAcquire))} s="acquisition target − handed over" cls="text-red-600" dot="bg-red-500" big />
-        <Flow l={`of which in pipeline ${monthLbl(cur)} + ${monthLbl(next)}`} v={fmtNum(T.vis)} s={`${fmtNum(T.visCur)} + ${fmtNum(T.visNext)} by expected HO · not yet acquired`} cls="text-amber-600" dot="bg-amber-400" />
+        <Flow l={`Visibility ${monthLbl(cur)} + ${monthLbl(next)}`} v={fmtNum(T.vis)} s={`${fmtNum(T.visCur)} + ${fmtNum(T.visNext)} by expected HO`} cls="text-amber-600" dot="bg-amber-400" />
+        <Flow l="Still to scout" v={fmtNum(Math.ceil(T.toAcquire))} s="acquisition target − handed over" cls="text-red-600" dot="bg-red-500" big />
       </div>
 
       {/* city rows */}
       <div className="px-5 py-3">
         <div className="mb-1 flex items-center gap-4 text-[11px] text-slate-500">
-          <span className="w-36">City</span><span className="hidden w-28 text-right md:block">Energised / target</span><span className="flex-1">Acquisition target, split</span><span className="w-20 text-right">To acquire</span>
+          <span className="w-36">City</span><span className="hidden w-28 text-right md:block">Energised / target</span><span className="flex-1">Acquisition target, split</span><span className="w-20 text-right">To scout</span>
         </div>
         <div className="divide-y divide-slate-100">
           {list.map(x => {
