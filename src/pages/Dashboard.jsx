@@ -278,23 +278,19 @@ export default function Dashboard() {
       <PeriodBar value={period} onChange={setPeriod} label={m.period.label} future />
 
       {period.kind === 'next' ? (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
           <Stat label="Expected handover" value={fmtNum(m.hv.hoNext.qis)} icon={CalendarDays} tone="amber" sub={`${fmtNum(m.hv.hoNext.sites)} sites · by Expected HO date · ${m.period.label.replace('in ', '')}`}
             onClick={() => nav('/app/acquisition?tab=list')} />
           <Stat label="Expected energisation" value={fmtNum(m.hv.enNext.qis)} icon={Zap} tone="green" sub={`${fmtNum(m.hv.enNext.sites)} sites · by Expected energisation date`}
             onClick={() => nav('/app/acquisition?tab=list')} />
           <Stat label="Pending handover" value={fmtNum(m.hv.pending.qis)} icon={Boxes} tone="blue" sub={`${fmtNum(m.hv.pending.sites)} sites · in pipeline today`} onClick={() => goCard('Pending handover', { stage: m.hv.pendingByStage.map(s => s.id).join(',') })} />
-          <Stat label="Handed over, awaiting energisation" value={fmtNum(m.hv.awaiting.qis)} icon={CalendarDays} tone="teal" sub={`${fmtNum(m.hv.awaiting.sites)} sites · today`}
-            onClick={() => goCard('Handover Done · awaiting energisation', { stage: String(stages.find(s => s.key === 'ho_done')?.id || '') })} />
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <Stat label="Handed over" value={fmtNum(m.hv.handed.qis)} icon={CalendarDays} tone="amber" sub={`${fmtNum(m.hv.handed.sites)} sites · ${m.period.label}`}
             onClick={() => goCard(`Handed over ${m.period.label}`, { exit: `ho,${m.period.from},${m.period.to}` })} />
           <Stat label="Pending handover" value={fmtNum(m.hv.pending.qis)} icon={Boxes} tone="blue" sub={`${fmtNum(m.hv.pending.sites)} sites · in pipeline today`}
             onClick={() => goCard('Pending handover', { stage: m.hv.pendingByStage.map(s => s.id).join(',') })} />
-          <Stat label="Awaiting energisation" value={fmtNum(m.hv.awaiting.qis)} icon={CalendarDays} tone="teal" sub={`${fmtNum(m.hv.awaiting.sites)} sites · Handover Done today`}
-            onClick={() => goCard('Handover Done · awaiting energisation', { stage: String(stages.find(s => s.key === 'ho_done')?.id || '') })} />
           <Stat label="To energize this month" value={fmtNum(m.hv.enThisMonth.qis)} icon={Zap} tone="amber" sub={`${fmtNum(m.hv.enThisMonth.sites)} sites · expected${m.hv.enOverdue.sites ? ` · +${fmtNum(m.hv.enOverdue.qis)} QIS overdue` : ''}`}
             onClick={() => nav('/app/acquisition?tab=list')} />
           <Stat label="Energized" value={fmtNum(m.period.en.qis)} icon={Zap} tone="green" sub={`${fmtNum(m.period.en.sites)} sites · ${m.period.label} · QIS tracker`}
