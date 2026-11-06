@@ -104,7 +104,7 @@ export default function FyPlan({ deals, network, cities = [], team = [], filters
       <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 bg-gradient-to-r from-navy-900 to-slate-800 px-5 py-4 text-white">
         <div className="mr-auto">
           <h3 className="flex items-center gap-2 text-base font-bold"><Flag className="h-4 w-4" />FY exit plan</h3>
-          <p className="text-xs text-slate-300">What the acquisition team still has to find · acquire by {fmtDate(plan.scout_by)}</p>
+          <p className="text-xs text-slate-300">How the gap to the FY exit target splits between SPP and the acquisition team</p>
         </div>
         <div className="flex rounded-lg bg-white/10 p-0.5">
           {zones.map(z => { const v = zoneOf(z).toAcquire; return (
@@ -115,15 +115,22 @@ export default function FyPlan({ deals, network, cities = [], team = [], filters
         {isAdmin && <button className="rounded-lg bg-white/10 px-2.5 py-1.5 text-xs font-semibold hover:bg-white/20" onClick={() => setEdit(true)}><Pencil className="mr-1 inline h-3.5 w-3.5" />Edit</button>}
       </div>
 
-      {/* flow strip */}
-      <div className="grid grid-cols-2 gap-px bg-slate-100 sm:grid-cols-3 lg:grid-cols-7">
-        <Flow l="FY exit target" v={fmtNum(exit)} s={zone === 'All' && company && company !== T.target ? `${fmtNum(T.target)} cities + ${fmtNum(company - T.target)} SPP / other` : `${list.length} cities`} />
-        <Flow l="Energised today" v={fmtNum(netEnergised)} s={<span className="flex items-center gap-1.5" title={`${fmtNum(T.energised)} QIS in the ${list.length} plan cities`}><span className="h-1.5 w-12 overflow-hidden rounded-full bg-slate-200"><span className="block h-1.5 bg-emerald-500" style={{ width: `${Math.min(100, enPct)}%` }} /></span>{enPct}% of exit · {fmtNum(T.energised)} in plan cities</span>} cls="text-emerald-700" />
-        <Flow l="Acquisition target" v={fmtNum(Math.ceil(T.acq))} s={zone === 'All' && company ? `of ${fmtNum(Math.max(0, company - netEnergised))} short (${fmtNum(company)} − ${fmtNum(netEnergised)}) · rest SPP` : `of ${fmtNum(T.short)} short · rest SPP`} cls="text-navy-900" />
-        <Flow l="SPP balance" v={fmtNum(sppTarget)} s={<span title="SPP sites not yet energised or dropped, weighted QIS">{fmtNum(shortAll)} short − {fmtNum(Math.ceil(T.acq))} acquisition · SPP pipeline {fmtNum(Math.round(sppPipe))}</span>} cls="text-orange-600" dot="bg-orange-400" />
-        <Flow l="Already handed over" v={fmtNum(T.ho)} s="awaiting energisation" cls="text-teal-600" dot="bg-teal-500" />
-        <Flow l={`Visibility ${monthLbl(cur)} + ${monthLbl(next)}`} v={fmtNum(T.vis)} s={`${fmtNum(T.visCur)} + ${fmtNum(T.visNext)} by expected HO`} cls="text-amber-600" dot="bg-amber-400" />
-        <Flow l="Still to scout" v={fmtNum(Math.ceil(T.toAcquire))} s="acquisition target − handed over" cls="text-red-600" dot="bg-red-500" big />
+      {/* flow strip: where we stand → how the gap splits (SPP | acquisition team) */}
+      <div className="grid gap-3 bg-slate-50 p-3 lg:grid-cols-[3fr_1.1fr_4fr]">
+        <Group title="Where we stand" sub={`${fmtNum(exit)} exit − ${fmtNum(netEnergised)} energised = ${fmtNum(shortAll)} short`} tone="slate">
+          <Flow l="FY exit target" v={fmtNum(exit)} s={zone === 'All' && company && company !== T.target ? `${fmtNum(T.target)} cities + ${fmtNum(company - T.target)} SPP / other` : `${list.length} cities`} />
+          <Flow l="Energised today" v={fmtNum(netEnergised)} s={<span className="flex items-center gap-1.5" title={`${fmtNum(T.energised)} QIS in the ${list.length} plan cities`}><span className="h-1.5 w-10 overflow-hidden rounded-full bg-slate-200"><span className="block h-1.5 bg-emerald-500" style={{ width: `${Math.min(100, enPct)}%` }} /></span>{enPct}% of exit</span>} cls="text-emerald-700" />
+          <Flow l="Short" v={fmtNum(shortAll)} s="to be split below →" cls="text-navy-900" />
+        </Group>
+        <Group title="SPP" sub={`${fmtNum(sppTarget)} of ${fmtNum(shortAll)} short`} tone="orange">
+          <Flow l="SPP balance" v={fmtNum(sppTarget)} s={<span title="SPP sites not yet energised or dropped, weighted QIS">SPP pipeline {fmtNum(Math.round(sppPipe))} QIS</span>} cls="text-orange-600" />
+        </Group>
+        <Group title="Acquisition team" sub={`${fmtNum(Math.ceil(T.acq))} of ${fmtNum(shortAll)} short · acquire by ${fmtDate(plan.scout_by)}`} tone="navy">
+          <Flow l="Acquisition target" v={fmtNum(Math.ceil(T.acq))} s="city short × acquisition share" cls="text-navy-900" />
+          <Flow l="Already handed over" v={fmtNum(T.ho)} s="awaiting energisation" cls="text-teal-600" dot="bg-teal-500" />
+          <Flow l={`Visibility ${monthLbl(cur)} + ${monthLbl(next)}`} v={fmtNum(T.vis)} s={`${fmtNum(T.visCur)} + ${fmtNum(T.visNext)} by expected HO`} cls="text-amber-600" dot="bg-amber-400" />
+          <Flow l="Still to scout" v={fmtNum(Math.ceil(T.toAcquire))} s="target − handed over" cls="text-red-600" dot="bg-red-500" big />
+        </Group>
       </div>
 
       {/* city rows */}
@@ -212,8 +219,19 @@ function sumUp(list, days) {
   const scout = s('sitesScout')
   return { energised: s('energised'), target: s('target'), short: s('short'), acq: s('acq'), ho: s('ho'), visCur: s('visCur'), visNext: s('visNext'), vis: s('vis'), toAcquire: s('toAcquire'), sitesWin: s('sitesWin'), sitesScout: scout, needDay: days ? scout / days : null, paceDay: s('paceDay'), scouted30: s('scouted30') }
 }
+const GROUP_TONES = {
+  slate: 'border-slate-200 [&>header]:bg-slate-100 [&>header]:text-slate-700',
+  orange: 'border-orange-300 [&>header]:bg-orange-50 [&>header]:text-orange-800',
+  navy: 'border-navy-900/30 [&>header]:bg-navy-900 [&>header]:text-white',
+}
+const Group = ({ title, sub, tone, children }) => (
+  <div className={`overflow-hidden rounded-xl border-2 bg-white ${GROUP_TONES[tone]}`}>
+    <header className="flex flex-wrap items-baseline gap-x-2 px-3 py-1.5"><span className="text-xs font-extrabold uppercase tracking-wide">{title}</span><span className="text-[11px] opacity-80">{sub}</span></header>
+    <div className="grid grid-flow-col auto-cols-fr divide-x divide-slate-100">{children}</div>
+  </div>
+)
 const Flow = ({ l, v, s, cls = 'text-slate-900', dot, big }) => (
-  <div className={`bg-white px-4 py-3 ${big ? 'bg-red-50/60' : ''}`}>
+  <div className={`min-w-0 px-3 py-2.5 ${big ? 'bg-red-50/60' : 'bg-white'}`}>
     <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{dot && <span className={`h-2 w-2 rounded-full ${dot}`} />}{l}</p>
     <p className={`text-2xl font-extrabold leading-tight ${cls}`}>{v}</p>
     <div className="text-[11px] text-slate-500">{s}</div>
