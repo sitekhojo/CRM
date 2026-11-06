@@ -163,12 +163,13 @@ export default function FyPlan({ deals, network, cities = [], team = [], filters
           <Mini l="Pace / day" v={fmtNum(Math.ceil(T.paceDay))} cls={T.needDay && T.paceDay >= T.needDay ? 'text-emerald-600' : 'text-amber-600'} s={`${T.scouted30} sites in 30 days`} />
         </div>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          {list.filter(x => x.acq > 0).map(x => {
+          {clubNcr(list.filter(x => x.acq > 0), m.days).map(x => {
             const pct = x.needDay ? Math.round((100 * x.paceDay) / x.needDay) : 100
             const col = !x.needDay ? 'bg-emerald-500' : pct >= 100 ? 'bg-emerald-500' : pct >= 70 ? 'bg-amber-400' : 'bg-red-500'
             return (
               <div key={x.city} className="rounded-xl border border-slate-200 bg-white p-3">
                 <div className="flex items-baseline justify-between"><p className="truncate font-semibold text-slate-900">{x.city}</p><p className="truncate pl-2 text-[11px] text-slate-400">{x.owner}</p></div>
+                {x.parts && <p className="truncate text-[10px] text-slate-400">{x.parts.join(' · ')}</p>}
                 {x.needDay ? <>
                   <p className="mt-1 text-xs text-slate-500"><b className="text-lg font-extrabold text-slate-900">{fmtNum(Math.ceil(x.needDay))}</b> sites/day needed · <b>{fmtNum(Math.ceil(x.needDay) * plan.work_days)}</b>/wk</p>
                   <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className={`h-1.5 ${col}`} style={{ width: `${Math.min(100, pct)}%` }} /></div>
@@ -186,6 +187,19 @@ export default function FyPlan({ deals, network, cities = [], team = [], filters
 }
 
 const REGION_ORDER = ['North', 'South', 'West', 'East']
+const NCR = ['delhi', 'gurugram', 'gurgaon', 'noida', 'greater noida', 'ghaziabad', 'faridabad']
+/** Scouting cards: Delhi, Gurugram, Noida, Ghaziabad and Faridabad clubbed into one NCR card. */
+function clubNcr(list, days) {
+  const ncr = list.filter(x => NCR.includes(x.city.toLowerCase()))
+  if (ncr.length < 2) return list
+  const s = k => ncr.reduce((a, x) => a + (x[k] || 0), 0)
+  const scout = s('sitesScout')
+  const owners = [...new Set(ncr.map(x => x.owner).filter(o => o && o !== '—'))]
+  const card = { city: 'NCR', parts: ncr.map(x => x.city), owner: owners.join(', ') || '—', acq: s('acq'), toAcquire: s('toAcquire'), sitesWin: s('sitesWin'), sitesScout: scout,
+    needDay: days && scout ? Math.ceil(scout / days) : null, paceDay: s('paceDay'), scouted30: s('scouted30') }
+  const rest = list.filter(x => !ncr.includes(x))
+  return [card, ...rest]
+}
 function sumUp(list, days) {
   const s = k => list.reduce((a, x) => a + (x[k] || 0), 0)
   const scout = s('sitesScout')
