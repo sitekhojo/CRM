@@ -154,9 +154,24 @@ export default function Dashboard() {
     const hoNextMonth = pendingRows.filter(r => String(r.extra?.expected_ho || '').slice(0, 7) === nextYm)
     const enNextMonth = notLive.filter(r => String(r.extra?.expected_en || '').slice(0, 7) === nextYm)
     const handedInP = rows.filter(r => inP(hoDate(r)))
+    // Pending handover follows the period: sites whose Expected HO falls in it (whole pipeline for "All time")
+    const dueTo = (() => {
+      const a = pStart
+      if (period.kind === 'month') return isoDay(new Date(a.getFullYear(), a.getMonth() + 1, 0))
+      if (period.kind === 'quarter') return isoDay(new Date(a.getFullYear(), a.getMonth() + 3, 0))
+      if (period.kind === 'fy') return isoDay(new Date(a.getFullYear() + 1, 2, 31))
+      return isoDay(pEnd)
+    })()
+    const dueFrom = isoDay(pStart)
+    const allPending = period.kind === 'all'
+    const exp = r => r.extra?.expected_ho || ''
+    const dueRows = allPending ? pendingRows : pendingRows.filter(r => exp(r) >= dueFrom && exp(r) <= dueTo)
+    const slipRows = allPending || dueTo < todayStr ? [] : pendingRows.filter(r => exp(r) && exp(r) < dueFrom)
+    const noDateRows = allPending ? [] : pendingRows.filter(r => !exp(r))
     const hv = {
-      lists: { pending: pendingRows, enThisMonth, enOverdue, hoNext: hoNextMonth, enNext: enNextMonth, handed: handedInP },
-      pending: qs(pendingRows), pendingByStage: pendingStages.map(s => ({ id: s.id, name: s.name, color: s.color, rows: pendingRows.filter(r => r.stage_id === s.id), ...qs(pendingRows.filter(r => r.stage_id === s.id)) })),
+      allPending, dueTo, due: qs(dueRows), slip: qs(slipRows), noDate: qs(noDateRows),
+      lists: { pending: pendingRows, due: dueRows, slip: slipRows, noDate: noDateRows, enThisMonth, enOverdue, hoNext: hoNextMonth, enNext: enNextMonth, handed: handedInP },
+      pending: qs(pendingRows), pendingByStage: pendingStages.map(s => ({ id: s.id, name: s.name, color: s.color, rows: dueRows.filter(r => r.stage_id === s.id), ...qs(dueRows.filter(r => r.stage_id === s.id)) })),
       hold: qs(rows.filter(r => r.stage_category === 'hold')), awaiting: qs(awaitingRows), handed: qs(handedInP),
       enThisMonth: qs(enThisMonth), enOverdue: qs(enOverdue), hoNext: qs(hoNextMonth), enNext: qs(enNextMonth), curYm, nextYm,
     }
@@ -295,8 +310,14 @@ export default function Dashboard() {
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <Stat label="Handed over" value={fmtNum(m.hv.handed.qis)} icon={CalendarDays} tone="amber" sub={`${fmtNum(m.hv.handed.sites)} sites · ${m.period.label}`}
             onClick={() => openList(`Handed over ${m.period.label}`, m.hv.lists.handed)} />
-          <Stat label="Pending handover" value={fmtNum(m.hv.pending.qis)} icon={Boxes} tone="blue" sub={`${fmtNum(m.hv.pending.sites)} sites · in pipeline today`}
-            onClick={() => openList('Pending handover · in pipeline today', m.hv.lists.pending)} />
+          {m.hv.allPending ? (
+            <Stat label="Pending handover" value={fmtNum(m.hv.pending.qis)} icon={Boxes} tone="blue" sub={`${fmtNum(m.hv.pending.sites)} sites · whole pipeline today`}
+              onClick={() => openList('Pending handover · whole pipeline today', m.hv.lists.pending)} />
+          ) : (
+            <Stat label="Pending handover" value={fmtNum(m.hv.due.qis)} icon={Boxes} tone="blue"
+              sub={`${fmtNum(m.hv.due.sites)} sites · Expected HO ${m.period.label}${m.hv.slip.sites ? ` · +${fmtNum(m.hv.slip.qis)} QIS overdue` : ''}`}
+              onClick={() => openList(`Pending handover · Expected HO ${m.period.label}${m.hv.slip.sites ? ' (overdue listed separately)' : ''}`, m.hv.lists.due)} />
+          )}
           <Stat label="To energize this month" value={fmtNum(m.hv.enThisMonth.qis)} icon={Zap} tone="amber" sub={`${fmtNum(m.hv.enThisMonth.sites)} sites · expected${m.hv.enOverdue.sites ? ` · +${fmtNum(m.hv.enOverdue.qis)} QIS overdue` : ''}`}
             onClick={() => openList('To energize this month · by Expected energisation date', m.hv.lists.enThisMonth)} />
           <Stat label="Energized" value={fmtNum(m.period.en.qis)} icon={Zap} tone="green" sub={`${fmtNum(m.period.en.sites)} sites · ${m.period.label} · QIS tracker`}
@@ -306,7 +327,7 @@ export default function Dashboard() {
       <div className="card p-4">
         <div className="mb-2 flex flex-wrap items-baseline gap-2">
           <h3 className="text-sm font-bold text-slate-900">Pending handover by stage</h3>
-          <span className="text-xs text-slate-500">today · not dropped, not on hold{m.hv.hold.sites ? ` · ${fmtNum(m.hv.hold.qis)} QIS (${m.hv.hold.sites} sites) on hold` : ''}</span>
+          <span className="text-xs text-slate-500">{m.hv.allPending ? 'whole pipeline today' : `Expected HO ${m.period.label}`} · not dropped, not on hold{!m.hv.allPending && m.hv.slip.sites ? <> · <button className="font-semibold text-red-600 hover:underline" onClick={() => openList('Pending handover · Expected HO date already passed', m.hv.lists.slip)}>{fmtNum(m.hv.slip.qis)} QIS overdue</button></> : null}{!m.hv.allPending && m.hv.noDate.sites ? <> · <button className="font-semibold text-slate-600 hover:underline" onClick={() => openList('Pending handover · no Expected HO date', m.hv.lists.noDate)}>{fmtNum(m.hv.noDate.qis)} QIS with no Expected HO date</button></> : null}{m.hv.hold.sites ? ` · ${fmtNum(m.hv.hold.qis)} QIS (${m.hv.hold.sites} sites) on hold` : ''}</span>
           <button className="ml-auto text-xs font-semibold text-brand-700 hover:underline" onClick={() => nav('/app/map?network=1')}>Energized network: {fmtNum(m.netQis)} QIS · {fmtNum(m.netSites)} sites →</button>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
