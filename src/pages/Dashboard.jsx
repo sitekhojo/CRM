@@ -279,7 +279,7 @@ export default function Dashboard() {
 
       {period.kind === 'next' ? (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-          <Stat label="Expected handover" value={fmtNum(m.hv.hoNext.qis)} icon={CalendarDays} tone="amber" sub={`${fmtNum(m.hv.hoNext.sites)} sites · by Expected HO date · ${m.period.label.replace('in ', '')}`}
+          <Stat label="Expected handover" value={fmtNum(m.hv.hoNext.qis)} icon={CalendarDays} tone="amber" sub={`${fmtNum(m.hv.hoNext.sites)} sites · by Expected HO date`}
             onClick={() => nav('/app/acquisition?tab=list')} />
           <Stat label="Expected energisation" value={fmtNum(m.hv.enNext.qis)} icon={Zap} tone="green" sub={`${fmtNum(m.hv.enNext.sites)} sites · by Expected energisation date`}
             onClick={() => nav('/app/acquisition?tab=list')} />
