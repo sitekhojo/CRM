@@ -49,7 +49,7 @@ export default function FyPlan({ deals, network, cities = [], team = [], filters
     const region = Object.fromEntries(cities.map(c => [c.name.toLowerCase(), c.region]))
     const owner = Object.fromEntries(cities.map(c => [c.name.toLowerCase(), c.owner]))
     const keep = c => (!filters.region.length || filters.region.includes(region[c.toLowerCase()])) && (!filters.city.length || filters.city.includes(c))
-    const rows0 = deals.filter(r => !isTrackerSite(r))
+    const rows0 = deals.filter(r => !isTrackerSite(r) && r.site_type !== 'SPP') // acquisition team only; SPP is tracked separately
     const days = workDays(now, plan.scout_by, plan.work_days)
     const since = new Date(now); since.setDate(since.getDate() - 30)
     const days30 = workDays(since, now.toISOString().slice(0, 10), plan.work_days) || 1
