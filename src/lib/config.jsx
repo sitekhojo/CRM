@@ -62,11 +62,10 @@ export function ownerOptions(team = [], region, current) {
   const act = team.filter(t => t.is_active || t.name === current)
   const order = [region, ...REGIONS.filter(r => r !== region)].filter(Boolean)
   const groups = order.map(r => ({ region: r, members: act.filter(t => t.region === r) })).filter(g => g.members.length)
-  const other = act.filter(t => !REGIONS.includes(t.region))
-  if (other.length) groups.push({ region: 'Other', members: other })
+  for (const r of [...new Set(act.filter(t => !REGIONS.includes(t.region)).map(t => t.region || 'Other'))]) groups.push({ region: r, members: act.filter(t => (t.region || 'Other') === r) })
   if (current && !act.some(t => t.name === current)) groups.push({ region: 'Former', members: [{ name: current }] })
   return groups
 }
 
 /** Badge for a team lead: zonal head for North/South/West, "lead" elsewhere (e.g. East). */
-export const leadLabel = region => (['North', 'South', 'West'].includes(region) ? 'Zonal head' : 'lead')
+export const leadLabel = region => (['North', 'South', 'West', 'SPP'].includes(region) ? (region === 'SPP' ? 'SPP head' : 'Zonal head') : 'lead')
