@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell, LabelList, Legend } from 'recharts'
 import { Layers, CalendarPlus, CalendarDays, Zap, Activity, Boxes, Network } from 'lucide-react'
-import { useDeals, applyFilters, EMPTY_FILTERS, fetchNetworkPoints, inPipeline, exitOf, inPipeAt, dayBefore, workedIn, isTrackerSite, isBulkImport } from '../lib/deals'
+import { addedDay, useDeals, applyFilters, EMPTY_FILTERS, fetchNetworkPoints, inPipeline, exitOf, inPipeAt, dayBefore, workedIn, isTrackerSite, isBulkImport } from '../lib/deals'
 import { supabase, fetchAll } from '../lib/supabase'
 import { useConfig, stagesFor, REGIONS, leadLabel } from '../lib/config'
 import DealFilters from '../components/DealFilters'
@@ -188,6 +188,7 @@ export default function Dashboard() {
       }
       return out
     })()
+    const localDayOf = d => (d ? addedDay({ created_at: d }) : '')
     const inSpan = (d, w) => { const x = String(d || '').slice(0, 10); return x >= w.from && x <= w.to }
     const hoWeeks = weekSpans.map(w => {
       const due = dueRows.filter(r => inSpan(exp(r), w))
@@ -200,8 +201,14 @@ export default function Dashboard() {
       const doneQis = netAll.reduce((a, n) => a + Object.entries(n.energized_dates || {}).reduce((b, [d, c]) => b + (inSpan(d, w) ? Number(c) || 0 : 0), 0), 0)
       return { ...w, due, done: [], ...qs(due), doneQis }
     })
+    // Leads & deals created per week (manual adds only; bulk imports left out)
+    const addWeeks = weekSpans.map(w => {
+      const made = rows.filter(r => !isBulkImport(r) && inSpan(localDayOf(r.created_at), w))
+      const leads = made.filter(r => r.record_type === 'lead'), dealsW = made.filter(r => r.record_type !== 'lead')
+      return { ...w, future: w.from > todayStr, leads, deals: dealsW, l: qs(leads), d: qs(dealsW) }
+    })
     const hv = {
-      allPending, dueTo, weeks: hoWeeks, enWeeks, due: qs(dueRows), slip: qs(slipRows), noDate: qs(noDateRows),
+      allPending, dueTo, weeks: hoWeeks, enWeeks, addWeeks, due: qs(dueRows), slip: qs(slipRows), noDate: qs(noDateRows),
       lists: { pending: pendingRows, due: dueRows, slip: slipRows, noDate: noDateRows, enThisMonth, enOverdue, hoNext: hoNextMonth, enNext: enNextMonth, handed: handedInP },
       pending: qs(pendingRows), pendingByStage: pendingStages.map(s => ({ id: s.id, name: s.name, color: s.color, rows: dueRows.filter(r => r.stage_id === s.id), ...qs(dueRows.filter(r => r.stage_id === s.id)) })),
       hold: qs(rows.filter(r => r.stage_category === 'hold')), awaiting: qs(awaitingRows), handed: qs(handedInP),
@@ -373,12 +380,15 @@ export default function Dashboard() {
           ))}
         </div>
         {m.hv.weeks.length > 0 && (
-          <div className="mt-3 space-y-2.5 border-t border-slate-100 pt-3">
-            <WeekRow title="Handover" note="pending by Expected HO" tone="amber" weeks={m.hv.weeks}
-              onOpen={w => openList(`Pending handover · Expected HO ${w.label.replace(' · ', ' ')}`, w.due)}
-              onDone={w => openList(`Handed over · ${w.label.replace(' · ', ' ')}`, w.done)} />
-            <WeekRow title="Energisation" note="to energise by Expected energisation date" tone="green" weeks={m.hv.enWeeks}
-              onOpen={w => openList(`To energise · Expected energisation ${w.label.replace(' · ', ' ')}`, w.due)} doneLabel="energised" />
+          <div className={`mt-3 grid gap-4 border-t border-slate-100 pt-3 ${m.hv.addWeeks.some(w => !w.future) ? 'xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]' : ''}`}>
+            <div className="min-w-0 space-y-2.5">
+              <WeekRow title="Handover" note="pending by Expected HO" tone="amber" weeks={m.hv.weeks}
+                onOpen={w => openList(`Pending handover · Expected HO ${w.label.replace(' · ', ' ')}`, w.due)}
+                onDone={w => openList(`Handed over · ${w.label.replace(' · ', ' ')}`, w.done)} />
+              <WeekRow title="Energisation" note="to energise by Expected energisation date" tone="green" weeks={m.hv.enWeeks}
+                onOpen={w => openList(`To energise · Expected energisation ${w.label.replace(' · ', ' ')}`, w.due)} doneLabel="energised" />
+            </div>
+            {m.hv.addWeeks.some(w => !w.future) && <AddedTrend weeks={m.hv.addWeeks} onOpen={(w, kind) => openList(`${kind === 'lead' ? 'Leads' : 'Deals'} created · ${w.label.replace(' · ', ' ')}`, kind === 'lead' ? w.leads : w.deals)} />}
           </div>
         )}
       </div>
@@ -559,4 +569,37 @@ function byZone(team) {
   for (const z of Object.values(zones)) if (!z.head && z.members === 1) z.head = team.find(t => (t.region || '—') === z.zone)?.name
   const rank = z => { const i = REGIONS.indexOf(z.zone); return i < 0 ? (z.zone === 'Unassigned' ? 99 : 50) : i }
   return Object.values(zones).filter(z => z.zone !== 'Unassigned' || KEYS.some(k => z[k].sites)).sort((a, b) => rank(a) - rank(b))
+}
+
+/** Leads and deals created each week: count + QIS, with a small bar to show the trend. */
+function AddedTrend({ weeks, onOpen }) {
+  const monthly = weeks.length && !weeks[0].label.startsWith('W')
+  const max = Math.max(1, ...weeks.map(w => w.l.sites + w.d.sites))
+  const tot = weeks.reduce((a, w) => ({ l: a.l + w.l.sites, lq: a.lq + w.l.qis, d: a.d + w.d.sites, dq: a.dq + w.d.qis }), { l: 0, lq: 0, d: 0, dq: 0 })
+  return (
+    <div className="min-w-0 rounded-xl border border-slate-200 p-3">
+      <p className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+        <span className="text-slate-600">Created</span> · {monthly ? 'by month' : 'by week'}
+        <span className="flex items-center gap-1 normal-case"><span className="h-2 w-2 rounded-sm bg-violet-400" />Leads {tot.l} · {fmtNum(tot.lq)} QIS</span>
+        <span className="flex items-center gap-1 normal-case"><span className="h-2 w-2 rounded-sm bg-sky-600" />Deals {tot.d} · {fmtNum(tot.dq)} QIS</span>
+      </p>
+      <div className="flex items-end gap-2 overflow-x-auto pb-1">
+        {weeks.map(w => (
+          <div key={w.key} className={`min-w-[4.5rem] flex-1 text-center ${w.future ? 'opacity-40' : ''}`}>
+            <div className="mx-auto flex h-16 w-8 flex-col justify-end overflow-hidden rounded-t-md bg-slate-50">
+              {w.d.sites > 0 && <button title={`Deals: ${w.d.sites} · ${fmtNum(w.d.qis)} QIS`} onClick={() => onOpen(w, 'deal')} className="w-full bg-sky-600 hover:opacity-80" style={{ height: `${(100 * w.d.sites) / max}%` }} />}
+              {w.l.sites > 0 && <button title={`Leads: ${w.l.sites} · ${fmtNum(w.l.qis)} QIS`} onClick={() => onOpen(w, 'lead')} className="w-full bg-violet-400 hover:opacity-80" style={{ height: `${(100 * w.l.sites) / max}%` }} />}
+            </div>
+            <p className={`mt-1 text-[11px] font-semibold ${w.now ? 'text-sky-700' : 'text-slate-500'}`}>{monthly ? w.label : `${w.label.split(' · ')[0]} ${w.label.split(' ').pop()}`}{w.now ? ' · now' : ''}</p>
+            <p className="text-[11px] text-slate-700">
+              <button className="font-bold text-violet-600 hover:underline disabled:font-normal disabled:text-slate-300" disabled={!w.l.sites} onClick={() => onOpen(w, 'lead')}>{w.l.sites}L</button>
+              <span className="text-slate-300"> · </span>
+              <button className="font-bold text-sky-700 hover:underline disabled:font-normal disabled:text-slate-300" disabled={!w.d.sites} onClick={() => onOpen(w, 'deal')}>{w.d.sites}D</button>
+            </p>
+            <p className="text-[10px] text-slate-400">{fmtNum(w.l.qis + w.d.qis)} QIS</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
