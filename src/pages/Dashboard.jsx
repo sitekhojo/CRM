@@ -355,7 +355,7 @@ export default function Dashboard() {
         </div>
       </div>
       <DealFilters value={filters} onChange={setFilters} show={['region', 'city', 'owner', 'type', 'stage', 'siteType', 'format']} />
-      <PeriodBar value={period} onChange={setPeriod} label={m.period.label} future />
+      <PeriodBar value={period} onChange={setPeriod} label={m.period.label} tillToday future />
 
       {period.kind === 'next' ? (
         <div className="grid grid-cols-2 gap-3">

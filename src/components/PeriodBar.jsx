@@ -40,7 +40,7 @@ export function periodRange({ kind, from, to, months }) {
 }
 export function periodLabel({ kind, months }, a, b) {
   const f = d => d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-  if (kind === 'all') return 'all time'
+  if (kind === 'all') return 'till today'
   if (kind === 'next') return `expected in ${upcomingLabel(nextMonths({ months }))}`
   if (kind === 'month' || kind === 'lastMonth') return `in ${a.toLocaleDateString('en-IN', { month: 'long', ...(a.getFullYear() !== new Date().getFullYear() ? { year: 'numeric' } : {}) })}`
   if (kind === 'lastQuarter') { const fyq = ((Math.floor(a.getMonth() / 3) + 3) % 4) + 1; return `in Q${fyq} (${a.toLocaleDateString('en-IN', { month: 'short' })}–${b.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })})` }
@@ -48,8 +48,8 @@ export function periodLabel({ kind, months }, a, b) {
   if (kind === 'fy') { const y = a.getFullYear(); return `in FY${String(y + 1).slice(2)} (Apr ${y}–now)` }
   return `${f(a)} – ${f(b)}`
 }
-export default function PeriodBar({ value, onChange, label, allTime = false, future = false, prefix = 'Showing activity' }) {
-  const opt = [...(allTime ? [['all', 'All time']] : []), ['month', 'This month'], ['lastMonth', 'Last month'], ['quarter', 'This quarter'], ['lastQuarter', 'Last quarter'], ['fy', 'This FY'], ['custom', 'Custom']]
+export default function PeriodBar({ value, onChange, label, allTime = false, tillToday = false, future = false, prefix = 'Showing activity' }) {
+  const opt = [...(allTime ? [['all', 'All time']] : []), ['month', 'This month'], ['lastMonth', 'Last month'], ['quarter', 'This quarter'], ['lastQuarter', 'Last quarter'], ['fy', 'This FY'], ...(tillToday ? [['all', 'Till today']] : []), ['custom', 'Custom']]
   return (
     <div className="flex flex-wrap items-center gap-2">
       <div className="flex rounded-lg border border-slate-300 bg-white p-0.5">
