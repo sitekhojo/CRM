@@ -8,8 +8,9 @@ import { useConfig } from '../lib/config'
 import { haversine, hasLoc } from '../lib/geo'
 import { fmtINR, fmtNum, fmtDate } from '../lib/format'
 import { exportWorkbook } from '../lib/excel'
-import { Modal, PageLoader, useToast, Field, StageBadge } from './ui'
+import { Modal, PageLoader, useToast, Field } from './ui'
 import EditCell from './EditCell'
+import StageCell from './StageCell'
 import { SingleSelect } from './MultiSelect'
 import DealFilters from './DealFilters'
 
@@ -33,6 +34,7 @@ export default function FranchisePayments({ filters: extFilters, compact = false
   const [payments, setPayments] = useState(null)
   const [ownFilters, setOwnFilters] = useState(EMPTY_FILTERS)
   const [status, setStatus] = useState('')
+  const [stageSel, setStageSel] = useState('')
   const [q, setQ] = useState('')
   const [open, setOpen] = useState(null) // row for the payments modal
   const filters = extFilters || ownFilters
@@ -79,15 +81,17 @@ export default function FranchisePayments({ filters: extFilters, compact = false
       }
     }
     const qq = q.trim().toLowerCase()
-    const scoped = applyFiltersRows(rows, filters).filter(r => (!status || r.status === status) && (!qq || [r.name, r.deal?.name, r.deal?.site_code, r.city, r.owner].some(v => v && String(v).toLowerCase().includes(qq))))
+    const scoped = applyFiltersRows(rows, filters).filter(r => (!status || r.status === status) && (!stageSel || r.stage === stageSel) && (!qq || [r.name, r.deal?.name, r.deal?.site_code, r.city, r.owner].some(v => v && String(v).toLowerCase().includes(qq))))
     const tot = xs => ({ proposed: xs.reduce((a, r) => a + r.proposed, 0), received: xs.reduce((a, r) => a + r.received, 0), qis: xs.reduce((a, r) => a + r.qis, 0), sites: xs.length,
       comp: Object.fromEntries(COMPONENTS.map(([k]) => [k, { proposed: xs.reduce((a, r) => a + r.comp[k].proposed, 0), received: xs.reduce((a, r) => a + r.comp[k].received, 0) }])) })
     const all = tot(applyFiltersRows(rows, filters))
     const thisMonth = new Date().toISOString().slice(0, 7)
     const collectedMonth = applyFiltersRows(rows, filters).flatMap(r => r.pays).filter(p => p.paid_on && String(p.paid_on).slice(0, 7) === thisMonth).reduce((a, p) => a + Number(p.amount), 0)
     const counts = Object.fromEntries(['paid', 'partial', 'none', 'noproposal'].map(k => [k, applyFiltersRows(rows, filters).filter(r => r.status === k).length]))
-    return { rows: scoped.sort((a, b) => b.outstanding - a.outstanding || b.qis - a.qis), all, counts, collectedMonth, tot }
-  }, [deals, network, payments, filters, status, cities, q])
+    const stageCounts = {}
+    for (const r of applyFiltersRows(rows, filters)) stageCounts[r.stage] = (stageCounts[r.stage] || 0) + 1
+    return { stageCounts, rows: scoped.sort((a, b) => b.outstanding - a.outstanding || b.qis - a.qis), all, counts, collectedMonth, tot }
+  }, [deals, network, payments, filters, status, stageSel, cities, q])
 
   if (loading || !m) return <PageLoader />
   const pct = m.all.proposed ? Math.round((100 * m.all.received) / m.all.proposed) : 0
@@ -110,7 +114,7 @@ export default function FranchisePayments({ filters: extFilters, compact = false
 
   return (
     <div className="space-y-3">
-      {!extFilters && <DealFilters value={ownFilters} onChange={setOwnFilters} show={['region', 'city', 'owner', 'stage']} />}
+      {!extFilters && <DealFilters value={ownFilters} onChange={setOwnFilters} show={['region', 'city', 'owner']} />}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         {[['Proposed', short(m.all.proposed), `${m.all.sites} franchise sites · ${fmtNum(m.all.qis)} QIS`, 'text-slate-900'],
           ['Received', short(m.all.received), `${pct}% collected`, 'text-emerald-600'],
@@ -135,6 +139,7 @@ export default function FranchisePayments({ filters: extFilters, compact = false
       <div className="flex flex-wrap items-center gap-2">
         <input className="input w-full sm:w-64" placeholder="Search site, SK code, city, owner" value={q} onChange={e => setQ(e.target.value)} />
         <SingleSelect value={status} onChange={setStatus} options={[{ value: '', label: 'All payment statuses' }, { value: 'paid', label: `Fully paid (${m.counts.paid})` }, { value: 'partial', label: `Part paid (${m.counts.partial})` }, { value: 'none', label: `Nothing received (${m.counts.none})` }, { value: 'noproposal', label: `No proposed amount (${m.counts.noproposal})` }]} />
+        <SingleSelect value={stageSel} onChange={setStageSel} options={[{ value: '', label: 'All stages' }, ...Object.entries(m.stageCounts).sort((a, b) => b[1] - a[1]).map(([k, c]) => ({ value: k, label: `${k} (${c})` }))]} />
         <span className="text-sm text-slate-500">Franchise sites energized in {fyLabel()} (QIS tracker) plus every franchise deal with a proposal or payment, any stage{canPay ? ' · click a proposed amount to edit, “+ Payment” to log money received' : ''}</span>
         {canPay && <button className="btn-secondary ml-auto" onClick={exportX}><Download className="h-4 w-4" />Excel</button>}
       </div>
@@ -153,7 +158,7 @@ export default function FranchisePayments({ filters: extFilters, compact = false
                 <tr key={r.key} className="hover:bg-slate-50">
                   <td className="max-w-[260px] px-3 py-2">{r.deal ? <Link className="block truncate font-semibold text-slate-900 hover:text-brand-700" to={`/app/deals/${r.deal.id}`}>{r.name}</Link> : <span className="font-semibold">{r.name}</span>}<div className="font-mono text-[10px] text-slate-400">{r.deal?.site_code || 'no CRM deal'}</div></td>
                   <td className="px-2 py-2">{r.city}<div className="text-[10px] text-slate-400">{r.region}</div></td>
-                  <td className="whitespace-nowrap px-2 py-2">{r.deal ? <StageBadge name={r.stage} color={r.stageColor} /> : <span className="text-xs text-slate-500">{r.stage}</span>}{r.fyEnergized && <div className="text-[10px] font-semibold text-emerald-700">energized {fyLabel()}</div>}</td>
+                  <td className="whitespace-nowrap px-2 py-2">{r.deal ? <StageCell deal={r.deal} onChanged={refresh} /> : <span className="text-xs text-slate-500">{r.stage}</span>}{r.fyEnergized && <div className="text-[10px] font-semibold text-emerald-700">energized {fyLabel()}</div>}</td>
                   <td className="px-2 py-2">{r.owner || '—'}</td>
                   <td className="px-2 py-2 text-right font-semibold">{r.qis}</td>
                   <td className="whitespace-nowrap px-2 py-2">{fmtDate(r.enDate)}</td>
