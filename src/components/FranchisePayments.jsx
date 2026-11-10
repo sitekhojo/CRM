@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Download, Plus, Trash2, Wallet } from 'lucide-react'
-import { useDeals, applyFilters, EMPTY_FILTERS, fetchNetworkPoints } from '../lib/deals'
+import { useDeals, applyFilters, EMPTY_FILTERS, fetchNetworkPoints, isTrackerSite } from '../lib/deals'
 import { supabase, fetchAll, errMsg } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { useConfig } from '../lib/config'
@@ -56,11 +56,15 @@ export default function FranchisePayments({ filters: extFilters, compact = false
         || live.filter(hasLoc).map(d => ({ d, m: haversine(n.latitude, n.longitude, d.latitude, d.longitude) })).filter(x => x.m <= 100).sort((a, b) => a.m - b.m)[0]?.d
       return makeRow(n.id, deal, n.name, n.city, fy.reduce((a, [, c]) => a + (Number(c) || 0), 0), fy.map(([d]) => d).sort()[0], true)
     }).filter(Boolean)
-    // Every other franchise deal with a proposed amount or a payment (any stage).
+    // Every other franchise site in the CRM: all deals that are not dropped (energized ones only if from this FY or with money),
+    // plus any lead or dropped site that already has a proposed amount or a payment.
     const seen = new Set(rows.map(r => r.deal?.id).filter(Boolean))
     for (const d of deals) {
       if (d.site_type !== 'Franchise' || seen.has(d.id)) continue
-      if (!paidBy[d.id] && !COMPONENTS.some(([k]) => Number(d.extra?.[`${k}_proposed`]))) continue
+      const money = paidBy[d.id] || COMPONENTS.some(([k]) => Number(d.extra?.[`${k}_proposed`]))
+      const openDeal = d.record_type !== 'lead' && d.stage_category !== 'dropped' && !isTrackerSite(d)
+        && (d.stage_category !== 'live' || String(d.extra?.energized_on || '') >= from)
+      if (!money && !openDeal) continue
       rows.push(makeRow('d' + d.id, d, d.name, d.city, Number(d.extra?.qis_count) || 0, d.extra?.energized_on || null, false))
     }
     function makeRow(key, deal, name, city, qis, enDate, fyEnergized) {
@@ -140,7 +144,7 @@ export default function FranchisePayments({ filters: extFilters, compact = false
         <input className="input w-full sm:w-64" placeholder="Search site, SK code, city, owner" value={q} onChange={e => setQ(e.target.value)} />
         <SingleSelect value={status} onChange={setStatus} options={[{ value: '', label: 'All payment statuses' }, { value: 'paid', label: `Fully paid (${m.counts.paid})` }, { value: 'partial', label: `Part paid (${m.counts.partial})` }, { value: 'none', label: `Nothing received (${m.counts.none})` }, { value: 'noproposal', label: `No proposed amount (${m.counts.noproposal})` }]} />
         <SingleSelect value={stageSel} onChange={setStageSel} options={[{ value: '', label: 'All stages' }, ...Object.entries(m.stageCounts).sort((a, b) => b[1] - a[1]).map(([k, c]) => ({ value: k, label: `${k} (${c})` }))]} />
-        <span className="text-sm text-slate-500">Franchise sites energized in {fyLabel()} (QIS tracker) plus every franchise deal with a proposal or payment, any stage{canPay ? ' · click a proposed amount to edit, “+ Payment” to log money received' : ''}</span>
+        <span className="text-sm text-slate-500">Franchise sites energized in {fyLabel()} (QIS tracker) plus every open franchise deal, and any franchise site with a proposal or payment{canPay ? ' · click a proposed amount to edit, “+ Payment” to log money received' : ''}</span>
         {canPay && <button className="btn-secondary ml-auto" onClick={exportX}><Download className="h-4 w-4" />Excel</button>}
       </div>
 
