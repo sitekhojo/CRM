@@ -308,6 +308,8 @@ export default function Dashboard() {
   const listPath = t => (t === 'lead' ? '/app/leads' : t === 'deal' ? '/app/deals' : '/app/all')
   const go = q => nav(`${listPath(filters.recordType)}?${q}`)
   const openList = (title, rows) => { setListType(''); setList({ title, rows }) }
+  // Same sites as when opened, but with their latest values after an edit
+  const listRows = list ? list.rows.map(r => deals.find(d => d.id === r.id) || r) : []
   const goCard = (card, extra) => {
     const p = new URLSearchParams({ card, ...extra })
     if (filters.city.length) p.set('city', filters.city.join(','))
@@ -382,10 +384,10 @@ export default function Dashboard() {
       </div>
 
       <Modal open={!!list} onClose={() => setList(null)} wide="xl"
-        title={list ? `${list.title} · ${fmtNum(list.rows.reduce((a, r) => a + (Number(r.extra?.qis_count) || 0), 0))} QIS · ${list.rows.length} sites` : ''}
+        title={list ? `${list.title} · ${fmtNum(listRows.reduce((a, r) => a + (Number(r.extra?.qis_count) || 0), 0))} QIS · ${listRows.length} sites` : ''}
         footer={<button className="btn-primary" onClick={() => setList(null)}>Close</button>}>
-        {list && <TypeSplit rows={list.rows} value={listType} onChange={setListType} />}
-        {list && <div className="max-h-[62vh] overflow-auto"><PlanTable rows={list.rows.filter(r => !listType || (r.site_type || 'Not set') === listType)} onChanged={reload} /></div>}
+        {list && <TypeSplit rows={listRows} value={listType} onChange={setListType} />}
+        {list && <div className="max-h-[62vh] overflow-auto"><PlanTable rows={listRows.filter(r => !listType || (r.site_type || 'Not set') === listType)} onChanged={reload} /></div>}
       </Modal>
       <Modal open={enOpen} onClose={() => setEnOpen(false)} wide title={`Energized ${m.period.label} · ${fmtNum(m.period.en.qis)} QIS · ${fmtNum(m.period.en.sites)} sites`}
         footer={<><button className="btn btn-ghost" onClick={() => nav('/app/map?network=1')}>Open on map</button><button className="btn btn-primary" onClick={() => setEnOpen(false)}>Close</button></>}>

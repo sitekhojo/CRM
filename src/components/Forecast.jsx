@@ -12,6 +12,7 @@ import IntentCell from './IntentCell'
 import StageCell from './StageCell'
 import OwnerCell from './OwnerCell'
 import RemarksCell, { fetchRemarks, latestRemark } from './RemarksCell'
+import DateTrend, { fetchDateChanges } from './DateTrend'
 import { SingleSelect } from './MultiSelect'
 import { Download } from 'lucide-react'
 import { exportWorkbook } from '../lib/excel'
@@ -242,6 +243,10 @@ export function PlanTable({ rows, onChanged, today }) {
   const idsKey = rows.map(r => r.id).sort().join(',')
   const loadRemarks = () => fetchRemarks(rows.map(r => r.id)).then(setRemarks).catch(() => {})
   useEffect(() => { loadRemarks() }, [idsKey]) // eslint-disable-line
+  const [moves, setMoves] = useState({})
+  const loadMoves = () => fetchDateChanges(rows.map(r => r.id)).then(setMoves).catch(() => {})
+  useEffect(() => { loadMoves() }, [idsKey]) // eslint-disable-line
+  const changed = (...a) => { onChanged?.(...a); setTimeout(loadMoves, 400) }
   const sorted = [...rows].sort((a, b) => String(a.extra?.expected_ho || a.extra?.expected_en || '9').localeCompare(String(b.extra?.expected_ho || b.extra?.expected_en || '9')))
   const late = (d, active = true) => active && d && d < t
   if (!rows.length) return <p className="p-6 text-center text-sm text-slate-400">No sites here.</p>
@@ -249,7 +254,7 @@ export function PlanTable({ rows, onChanged, today }) {
     <table className="min-w-full text-sm">
       <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
         <tr><th className="px-3 py-2">Site</th><th className="px-2 py-2">City</th><th className="px-2 py-2">Site type</th><th className="px-2 py-2">Stage</th><th className="px-2 py-2">Intent</th>
-          <th className="px-2 py-2 text-right">QIS</th><th className="px-2 py-2">Expected HO / HO date</th><th className="px-2 py-2">Expected energisation</th><th className="px-2 py-2">Owner</th><th className="px-2 py-2">Remarks <span className="normal-case text-slate-400">(latest)</span></th></tr>
+          <th className="px-2 py-2 text-right">QIS</th><th className="px-2 py-2">Expected HO / HO date</th><th className="px-2 py-2">HO date trend</th><th className="px-2 py-2">Expected energisation</th><th className="px-2 py-2">Energisation trend</th><th className="px-2 py-2">Owner</th><th className="px-2 py-2">Remarks <span className="normal-case text-slate-400">(latest)</span></th></tr>
       </thead>
       <tbody className="divide-y divide-slate-100">
         {sorted.map(r => (
@@ -257,20 +262,22 @@ export function PlanTable({ rows, onChanged, today }) {
             <td className="max-w-[260px] px-3 py-2"><Link className="block truncate font-semibold text-slate-900 hover:text-brand-700" to={`/app/deals/${r.id}`}>{r.name}</Link><div className="font-mono text-[10px] text-slate-400">{r.site_code} · {r.record_type === 'lead' ? 'Lead' : 'Deal'}</div></td>
             <td className="px-2 py-2">{r.city}</td>
             <td className="whitespace-nowrap px-2 py-2">{r.site_type ? <><SiteTypeChip t={r.site_type} /> <span className="text-xs text-slate-600">{r.site_type}</span></> : <span className="text-slate-300">—</span>}</td>
-            <td className="px-2 py-2"><StageCell deal={r} onChanged={onChanged} /></td>
-            <td className="px-2 py-2"><IntentCell deal={r} onChanged={onChanged} /></td>
-            <td className="px-2 py-2 text-right font-semibold"><EditCell deal={r} field="qis_count" type="number" label="QIS" onChanged={onChanged} /></td>
+            <td className="px-2 py-2"><StageCell deal={r} onChanged={changed} /></td>
+            <td className="px-2 py-2"><IntentCell deal={r} onChanged={changed} /></td>
+            <td className="px-2 py-2 text-right font-semibold"><EditCell deal={r} field="qis_count" type="number" label="QIS" onChanged={changed} /></td>
             <td className="px-2 py-2">{['approved', 'live'].includes(r.stage_category)
-              ? <div><DateCell deal={r} field="ho_date" label="Handover date" onChanged={onChanged} /><div className="text-[10px] font-semibold uppercase text-cyan-700">handed over</div></div>
-              : <EditCell deal={r} field="expected_ho" label="Expected HO" onChanged={onChanged} className={late(r.extra?.expected_ho) ? 'font-semibold text-red-600' : ''} />}</td>
-            <td className="px-2 py-2"><EditCell deal={r} field="expected_en" label="Expected energisation" onChanged={onChanged} className={late(r.extra?.expected_en) ? 'font-semibold text-red-600' : ''} /></td>
-            <td className="px-2 py-2"><OwnerCell deal={r} onChanged={onChanged} /></td>
+              ? <div><DateCell deal={r} field="ho_date" label="Handover date" onChanged={changed} /><div className="text-[10px] font-semibold uppercase text-cyan-700">handed over</div></div>
+              : <EditCell deal={r} field="expected_ho" label="Expected HO" onChanged={changed} className={late(r.extra?.expected_ho) ? 'font-semibold text-red-600' : ''} />}</td>
+            <td className="px-2 py-2"><DateTrend list={moves[r.id]?.expected_ho} /></td>
+            <td className="px-2 py-2"><EditCell deal={r} field="expected_en" label="Expected energisation" onChanged={changed} className={late(r.extra?.expected_en) ? 'font-semibold text-red-600' : ''} /></td>
+            <td className="px-2 py-2"><DateTrend list={moves[r.id]?.expected_en} /></td>
+            <td className="px-2 py-2"><OwnerCell deal={r} onChanged={changed} /></td>
             <td className="px-2 py-1"><RemarksCell deal={r} list={remarks[r.id]} onChanged={loadRemarks} /></td>
           </tr>
         ))}
       </tbody>
       <tfoot className="border-t-2 border-slate-200 bg-slate-50 font-bold">
-        <tr><td className="px-3 py-2" colSpan={5}>Total · {rows.length} {rows.length === 1 ? 'site' : 'sites'}</td><td className="px-2 py-2 text-right">{fmtNum(rows.reduce((a, r) => a + qisOf(r), 0))}</td><td colSpan={4} /></tr>
+        <tr><td className="px-3 py-2" colSpan={5}>Total · {rows.length} {rows.length === 1 ? 'site' : 'sites'}</td><td className="px-2 py-2 text-right">{fmtNum(rows.reduce((a, r) => a + qisOf(r), 0))}</td><td colSpan={6} /></tr>
       </tfoot>
     </table>
   )
