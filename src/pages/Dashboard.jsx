@@ -10,9 +10,9 @@ import PeriodBar, { nextMonths, periodRange, periodLabel, isoDay } from '../comp
 import FranchisePayments from '../components/FranchisePayments'
 import TargetTrend, { fyMonths } from '../components/TargetTrend'
 import FyPlan from '../components/FyPlan'
-import { PlanTable, TypeSplit } from '../components/Forecast'
+import { PlanTable, TypeSplit, SITE_TYPE_CHIPS } from '../components/Forecast'
 import { Stat, StageBadge, PageLoader, Modal } from '../components/ui'
-import { fmtNum, daysLabel, daysInt, stageAgeTone, AGE_TONES, startOfWeek, startOfMonth, fmtDate } from '../lib/format'
+import { fmtNum, daysLabel, daysInt, stageAgeTone, AGE_TONES, startOfWeek, startOfMonth, fmtDate, normaliseSiteType } from '../lib/format'
 import { haversine, hasLoc } from '../lib/geo'
 
 export default function Dashboard() {
@@ -23,7 +23,8 @@ export default function Dashboard() {
   const [period, setPeriod] = useState({ kind: 'month', from: '', to: '' })
   const [network, setNetwork] = useState([])
   const [metric, setMetric] = useState('qis') // chart unit: 'qis' | 'sites'
-  const [enOpen, setEnOpen] = useState(false)
+  const [enItems, setEnItems] = useState(null)
+  const [enType, setEnType] = useState('')
   const [list, setList] = useState(null)
   const [listType, setListType] = useState('')
   const [grain, setGrain] = useState('month') // energisation / HO trend: 'week' | 'month'
@@ -67,7 +68,7 @@ export default function Dashboard() {
     const energizedDeals = rows.filter(r => r.stage_category === 'live')
     const near = (d, n) => hasLoc(d) && haversine(d.latitude, d.longitude, n.latitude, n.longitude) <= 100
     const cityRegion = Object.fromEntries((cities || []).map(c => [c.name.toLowerCase(), c.region]))
-    const netOk = n => n.point_type === 'own_station' && (!filters.city.length || filters.city.includes(n.city)) && (!filters.siteType.length || filters.siteType.includes(n.site_type)) && (!filters.region.length || filters.region.includes(cityRegion[String(n.city || '').toLowerCase()]))
+    const netOk = n => n.point_type === 'own_station' && (!filters.city.length || filters.city.includes(n.city)) && (!filters.siteType.length || filters.siteType.includes(normaliseSiteType(n.site_type))) && (!filters.region.length || filters.region.includes(cityRegion[String(n.city || '').toLowerCase()]))
     const netAll = network.filter(netOk)
     const net = network.filter(netOk)
       .filter(n => !energizedDeals.some(d => near(d, n))) // already counted as a deal
@@ -155,6 +156,20 @@ export default function Dashboard() {
     // Energized in the period = CRM sites at an Energized stage whose energisation date falls in the period
     const crmEnDate = r => r.extra?.energized_on || (isTrackerSite(r) ? null : enDate(r))
     const enDone = energizedDeals.filter(r => inP(crmEnDate(r)))
+    // Energized items = QIS-tracker energisations + CRM-energised sites the tracker doesn't have yet (matched by location)
+    const nm = x => String(x || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+    const netNames = new Set(network.map(n => nm(n.name)))
+    const crmNotInTracker = energizedDeals.filter(d => !netNames.has(nm(d.name)) && !network.some(n => n.point_type === 'own_station' && near(d, n)))
+    const enItems = test => [
+      ...netAll.flatMap(n => {
+        const ds = Object.entries(n.energized_dates || {}).filter(([d]) => test(d))
+        if (!ds.length) return []
+        const deal = energizedDeals.find(d => near(d, n))
+        return [{ key: 'n' + n.id, name: n.name, city: n.city, siteType: normaliseSiteType(n.site_type) || 'Not set', qis: ds.reduce((a, [, c]) => a + (Number(c) || 0), 0), date: ds.map(([d]) => d).sort().pop(), source: deal ? 'Tracker + CRM' : 'QIS tracker', dealId: deal?.id }]
+      }),
+      ...crmNotInTracker.filter(r => test(String(crmEnDate(r) || '').slice(0, 10))).map(r => ({ key: 'd' + r.id, name: r.name, city: r.city, siteType: r.site_type || 'Not set', qis: qisOf(r), date: String(crmEnDate(r)).slice(0, 10), source: 'CRM (not in tracker yet)', dealId: r.id })),
+    ].sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.qis - a.qis)
+    const enPeriod = enItems(d => inP(d + 'T12:00:00'))
     const hoNextMonth = pendingRows.filter(r => selYm?.has(String(r.extra?.expected_ho || '').slice(0, 7)))
     const enNextMonth = notLive.filter(r => selYm?.has(String(r.extra?.expected_en || '').slice(0, 7)))
     const handedInP = rows.filter(r => inP(hoDate(r)))
@@ -201,8 +216,8 @@ export default function Dashboard() {
     // Energisation: still-to-energise sites by Expected energisation date; ✓ = energised that week (CRM stage Energized + date)
     const enWeeks = weekSpans.map(w => {
       const due = notLive.filter(r => inSpan(r.extra?.expected_en, w))
-      const done = energizedDeals.filter(r => inSpan(crmEnDate(r), w))
-      return { ...w, due, done, ...qs(due), doneQis: qs(done).qis }
+      const doneItems = enItems(d => inSpan(d, w))
+      return { ...w, due, doneItems, ...qs(due), doneQis: doneItems.reduce((a, x) => a + x.qis, 0) }
     })
     // Leads & deals created per week (manual adds only; bulk imports left out)
     const addWeeks = weekSpans.map(w => {
@@ -215,7 +230,7 @@ export default function Dashboard() {
       lists: { enDone, pending: pendingRows, due: dueRows, slip: slipRows, noDate: noDateRows, enThisMonth, enOverdue, hoNext: hoNextMonth, enNext: enNextMonth, handed: handedInP },
       pending: qs(pendingRows), pendingByStage: pendingStages.map(s => ({ id: s.id, name: s.name, color: s.color, rows: dueRows.filter(r => r.stage_id === s.id), ...qs(dueRows.filter(r => r.stage_id === s.id)) })),
       hold: qs(rows.filter(r => r.stage_category === 'hold')), awaiting: qs(awaitingRows), handed: qs(handedInP),
-      enThisMonth: qs(enThisMonth), enOverdue: qs(enOverdue), enDone: qs(enDone), hoNext: qs(hoNextMonth), enNext: qs(enNextMonth), curYm, nextYm,
+      enThisMonth: qs(enThisMonth), enOverdue: qs(enOverdue), enDone: qs(enDone), enPeriod, hoNext: qs(hoNextMonth), enNext: qs(enNextMonth), curYm, nextYm,
     }
 
     // Target-trend series (FY, by month)
@@ -363,8 +378,9 @@ export default function Dashboard() {
           )}
           <Stat label="To energize this month" value={fmtNum(m.hv.enThisMonth.qis)} icon={Zap} tone="amber" sub={`${fmtNum(m.hv.enThisMonth.sites)} sites · Expected energisation this month, not yet energised`}
             onClick={() => openList('To energize this month · by Expected energisation date', m.hv.lists.enThisMonth)} />
-          <Stat label="Energized" value={fmtNum(m.hv.enDone.qis)} icon={Zap} tone="green" sub={`${fmtNum(m.hv.enDone.sites)} sites · stage Energized, energisation date ${m.period.label.replace(/^in /, 'in ')}`}
-            onClick={() => openList(`Energized · energisation date ${m.period.label}`, m.hv.lists.enDone)} />
+          <Stat label="Energized" value={fmtNum(sumQ(m.hv.enPeriod))} icon={Zap} tone="green"
+            sub={<>{fmtNum(m.hv.enPeriod.length)} sites · {m.period.label}<span className="mt-1 flex flex-wrap gap-1">{splitTypes(m.hv.enPeriod).map(([t, q]) => <span key={t} className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${typeChip(t).cls}`}>{typeChip(t).short} {fmtNum(q)}</span>)}</span></>}
+            onClick={() => { setEnItems({ title: `Energized ${m.period.label}`, list: m.hv.enPeriod }); setEnType('') }} />
         </div>
       )}
       <div className="card p-4">
@@ -390,7 +406,7 @@ export default function Dashboard() {
                 onDone={w => openList(`Handed over · ${w.label.replace(' · ', ' ')}`, w.done)} />
               <WeekRow title="Energisation" note="to energise by Expected energisation date" tone="green" weeks={m.hv.enWeeks}
                 onOpen={w => openList(`To energise · Expected energisation ${w.label.replace(' · ', ' ')}`, w.due)}
-                onDone={w => openList(`Energized · ${w.label.replace(' · ', ' ')}`, w.done)} doneLabel="energised" />
+                onDone={w => { setEnItems({ title: `Energized · ${w.label.replace(' · ', ' ')}`, list: w.doneItems }); setEnType('') }} doneLabel="energised" />
             </div>
             {m.hv.addWeeks.some(w => !w.future) && <AddedTrend weeks={m.hv.addWeeks} onOpen={(w, kind) => openList(`${kind === 'lead' ? 'Leads' : 'Deals'} created · ${w.label.replace(' · ', ' ')}`, kind === 'lead' ? w.leads : w.deals)} />}
           </div>
@@ -403,24 +419,37 @@ export default function Dashboard() {
         {list && <TypeSplit rows={listRows} value={listType} onChange={setListType} />}
         {list && <div className="max-h-[62vh] overflow-auto"><PlanTable rows={listRows.filter(r => !listType || (r.site_type || 'Not set') === listType)} onChanged={reload} /></div>}
       </Modal>
-      <Modal open={enOpen} onClose={() => setEnOpen(false)} wide title={`Energized ${m.period.label} · ${fmtNum(m.period.en.qis)} QIS · ${fmtNum(m.period.en.sites)} sites`}
-        footer={<><button className="btn btn-ghost" onClick={() => nav('/app/map?network=1')}>Open on map</button><button className="btn btn-primary" onClick={() => setEnOpen(false)}>Close</button></>}>
-        {m.period.en.list.length === 0 ? <p className="text-sm text-slate-400">Nothing energized in this period.</p> : (
-          <div className="max-h-[60vh] overflow-auto">
-            <table className="w-full text-sm">
-              <thead><tr className="text-left text-xs uppercase text-slate-500"><th className="py-2 pr-2">Site</th><th className="pr-2">City</th><th className="pr-2">Type</th><th className="pr-2 text-right">QIS</th><th className="pr-2">Energized on</th><th>Source</th></tr></thead>
-              <tbody>
-                {m.period.en.list.map(x => (
-                  <tr key={x.key} className={`border-t border-slate-100 ${x.dealId ? 'cursor-pointer hover:bg-slate-50' : ''}`} onClick={() => x.dealId && nav(`/app/deals/${x.dealId}`)}>
-                    <td className="py-2 pr-2 font-medium text-navy-900">{x.name}</td><td className="pr-2">{x.city}</td><td className="pr-2">{x.siteType || '—'}</td>
-                    <td className="pr-2 text-right font-semibold">{fmtNum(x.qis)}</td><td className="whitespace-nowrap pr-2">{x.date ? fmtDate(x.date) : '—'}</td>
-                    <td><span className={`rounded-full px-2 py-0.5 text-xs ${x.source === 'Pipeline' || x.dealId ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{x.dealId && x.source !== 'Pipeline' ? 'Tracker + Pipeline' : x.source}</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+      <Modal open={!!enItems} onClose={() => setEnItems(null)} wide
+        title={enItems ? `${enItems.title} · ${fmtNum(sumQ(enItems.list.filter(x => !enType || x.siteType === enType)))} QIS · ${enItems.list.filter(x => !enType || x.siteType === enType).length} sites` : ''}
+        footer={<><button className="btn btn-ghost" onClick={() => nav('/app/map?network=1')}>Open on map</button><button className="btn btn-primary" onClick={() => setEnItems(null)}>Close</button></>}>
+        {enItems && (enItems.list.length === 0 ? <p className="text-sm text-slate-400">Nothing energized in this period.</p> : (
+          <>
+            <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Site type</span>
+              <button onClick={() => setEnType('')} className={`rounded-lg border px-2.5 py-1 ${!enType ? 'border-navy-900 bg-navy-900 text-white' : 'border-slate-200 hover:bg-slate-50'}`}>Total <b>{fmtNum(sumQ(enItems.list))}</b> QIS · {enItems.list.length} sites</button>
+              {splitTypes(enItems.list).map(([t, q, n]) => (
+                <button key={t} onClick={() => setEnType(enType === t ? '' : t)} className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 ${enType === t ? 'border-navy-900 ring-1 ring-navy-900' : 'border-slate-200 hover:bg-slate-50'}`}>
+                  <span className={`rounded px-1 text-[10px] font-bold ${typeChip(t).cls}`}>{typeChip(t).short}</span><b>{fmtNum(q)}</b> QIS · {n} sites
+                </button>
+              ))}
+            </div>
+            <div className="max-h-[56vh] overflow-auto">
+              <table className="w-full text-sm">
+                <thead><tr className="text-left text-xs uppercase text-slate-500"><th className="py-2 pr-2">Site</th><th className="pr-2">City</th><th className="pr-2">Type</th><th className="pr-2 text-right">QIS</th><th className="pr-2">Energized on</th><th>Source</th></tr></thead>
+                <tbody>
+                  {enItems.list.filter(x => !enType || x.siteType === enType).map(x => (
+                    <tr key={x.key} className={`border-t border-slate-100 ${x.dealId ? 'cursor-pointer hover:bg-slate-50' : ''}`} onClick={() => x.dealId && nav(`/app/deals/${x.dealId}`)}>
+                      <td className="py-2 pr-2 font-medium text-navy-900">{x.name}</td><td className="pr-2">{x.city}</td>
+                      <td className="pr-2"><span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${typeChip(x.siteType).cls}`}>{typeChip(x.siteType).short}</span></td>
+                      <td className="pr-2 text-right font-semibold">{fmtNum(x.qis)}</td><td className="whitespace-nowrap pr-2">{x.date ? fmtDate(x.date) : '—'}</td>
+                      <td><span className={`rounded-full px-2 py-0.5 text-xs ${x.source === 'QIS tracker' ? 'bg-slate-100 text-slate-600' : 'bg-emerald-50 text-emerald-700'}`}>{x.source}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ))}
       </Modal>
 
 
@@ -607,3 +636,13 @@ function AddedTrend({ weeks, onOpen }) {
     </div>
   )
 }
+
+const sumQ = xs => xs.reduce((a, x) => a + (Number(x.qis) || 0), 0)
+/** [siteType, qis, sites] per type, Franchise / Private / SPP first. */
+function splitTypes(xs) {
+  const m = {}
+  for (const x of xs) { const t = x.siteType || 'Not set'; m[t] = m[t] || [t, 0, 0]; m[t][1] += Number(x.qis) || 0; m[t][2]++ }
+  const order = ['Franchise', 'Private', 'SPP']
+  return Object.values(m).sort((a, b) => (order.indexOf(a[0]) + 1 || 9) - (order.indexOf(b[0]) + 1 || 9))
+}
+const typeChip = t => SITE_TYPE_CHIPS[t] || { short: t === 'Not set' ? '?' : String(t).slice(0, 4), cls: 'bg-slate-100 text-slate-600' }
