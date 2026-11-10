@@ -152,6 +152,9 @@ export default function Dashboard() {
     const notLive = rows.filter(r => !['live', 'dropped'].includes(r.stage_category))
     const enThisMonth = notLive.filter(r => String(r.extra?.expected_en || '').slice(0, 7) === curYm)
     const enOverdue = notLive.filter(r => r.extra?.expected_en && r.extra.expected_en < curYm + '-01')
+    // Energized in the period = CRM sites at an Energized stage whose energisation date falls in the period
+    const crmEnDate = r => r.extra?.energized_on || (isTrackerSite(r) ? null : enDate(r))
+    const enDone = energizedDeals.filter(r => inP(crmEnDate(r)))
     const hoNextMonth = pendingRows.filter(r => selYm?.has(String(r.extra?.expected_ho || '').slice(0, 7)))
     const enNextMonth = notLive.filter(r => selYm?.has(String(r.extra?.expected_en || '').slice(0, 7)))
     const handedInP = rows.filter(r => inP(hoDate(r)))
@@ -195,11 +198,11 @@ export default function Dashboard() {
       const done = rows.filter(r => inSpan(hoDate(r), w))
       return { ...w, due, done, ...qs(due), doneQis: qs(done).qis }
     })
-    // Energisation: still-to-energise sites by Expected energisation date; ✓ = energised that week (QIS tracker)
+    // Energisation: still-to-energise sites by Expected energisation date; ✓ = energised that week (CRM stage Energized + date)
     const enWeeks = weekSpans.map(w => {
       const due = notLive.filter(r => inSpan(r.extra?.expected_en, w))
-      const doneQis = netAll.reduce((a, n) => a + Object.entries(n.energized_dates || {}).reduce((b, [d, c]) => b + (inSpan(d, w) ? Number(c) || 0 : 0), 0), 0)
-      return { ...w, due, done: [], ...qs(due), doneQis }
+      const done = energizedDeals.filter(r => inSpan(crmEnDate(r), w))
+      return { ...w, due, done, ...qs(due), doneQis: qs(done).qis }
     })
     // Leads & deals created per week (manual adds only; bulk imports left out)
     const addWeeks = weekSpans.map(w => {
@@ -209,10 +212,10 @@ export default function Dashboard() {
     })
     const hv = {
       allPending, dueTo, weeks: hoWeeks, enWeeks, addWeeks, due: qs(dueRows), slip: qs(slipRows), noDate: qs(noDateRows),
-      lists: { pending: pendingRows, due: dueRows, slip: slipRows, noDate: noDateRows, enThisMonth, enOverdue, hoNext: hoNextMonth, enNext: enNextMonth, handed: handedInP },
+      lists: { enDone, pending: pendingRows, due: dueRows, slip: slipRows, noDate: noDateRows, enThisMonth, enOverdue, hoNext: hoNextMonth, enNext: enNextMonth, handed: handedInP },
       pending: qs(pendingRows), pendingByStage: pendingStages.map(s => ({ id: s.id, name: s.name, color: s.color, rows: dueRows.filter(r => r.stage_id === s.id), ...qs(dueRows.filter(r => r.stage_id === s.id)) })),
       hold: qs(rows.filter(r => r.stage_category === 'hold')), awaiting: qs(awaitingRows), handed: qs(handedInP),
-      enThisMonth: qs(enThisMonth), enOverdue: qs(enOverdue), hoNext: qs(hoNextMonth), enNext: qs(enNextMonth), curYm, nextYm,
+      enThisMonth: qs(enThisMonth), enOverdue: qs(enOverdue), enDone: qs(enDone), hoNext: qs(hoNextMonth), enNext: qs(enNextMonth), curYm, nextYm,
     }
 
     // Target-trend series (FY, by month)
@@ -358,10 +361,10 @@ export default function Dashboard() {
               sub={`${fmtNum(m.hv.due.sites)} sites · Expected HO ${m.period.label}${m.hv.slip.sites ? ` · +${fmtNum(m.hv.slip.qis)} QIS overdue` : ''}`}
               onClick={() => openList(`Pending handover · Expected HO ${m.period.label}${m.hv.slip.sites ? ' (overdue listed separately)' : ''}`, m.hv.lists.due)} />
           )}
-          <Stat label="To energize this month" value={fmtNum(m.hv.enThisMonth.qis)} icon={Zap} tone="amber" sub={`${fmtNum(m.hv.enThisMonth.sites)} sites · expected${m.hv.enOverdue.sites ? ` · +${fmtNum(m.hv.enOverdue.qis)} QIS overdue` : ''}`}
+          <Stat label="To energize this month" value={fmtNum(m.hv.enThisMonth.qis)} icon={Zap} tone="amber" sub={`${fmtNum(m.hv.enThisMonth.sites)} sites · Expected energisation this month, not yet energised`}
             onClick={() => openList('To energize this month · by Expected energisation date', m.hv.lists.enThisMonth)} />
-          <Stat label="Energized" value={fmtNum(m.period.en.qis)} icon={Zap} tone="green" sub={`${fmtNum(m.period.en.sites)} sites · ${m.period.label} · QIS tracker`}
-            onClick={() => setEnOpen(true)} />
+          <Stat label="Energized" value={fmtNum(m.hv.enDone.qis)} icon={Zap} tone="green" sub={`${fmtNum(m.hv.enDone.sites)} sites · stage Energized, energisation date ${m.period.label.replace(/^in /, 'in ')}`}
+            onClick={() => openList(`Energized · energisation date ${m.period.label}`, m.hv.lists.enDone)} />
         </div>
       )}
       <div className="card p-4">
@@ -386,7 +389,8 @@ export default function Dashboard() {
                 onOpen={w => openList(`Pending handover · Expected HO ${w.label.replace(' · ', ' ')}`, w.due)}
                 onDone={w => openList(`Handed over · ${w.label.replace(' · ', ' ')}`, w.done)} />
               <WeekRow title="Energisation" note="to energise by Expected energisation date" tone="green" weeks={m.hv.enWeeks}
-                onOpen={w => openList(`To energise · Expected energisation ${w.label.replace(' · ', ' ')}`, w.due)} doneLabel="energised" />
+                onOpen={w => openList(`To energise · Expected energisation ${w.label.replace(' · ', ' ')}`, w.due)}
+                onDone={w => openList(`Energized · ${w.label.replace(' · ', ' ')}`, w.done)} doneLabel="energised" />
             </div>
             {m.hv.addWeeks.some(w => !w.future) && <AddedTrend weeks={m.hv.addWeeks} onOpen={(w, kind) => openList(`${kind === 'lead' ? 'Leads' : 'Deals'} created · ${w.label.replace(' · ', ' ')}`, kind === 'lead' ? w.leads : w.deals)} />}
           </div>
