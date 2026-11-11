@@ -93,7 +93,6 @@ export default function FyPlan({ deals, network, cities = [], team = [], filters
   const company = Number(plan.company_target) || 0
   const exit = zone === 'All' && company ? company : T.target
   const zoneOf = z => sumUp(z === 'All' ? m.list : m.list.filter(x => x.region === z), m.days)
-  const maxAcq = Math.max(1, ...list.map(x => x.short))
   const enPct = exit ? Math.round((100 * netEnergised) / exit) : 0
   // SPP covers whatever the acquisition team does not: total short − acquisition target
   const shortAll = zone === 'All' && company ? Math.max(0, company - netEnergised) : T.short
@@ -135,48 +134,90 @@ export default function FyPlan({ deals, network, cities = [], team = [], filters
         </Group>
       </div>
 
-      {/* city rows */}
-      <div className="px-5 py-3">
-        <div className="mb-1 flex items-center gap-4 text-[11px] text-slate-500">
-          <span className="w-36">City</span><span className="hidden w-28 text-right md:block">Energised / target</span><span className="flex-1">City short = <span className="font-semibold text-navy-900">acquisition</span> + <span className="font-semibold text-orange-600">SPP</span></span><span className="w-24 text-right text-orange-600">SPP balance</span><span className="w-20 text-right">To scout</span>
+      {/* city tables: acquisition team | SPP */}
+      <div className="grid gap-4 px-5 py-4 xl:grid-cols-[3fr_2fr]">
+        <div className="overflow-hidden rounded-xl border-2 border-navy-900/30">
+          <header className="flex items-baseline gap-2 bg-navy-900 px-3 py-1.5 text-white"><span className="text-xs font-extrabold uppercase tracking-wide">Acquisition team · by city</span><span className="text-[11px] opacity-80">target = city short × acquisition share</span></header>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="border-b border-slate-100 text-[11px] uppercase tracking-wide text-slate-400">
+                <th className="px-3 py-2 text-left font-semibold">City</th><th className="px-2 text-right font-semibold">Target</th>
+                <th className="px-2 text-right font-semibold text-teal-600">HO'd</th><th className="px-2 text-right font-semibold text-amber-600">{monthLbl(cur)}</th><th className="px-2 text-right font-semibold text-amber-500">{monthLbl(next)}</th>
+                <th className="w-[28%] px-2 font-semibold">Progress</th><th className="px-3 text-right font-semibold text-red-600">To scout</th>
+              </tr></thead>
+              <tbody className="divide-y divide-slate-50">
+                {list.filter(x => x.acq > 0).map(x => {
+                  const pct = v => `${Math.min(100, (100 * v) / x.acq)}%`
+                  return (
+                    <tr key={x.city} className="hover:bg-slate-50">
+                      <td className="px-3 py-2"><p className="font-semibold text-slate-900">{x.city}</p><p className="text-[11px] text-slate-400">{x.owner} · {x.share}% of {fmtNum(x.short)} short</p></td>
+                      <td className="px-2 text-right font-bold text-navy-900">{fmtNum(x.acq)}</td>
+                      <td className="px-2 text-right text-teal-700">{x.ho ? fmtNum(x.ho) : '—'}</td>
+                      <td className="px-2 text-right text-amber-700">{x.visCur ? fmtNum(x.visCur) : '—'}</td>
+                      <td className="px-2 text-right text-amber-600">{x.visNext ? fmtNum(x.visNext) : '—'}</td>
+                      <td className="px-2"><div className="flex h-2.5 overflow-hidden rounded-full bg-red-100" title="handed over · Nov · Dec · still to scout (red)">
+                        <div className="bg-teal-500" style={{ width: pct(x.ho) }} /><div className="bg-amber-400" style={{ width: pct(x.visCur) }} /><div className="bg-amber-200" style={{ width: pct(x.visNext) }} />
+                      </div></td>
+                      <td className={`px-3 text-right text-lg font-extrabold ${x.toAcquire >= 30 ? 'text-red-600' : x.toAcquire ? 'text-amber-600' : 'text-emerald-600'}`}>{x.toAcquire ? fmtNum(x.toAcquire) : '✓'}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+              <tfoot><tr className="border-t-2 border-slate-200 bg-slate-50 font-bold">
+                <td className="px-3 py-2">Total</td><td className="px-2 text-right">{fmtNum(T.acq)}</td><td className="px-2 text-right text-teal-700">{fmtNum(T.ho)}</td>
+                <td className="px-2 text-right text-amber-700">{fmtNum(T.visCur)}</td><td className="px-2 text-right text-amber-600">{fmtNum(T.visNext)}</td><td />
+                <td className="px-3 text-right text-lg text-red-600">{fmtNum(T.toAcquire)}</td>
+              </tr></tfoot>
+            </table>
+          </div>
         </div>
-        <div className="divide-y divide-slate-100">
-          {list.map(x => {
-            const seg = [[x.ho, 'bg-teal-500', 'Handed over'], [x.visCur, 'bg-amber-400', `${monthLbl(cur)} visibility`], [x.visNext, 'bg-amber-200', `${monthLbl(next)} visibility`], [x.noPipe, 'bg-red-400', 'No pipeline yet']]
-            const used = Math.min(x.acq, x.ho + x.vis + x.noPipe)
-            const w = v => `${(100 * Math.min(v, x.acq)) / maxAcq}%`
-            const sw = v => `${(100 * v) / maxAcq}%`
-            const sppCov = Math.min(x.sppPipe, x.spp)
-            const ep = x.target ? Math.round((100 * x.energised) / x.target) : 0
-            return (
-              <div key={x.city} className="flex items-center gap-4 py-2.5">
-                <div className="w-36 min-w-0"><p className="truncate font-semibold text-slate-900">{x.city}</p><p className="truncate text-[11px] text-slate-400">{x.owner}</p></div>
-                <div className="hidden w-28 text-right md:block"><p className="text-sm"><b>{fmtNum(x.energised)}</b><span className="text-slate-400"> / {fmtNum(x.target)}</span></p>
-                  <div className="ml-auto mt-1 h-1 w-20 overflow-hidden rounded-full bg-slate-100"><div className="h-1 bg-emerald-500" style={{ width: `${Math.min(100, ep)}%` }} /></div></div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-baseline gap-x-2 text-xs text-slate-500"><b className="text-sm text-slate-800">{fmtNum(x.short)}</b> short
-                    <span>= <b className="text-navy-900">{fmtNum(x.acq)}</b> acquisition ({x.share}%)</span>
-                    <span>+ <b className="text-orange-600">{fmtNum(x.spp)}</b> SPP ({100 - x.share}%)</span></div>
-                  <div className="mt-1 flex h-3.5 overflow-hidden rounded-full bg-slate-100" title={seg.map(([v, , l]) => `${l}: ${fmtNum(Math.ceil(v))}`).join(' · ')}>
-                    {used > 0 && seg.map(([v, c, l]) => v > 0 && <div key={l} className={`${c} h-full border-r border-white/70`} style={{ width: w(v) }} title={`${l}: ${fmtNum(Math.ceil(v))} QIS`} />)}
-                    {x.spp > 0 && <>
-                      <div className="h-full w-0.5 shrink-0 bg-white" />
-                      {sppCov > 0 && <div className="h-full bg-orange-500" style={{ width: sw(sppCov) }} title={`SPP covered by pipeline: ${fmtNum(sppCov)} QIS`} />}
-                      {x.spp - sppCov > 0 && <div className="h-full bg-[repeating-linear-gradient(45deg,#fed7aa_0_4px,#ffedd5_4px_8px)]" style={{ width: sw(x.spp - sppCov) }} title={`SPP not yet in pipeline: ${fmtNum(x.spp - sppCov)} QIS`} />}
-                    </>}
-                  </div>
-                  <div className="mt-0.5 flex gap-3 text-[10px] text-slate-500">
-                    {x.ho > 0 && <span><span className="text-teal-600">●</span> HO'd {fmtNum(x.ho)}</span>}
-                    {x.visCur > 0 && <span><span className="text-amber-400">●</span> {monthLbl(cur)} {fmtNum(x.visCur)}</span>}
-                    {x.visNext > 0 && <span><span className="text-amber-200">●</span> {monthLbl(next)} {fmtNum(x.visNext)}</span>}
-                    {x.spp > 0 && <span className="ml-auto"><span className="text-orange-500">●</span> SPP pipeline {fmtNum(x.sppPipe)} of {fmtNum(x.spp)}</span>}
-                  </div>
-                </div>
-                <div className="w-24 text-right"><p className="text-xl font-extrabold text-orange-600">{fmtNum(x.spp)}</p><p className={`text-[10px] ${x.sppPipe >= x.spp ? 'text-emerald-600' : 'text-slate-400'}`}>{x.spp ? (x.sppPipe >= x.spp ? 'covered by pipeline' : `pipeline ${fmtNum(x.sppPipe)}`) : 'QIS'}</p></div>
-                <div className="w-20 text-right"><p className={`text-xl font-extrabold ${x.toAcquire >= 30 ? 'text-red-600' : x.toAcquire ? 'text-amber-600' : 'text-emerald-600'}`}>{fmtNum(Math.ceil(x.toAcquire))}</p><p className="text-[10px] text-slate-400">QIS</p></div>
-              </div>
-            )
-          })}
+
+        <div className="overflow-hidden rounded-xl border-2 border-orange-300">
+          <header className="flex items-baseline gap-2 bg-orange-50 px-3 py-1.5 text-orange-800"><span className="text-xs font-extrabold uppercase tracking-wide">SPP · by city</span><span className="text-[11px] opacity-80">balance = city short − acquisition target · pipeline is weighted QIS</span></header>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="border-b border-slate-100 text-[11px] uppercase tracking-wide text-slate-400">
+                <th className="px-3 py-2 text-left font-semibold">City</th><th className="px-2 text-right font-semibold text-orange-600">Balance</th><th className="px-2 text-right font-semibold">Pipeline</th>
+                <th className="w-[30%] px-2 font-semibold">Coverage</th><th className="px-3 text-right font-semibold">Gap</th>
+              </tr></thead>
+              <tbody className="divide-y divide-slate-50">
+                {list.filter(x => x.spp > 0 || x.sppPipe > 0).map(x => {
+                  const cov = x.spp ? Math.min(100, (100 * x.sppPipe) / x.spp) : 100
+                  const gap = Math.max(0, x.spp - x.sppPipe)
+                  return (
+                    <tr key={x.city} className="hover:bg-slate-50">
+                      <td className="px-3 py-2"><p className="font-semibold text-slate-900">{x.city}</p><p className="text-[11px] text-slate-400">{100 - x.share}% of {fmtNum(x.short)} short</p></td>
+                      <td className="px-2 text-right font-bold text-orange-600">{fmtNum(x.spp)}</td>
+                      <td className="px-2 text-right">{fmtNum(x.sppPipe)}</td>
+                      <td className="px-2"><div className="h-2.5 overflow-hidden rounded-full bg-orange-100"><div className={`h-full ${cov >= 100 ? 'bg-emerald-500' : 'bg-orange-500'}`} style={{ width: `${cov}%` }} /></div>
+                        <p className="mt-0.5 text-[10px] text-slate-400">{x.spp ? `${Math.floor(cov)}% covered` : 'no SPP share'}</p></td>
+                      <td className={`px-3 text-right text-lg font-extrabold ${gap ? 'text-orange-600' : 'text-emerald-600'}`}>{gap ? fmtNum(gap) : '✓'}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+              {(() => {
+                const cityBal = list.reduce((a, x) => a + x.spp, 0), cityPipe = list.reduce((a, x) => a + x.sppPipe, 0)
+                const adjBal = sppTarget - cityBal, adjPipe = Math.max(0, sppPipe - cityPipe)
+                const showAdj = zone === 'All' && (Math.round(adjBal) !== 0 || Math.round(adjPipe) !== 0)
+                const totBal = zone === 'All' ? sppTarget : cityBal, totPipe = zone === 'All' ? sppPipe : cityPipe
+                return (
+                  <tfoot>
+                    {showAdj && <tr className="border-t border-slate-100 text-slate-500">
+                      <td className="px-3 py-2"><p className="font-semibold">Company adjustment</p><p className="text-[11px] text-slate-400">so the total matches the headline SPP balance</p></td>
+                      <td className="px-2 text-right font-semibold">{adjBal < 0 ? '−' : '+'}{fmtNum(Math.abs(adjBal))}</td><td className="px-2 text-right">{adjPipe ? `+${fmtNum(adjPipe)}` : '—'}</td><td /><td />
+                    </tr>}
+                    <tr className="border-t-2 border-slate-200 bg-slate-50 font-bold">
+                      <td className="px-3 py-2">Total</td><td className="px-2 text-right text-orange-600">{fmtNum(totBal)}</td><td className="px-2 text-right">{fmtNum(totPipe)}</td>
+                      <td className="px-2"><div className="h-2.5 overflow-hidden rounded-full bg-orange-100"><div className={`h-full ${totPipe >= totBal ? 'bg-emerald-500' : 'bg-orange-500'}`} style={{ width: `${totBal ? Math.min(100, (100 * totPipe) / totBal) : 100}%` }} /></div></td>
+                      <td className={`px-3 text-right text-lg ${totPipe >= totBal ? 'text-emerald-600' : 'text-orange-600'}`}>{totPipe >= totBal ? '✓ covered' : fmtNum(totBal - totPipe)}</td>
+                    </tr>
+                  </tfoot>
+                )
+              })()}
+            </table>
+          </div>
+          <p className="border-t border-slate-100 px-3 py-2 text-[11px] text-slate-400">✓ = SPP pipeline already covers the city's SPP share. Gap = SPP still has to find.</p>
         </div>
       </div>
 
