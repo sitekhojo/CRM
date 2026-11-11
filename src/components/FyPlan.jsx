@@ -73,7 +73,9 @@ export default function FyPlan({ deals, network, cities = [], team = [], filters
       const scouted30 = inCity.filter(r => new Date(r.created_at) >= since).length
       const needDay = days ? Math.ceil(sitesScout / days) : null
       const paceDay = scouted30 / days30
-      return { noPipe, city: c.city, owner: owner[lc] || '—', region: region[lc] || '—', energised, target, short, share, acq, ho, pendingPipe, visCur, visNext, vis, toAcquire, sitesWin, sitesScout, needDay, paceDay, scouted30 }
+      const spp = Math.max(0, short - acq) // the rest of the city's gap is SPP's
+      const sppPipe = deals.filter(d => d.site_type === 'SPP' && !isTrackerSite(d) && !['live', 'dropped'].includes(d.stage_category) && String(d.city || '').toLowerCase() === lc).reduce((a, d) => a + qisOf(d), 0)
+      return { spp, sppPipe, noPipe, city: c.city, owner: owner[lc] || '—', region: region[lc] || '—', energised, target, short, share, acq, ho, pendingPipe, visCur, visNext, vis, toAcquire, sitesWin, sitesScout, needDay, paceDay, scouted30 }
     })
     const sum = k => list.reduce((a, x) => a + (x[k] || 0), 0)
     const total = { energised: sum('energised'), target: sum('target'), short: sum('short'), acq: sum('acq'), ho: sum('ho'), pendingPipe: sum('pendingPipe'), visCur: sum('visCur'), visNext: sum('visNext'), vis: sum('vis'), toAcquire: sum('toAcquire'), sitesWin: sum('sitesWin'), sitesScout: sum('sitesScout'), needDay: days ? sum('sitesScout') / days : null, paceDay: sum('paceDay'), scouted30: sum('scouted30') }
@@ -91,7 +93,7 @@ export default function FyPlan({ deals, network, cities = [], team = [], filters
   const company = Number(plan.company_target) || 0
   const exit = zone === 'All' && company ? company : T.target
   const zoneOf = z => sumUp(z === 'All' ? m.list : m.list.filter(x => x.region === z), m.days)
-  const maxAcq = Math.max(1, ...list.map(x => x.acq))
+  const maxAcq = Math.max(1, ...list.map(x => x.short))
   const enPct = exit ? Math.round((100 * netEnergised) / exit) : 0
   // SPP covers whatever the acquisition team does not: total short − acquisition target
   const shortAll = zone === 'All' && company ? Math.max(0, company - netEnergised) : T.short
@@ -136,13 +138,15 @@ export default function FyPlan({ deals, network, cities = [], team = [], filters
       {/* city rows */}
       <div className="px-5 py-3">
         <div className="mb-1 flex items-center gap-4 text-[11px] text-slate-500">
-          <span className="w-36">City</span><span className="hidden w-28 text-right md:block">Energised / target</span><span className="flex-1">Acquisition target, split</span><span className="w-20 text-right">To scout</span>
+          <span className="w-36">City</span><span className="hidden w-28 text-right md:block">Energised / target</span><span className="flex-1">City short = <span className="font-semibold text-navy-900">acquisition</span> + <span className="font-semibold text-orange-600">SPP</span></span><span className="w-24 text-right text-orange-600">SPP balance</span><span className="w-20 text-right">To scout</span>
         </div>
         <div className="divide-y divide-slate-100">
           {list.map(x => {
             const seg = [[x.ho, 'bg-teal-500', 'Handed over'], [x.visCur, 'bg-amber-400', `${monthLbl(cur)} visibility`], [x.visNext, 'bg-amber-200', `${monthLbl(next)} visibility`], [x.noPipe, 'bg-red-400', 'No pipeline yet']]
             const used = Math.min(x.acq, x.ho + x.vis + x.noPipe)
             const w = v => `${(100 * Math.min(v, x.acq)) / maxAcq}%`
+            const sw = v => `${(100 * v) / maxAcq}%`
+            const sppCov = Math.min(x.sppPipe, x.spp)
             const ep = x.target ? Math.round((100 * x.energised) / x.target) : 0
             return (
               <div key={x.city} className="flex items-center gap-4 py-2.5">
@@ -150,17 +154,25 @@ export default function FyPlan({ deals, network, cities = [], team = [], filters
                 <div className="hidden w-28 text-right md:block"><p className="text-sm"><b>{fmtNum(x.energised)}</b><span className="text-slate-400"> / {fmtNum(x.target)}</span></p>
                   <div className="ml-auto mt-1 h-1 w-20 overflow-hidden rounded-full bg-slate-100"><div className="h-1 bg-emerald-500" style={{ width: `${Math.min(100, ep)}%` }} /></div></div>
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-baseline gap-2 text-xs text-slate-500"><b className="text-sm text-slate-800">{fmtNum(x.acq)}</b> QIS <span>· {x.share}% of {fmtNum(x.short)} short</span>
-                    {x.share === 0 && <span className="rounded bg-orange-50 px-1.5 text-[10px] font-semibold text-orange-700">all SPP</span>}</div>
+                  <div className="flex flex-wrap items-baseline gap-x-2 text-xs text-slate-500"><b className="text-sm text-slate-800">{fmtNum(x.short)}</b> short
+                    <span>= <b className="text-navy-900">{fmtNum(x.acq)}</b> acquisition ({x.share}%)</span>
+                    <span>+ <b className="text-orange-600">{fmtNum(x.spp)}</b> SPP ({100 - x.share}%)</span></div>
                   <div className="mt-1 flex h-3.5 overflow-hidden rounded-full bg-slate-100" title={seg.map(([v, , l]) => `${l}: ${fmtNum(Math.ceil(v))}`).join(' · ')}>
-                    {used > 0 && seg.map(([v, c, l]) => v > 0 && <div key={l} className={`${c} h-full border-r border-white/70 last:border-0`} style={{ width: w(v) }} title={`${l}: ${fmtNum(Math.ceil(v))} QIS`} />)}
+                    {used > 0 && seg.map(([v, c, l]) => v > 0 && <div key={l} className={`${c} h-full border-r border-white/70`} style={{ width: w(v) }} title={`${l}: ${fmtNum(Math.ceil(v))} QIS`} />)}
+                    {x.spp > 0 && <>
+                      <div className="h-full w-0.5 shrink-0 bg-white" />
+                      {sppCov > 0 && <div className="h-full bg-orange-500" style={{ width: sw(sppCov) }} title={`SPP covered by pipeline: ${fmtNum(sppCov)} QIS`} />}
+                      {x.spp - sppCov > 0 && <div className="h-full bg-[repeating-linear-gradient(45deg,#fed7aa_0_4px,#ffedd5_4px_8px)]" style={{ width: sw(x.spp - sppCov) }} title={`SPP not yet in pipeline: ${fmtNum(x.spp - sppCov)} QIS`} />}
+                    </>}
                   </div>
                   <div className="mt-0.5 flex gap-3 text-[10px] text-slate-500">
                     {x.ho > 0 && <span><span className="text-teal-600">●</span> HO'd {fmtNum(x.ho)}</span>}
                     {x.visCur > 0 && <span><span className="text-amber-400">●</span> {monthLbl(cur)} {fmtNum(x.visCur)}</span>}
                     {x.visNext > 0 && <span><span className="text-amber-200">●</span> {monthLbl(next)} {fmtNum(x.visNext)}</span>}
+                    {x.spp > 0 && <span className="ml-auto"><span className="text-orange-500">●</span> SPP pipeline {fmtNum(x.sppPipe)} of {fmtNum(x.spp)}</span>}
                   </div>
                 </div>
+                <div className="w-24 text-right"><p className="text-xl font-extrabold text-orange-600">{fmtNum(x.spp)}</p><p className={`text-[10px] ${x.sppPipe >= x.spp ? 'text-emerald-600' : 'text-slate-400'}`}>{x.spp ? (x.sppPipe >= x.spp ? 'covered by pipeline' : `pipeline ${fmtNum(x.sppPipe)}`) : 'QIS'}</p></div>
                 <div className="w-20 text-right"><p className={`text-xl font-extrabold ${x.toAcquire >= 30 ? 'text-red-600' : x.toAcquire ? 'text-amber-600' : 'text-emerald-600'}`}>{fmtNum(Math.ceil(x.toAcquire))}</p><p className="text-[10px] text-slate-400">QIS</p></div>
               </div>
             )

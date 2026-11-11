@@ -2,7 +2,7 @@ export const fmtDate = d => d ? new Date(d).toLocaleDateString('en-IN', { day: '
 export const fmtDateTime = d => d ? new Date(d).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'
 export const fmtINR = n => (n === null || n === undefined || n === '') ? '—' : '₹' + Number(n).toLocaleString('en-IN')
 /** Whole numbers everywhere, rounded up (2.2 → 3); tiny float noise is ignored. */
-export const roundUp = n => { const v = Number(n) || 0; const a = Math.ceil(Math.abs(v) - 1e-6); return v < 0 ? -a : a }
+export const roundUp = n => { const v = Number(n) || 0; const a = Math.max(0, Math.ceil(Math.abs(v) - 1e-6)); return v < 0 && a ? -a : a }
 export const fmtNum = n => (n === null || n === undefined || n === '' || Number.isNaN(Number(n))) ? '—' : roundUp(n).toLocaleString('en-IN')
 export const fmtDist = m => m === null || m === undefined || !Number.isFinite(m) ? '—' : m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(2)} km`
 export const daysLabel = d => {
