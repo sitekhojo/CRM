@@ -472,7 +472,7 @@ export default function Dashboard() {
                       <td className="td"><StageBadge name={d.stage_name} color={d.stage_color} /></td>
                       <td className="td">{d.city}</td>
                       <td className="td">{d.owner || '—'}</td>
-                      <td className="td text-right">{d.extra?.qis_count ?? '—'}</td><td className="td text-right"><span className={`inline-block min-w-[2.5rem] rounded-md px-2 py-0.5 text-center font-bold ${stageAgeTone(d.days_in_stage, d.stage_category).cls}`}>{daysInt(d.days_in_stage)}</span></td>
+                      <td className="td text-right">{fmtNum(d.extra?.qis_count)}</td><td className="td text-right"><span className={`inline-block min-w-[2.5rem] rounded-md px-2 py-0.5 text-center font-bold ${stageAgeTone(d.days_in_stage, d.stage_category).cls}`}>{daysInt(d.days_in_stage)}</span></td>
                     </tr>
                   ))}
                 </tbody>
@@ -550,7 +550,7 @@ const Panel = ({ title, children, className = '' }) => (
   <div className={`card p-4 sm:p-5 ${className}`}><h3 className="mb-3 text-sm font-bold text-slate-900">{title}</h3>{children}</div>
 )
 const QS = ({ v, bold, cls = '' }) => (
-  <td className={`td text-right ${cls}`}><span className={bold ? 'font-bold' : ''}>{v.qis}</span><span className="block text-[11px] text-slate-400">{v.sites} sites</span></td>
+  <td className={`td text-right ${cls}`}><span className={bold ? 'font-bold' : ''}>{fmtNum(v.qis)}</span><span className="block text-[11px] text-slate-400">{v.sites} sites</span></td>
 )
 const qs = rs => ({ qis: rs.reduce((a, r) => a + (Number(r.extra?.qis_count) || 0), 0), sites: rs.length })
 const AGE_BUCKETS = [[0, 7], [8, 15], [16, 30], [31, 60], [61, Infinity]]

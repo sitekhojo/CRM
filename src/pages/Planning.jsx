@@ -7,7 +7,7 @@ import { useConfig } from '../lib/config'
 import { BaseMap, FitBounds, pinIcon, DealMarkers, LocationPicker } from '../components/maps'
 import { PageLoader, StageBadge } from '../components/ui'
 import { evaluateFeasibility, validLatLng, VERDICT, haversine } from '../lib/geo'
-import { fmtDist } from '../lib/format'
+import { fmtDist, fmtNum } from '../lib/format'
 
 export const NETWORK_TYPES = {
   own_station: { label: 'Own station', color: '#16a34a' },
@@ -77,7 +77,7 @@ export default function Planning() {
               {network.map(p => (
                 <CircleMarker key={'n' + p.id} center={[p.latitude, p.longitude]} radius={6}
                   pathOptions={{ color: '#fff', weight: 2, fillColor: NETWORK_TYPES[p.point_type].color, fillOpacity: 0.9 }}>
-                  <LTooltip>{NETWORK_TYPES[p.point_type].label}{p.site_type ? ` (${p.site_type})` : ''}: {p.name}{p.weight > 1 ? ` · ${p.weight} QIS` : ''}{has ? ` · ${fmtDist(distanceTo(loc, p))}` : ''}</LTooltip>
+                  <LTooltip>{NETWORK_TYPES[p.point_type].label}{p.site_type ? ` (${p.site_type})` : ''}: {p.name}{p.weight > 1 ? ` · ${fmtNum(p.weight)} QIS` : ''}{has ? ` · ${fmtDist(distanceTo(loc, p))}` : ''}</LTooltip>
                 </CircleMarker>
               ))}
               {res && <DealMarkers deals={res.nearby.pipeline} radius={6} />}

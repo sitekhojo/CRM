@@ -164,7 +164,7 @@ export default function FranchisePayments({ filters: extFilters, compact = false
                   <td className="px-2 py-2">{r.city}<div className="text-[10px] text-slate-400">{r.region}</div></td>
                   <td className="whitespace-nowrap px-2 py-2">{r.deal ? <StageCell deal={r.deal} onChanged={refresh} /> : <span className="text-xs text-slate-500">{r.stage}</span>}{r.fyEnergized && <div className="text-[10px] font-semibold text-emerald-700">energized {fyLabel()}</div>}</td>
                   <td className="px-2 py-2">{r.owner || '—'}</td>
-                  <td className="px-2 py-2 text-right font-semibold">{r.qis}</td>
+                  <td className="px-2 py-2 text-right font-semibold">{fmtNum(r.qis)}</td>
                   <td className="whitespace-nowrap px-2 py-2">{fmtDate(r.enDate)}</td>
                   {COMPONENTS.map(([k, l]) => { const c = r.comp[k]; return (
                     <td key={k} className="whitespace-nowrap px-2 py-2 text-right">

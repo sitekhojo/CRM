@@ -141,7 +141,7 @@ export default function Acquisition() {
                       <td className="td text-right">{r.leads || '—'}</td>
                       <td className="td text-right">{r.dealsN || '—'}</td>
                       <td className="td text-right font-semibold">{r.qis || '—'}</td>
-                      <td className="td text-right text-slate-500">{r.target_qis ?? '—'}</td>
+                      <td className="td text-right text-slate-500">{fmtNum(r.target_qis)}</td>
                       <td className="td text-right text-slate-500">{fmtNum(r.radius_m)} m</td>
                       {isAdmin && <td className="td text-right" onClick={e => e.stopPropagation()}><button className="btn-ghost p-1 text-slate-400 hover:text-red-600" title="Remove location" onClick={() => remove(r)}><Trash2 className="h-4 w-4" /></button></td>}
                     </tr>,

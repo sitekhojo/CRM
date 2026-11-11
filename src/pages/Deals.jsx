@@ -8,7 +8,7 @@ import DealFilters from '../components/DealFilters'
 import { SingleSelect } from '../components/MultiSelect'
 import PeriodBar, { periodRange, periodLabel, isoDay } from '../components/PeriodBar'
 import { StageBadge, PageLoader, Empty, Pill } from '../components/ui'
-import { fmtDate, fmtINR, daysInt, stageAgeTone, AGE_TONES, POWER_FEASIBILITY, RECORD_TYPES, INTENTS, SITE_FORMATS } from '../lib/format'
+import { fmtNum, fmtDate, fmtINR, daysInt, stageAgeTone, AGE_TONES, POWER_FEASIBILITY, RECORD_TYPES, INTENTS, SITE_FORMATS } from '../lib/format'
 import { exportRows, DEAL_COLUMNS } from '../lib/excel'
 import ImportDealsModal from '../components/ImportDealsModal'
 import StageCell from '../components/StageCell'
@@ -58,7 +58,7 @@ export default function Deals({ fixedType }) {
     { key: 'intent', label: 'Intent', sort: 'intent_sort', click: true, cell: d => <IntentCell deal={d} onChanged={reload} /> },
     { key: 'site', label: 'Site', sort: 'name', td: 'max-w-[260px]', locked: true, cell: d => <><div className="truncate font-semibold text-slate-900">{d.name}</div><div className="truncate text-xs text-slate-500">{[d.site_type, SITE_FORMATS[d.extra?.site_format], d.address].filter(Boolean).join(' · ') || '—'}{d.latitude === null && <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] font-semibold text-amber-700">No location</span>}</div>{d.target && <div className="mt-0.5 truncate text-[11px] text-slate-600" title={`Priority location · month of acquisition ${d.target_month_label}`}><span className={`mr-1 rounded px-1 font-bold ${PRIORITIES[d.target.priority]?.cls}`}>{d.target.priority}</span>{d.target.name}</div>}</> },
     { key: 'stage', label: 'Stage', sort: 'stage_order', click: true, cell: d => <StageCell deal={d} onChanged={reload} /> },
-    { key: 'qis', label: 'QIS', sort: 'qis', td: 'font-semibold', cell: d => d.qis ?? '—' },
+    { key: 'qis', label: 'QIS', sort: 'qis', td: 'font-semibold', cell: d => fmtNum(d.qis) },
     { key: 'days', label: 'Days in stage', sort: 'days_in_stage', td: 'whitespace-nowrap', cell: d => { const t = stageAgeTone(d.days_in_stage, d.stage_category); return <span title={t.label} className={`inline-block min-w-[2.5rem] rounded-md px-2 py-1 text-center text-sm font-bold ${t.cls}`}>{daysInt(d.days_in_stage) ?? '—'}</span> } },
     { key: 'city', label: 'City', sort: 'city', cell: d => <>{d.city}{d.region && <div className="text-[10px] text-slate-400">{d.region}</div>}</> },
     { key: 'site_type', label: 'Site type', sort: 'site_type', hidden: true, cell: d => d.site_type || '—' },
@@ -225,7 +225,7 @@ function Board({ rows, stages }) {
                       <span className="truncate">{d.city}{d.site_type ? ` · ${d.site_type}` : ''}</span>
                     </div>
                     <div className="mt-2 flex items-center justify-between text-xs">
-                      <span className="text-slate-600">{d.qis ? <b>{d.qis} QIS · </b> : ''}{d.owner || '—'}</span>
+                      <span className="text-slate-600">{d.qis ? <b>{fmtNum(d.qis)} QIS · </b> : ''}{d.owner || '—'}</span>
                       <span title="Days in stage" className={`rounded-md px-1.5 py-0.5 text-xs font-bold ${stageAgeTone(d.days_in_stage, d.stage_category).cls}`}>{daysInt(d.days_in_stage) ?? '—'}</span>
                     </div>
                   </Link>

@@ -119,10 +119,10 @@ export default function Forecast({ view = 'table' }) {
           <div className={`text-base font-bold ${tone}`}>{fmtNum(v.qis)}</div>
           <div className="text-[11px] text-slate-400">{v.sites} sites</div>
           {intents && v.list && chipBy === 'type' && (
-            <div className="mt-0.5 flex flex-wrap justify-end gap-1">{byType(v.list).map(x => <SiteTypeChip key={x.type} t={x.type}> {x.qis}</SiteTypeChip>)}</div>)}
+            <div className="mt-0.5 flex flex-wrap justify-end gap-1">{byType(v.list).map(x => <SiteTypeChip key={x.type} t={x.type}> {fmtNum(x.qis)}</SiteTypeChip>)}</div>)}
           {intents && v.list && chipBy === 'intent' && (() => { const b = byIntent(v.list); return (
             <div className="mt-0.5 flex justify-end gap-1">
-              {['hot', 'warm', 'cold'].filter(k => b[k]).map(k => <span key={k} className={`rounded px-1 text-[10px] font-semibold ${INTENTS[k].cls}`} title={INTENTS[k].hint}>{INTENTS[k].label[0]} {b[k]}</span>)}
+              {['hot', 'warm', 'cold'].filter(k => b[k]).map(k => <span key={k} className={`rounded px-1 text-[10px] font-semibold ${INTENTS[k].cls}`} title={INTENTS[k].hint}>{INTENTS[k].label[0]} {fmtNum(b[k])}</span>)}
               {b[''] > 0 && <span className="rounded bg-slate-100 px-1 text-[10px] text-slate-500" title="Intent not set">? {b['']}</span>}
             </div>) })()}
         </button>
