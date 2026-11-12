@@ -53,8 +53,10 @@ export default function TeamSummary({ label, from, to, visits, deals, team, peop
       const mine = created.filter(d => d.owner === n)
       const ok = mine.filter(d => visitedBy(d, n))
       const no = mine.filter(d => !ok.includes(d))
-      return { name: n, region: regionOf[n] || '—', total: mine.length, leads: mine.filter(d => d.record_type === 'lead').length, dealsN: mine.filter(d => d.record_type !== 'lead').length, ok: ok.length, no: no.length, noQis: no.reduce((a, d) => a + qisOf(d), 0), noList: no }
-    }).filter(r => r.total || people.length).sort((a, b) => b.no - a.no || b.total - a.total || a.name.localeCompare(b.name))
+      const skipped = visits.filter(v => v.member === n && v.visit_type === 'new_site' && !v.lead_created)
+      const reasons = {}; skipped.forEach(v => { const k = v.no_lead_reason || 'No reason'; reasons[k] = (reasons[k] || 0) + 1 })
+      return { skipped: skipped.length, reasons: Object.entries(reasons).map(([k, c]) => `${k}: ${c}`).join('\n'), name: n, region: regionOf[n] || '—', total: mine.length, leads: mine.filter(d => d.record_type === 'lead').length, dealsN: mine.filter(d => d.record_type !== 'lead').length, ok: ok.length, no: no.length, noQis: no.reduce((a, d) => a + qisOf(d), 0), noList: no }
+    }).filter(r => r.total || r.skipped || people.length).sort((a, b) => b.no - a.no || b.total - a.total || a.name.localeCompare(b.name))
 
     return { wd: wd.length, time, made }
   }, [from, to, visits, deals, team, people, history])
@@ -104,7 +106,7 @@ export default function TeamSummary({ label, from, to, visits, deals, team, peop
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
               <tr><th className="px-4 py-2 text-left">Person</th><th className="px-2 text-right">Created</th><th className="px-2 text-right">Leads</th><th className="px-2 text-right">Deals</th>
-                <th className="px-2 text-right text-emerald-700">With field visit</th><th className="px-2 text-right text-red-600">No field visit</th><th className="px-2 text-right text-red-600">QIS, no visit</th><th className="px-4 text-right">% backed by visit</th></tr>
+                <th className="px-2 text-right text-emerald-700">With field visit</th><th className="px-2 text-right text-red-600">No field visit</th><th className="px-2 text-right text-red-600">QIS, no visit</th><th className="px-2 text-right text-amber-600" title="New-site visits logged with 'Don't create a lead yet'">Scouted, no lead</th><th className="px-4 text-right">% backed by visit</th></tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {m.made.map(r => {
@@ -117,15 +119,16 @@ export default function TeamSummary({ label, from, to, visits, deals, team, peop
                     <td className="px-2 text-right font-semibold text-emerald-700">{r.ok || '—'}</td>
                     <td className="px-2 text-right">{r.no ? <button onClick={() => setOpen(open === r.name ? null : r.name)} className="font-extrabold text-red-600 underline decoration-dotted">{r.no}</button> : <span className="text-slate-300">—</span>}</td>
                     <td className="px-2 text-right text-red-600">{r.noQis ? fmtNum(r.noQis) : <span className="text-slate-300">—</span>}</td>
+                    <td className="px-2 text-right" title={r.reasons}>{r.skipped ? <span className="cursor-help font-semibold text-amber-600 underline decoration-dotted">{r.skipped}</span> : <span className="text-slate-300">—</span>}</td>
                     <td className="px-4 text-right"><span className={`rounded px-1.5 py-0.5 text-xs font-bold ${pct >= 80 ? 'bg-emerald-50 text-emerald-700' : pct >= 50 ? 'bg-amber-50 text-amber-700' : 'bg-red-100 text-red-700'}`}>{r.total ? `${pct}%` : '—'}</span></td>
                   </tr>
                 )
               })}
-              {!m.made.length && <tr><td colSpan={8} className="px-4 py-6 text-center text-slate-400">No leads or deals created in this period.</td></tr>}
+              {!m.made.length && <tr><td colSpan={9} className="px-4 py-6 text-center text-slate-400">No leads or deals created in this period.</td></tr>}
             </tbody>
             <tfoot className="border-t-2 border-slate-200 bg-slate-50 font-bold">
               <tr><td className="px-4 py-2">Team</td><td className="px-2 text-right">{cTot('total')}</td><td className="px-2 text-right">{cTot('leads')}</td><td className="px-2 text-right">{cTot('dealsN')}</td>
-                <td className="px-2 text-right text-emerald-700">{cTot('ok')}</td><td className="px-2 text-right text-red-600">{cTot('no')}</td><td className="px-2 text-right text-red-600">{fmtNum(cTot('noQis'))}</td>
+                <td className="px-2 text-right text-emerald-700">{cTot('ok')}</td><td className="px-2 text-right text-red-600">{cTot('no')}</td><td className="px-2 text-right text-red-600">{fmtNum(cTot('noQis'))}</td><td className="px-2 text-right text-amber-600">{cTot('skipped')}</td>
                 <td className="px-4 text-right">{cTot('total') ? `${Math.round((100 * cTot('ok')) / cTot('total'))}%` : '—'}</td></tr>
             </tfoot>
           </table>
@@ -143,7 +146,7 @@ export default function TeamSummary({ label, from, to, visits, deals, team, peop
       )}
       <p className="border-t border-slate-100 px-4 py-2 text-[11px] text-slate-400">
         {tab === 'time' ? 'Days out = working days with at least one visit logged.'
-          : `By site owner. "With field visit" = created from Log visit, or the owner logged a visit within ${NEAR_M} m of the site up to 3 days after it was created. Imports left out. Click a red number to see the sites.`}
+          : `By site owner. "With field visit" = created from Log visit, or the owner logged a visit within ${NEAR_M} m of the site up to 3 days after it was created. Imports left out. Click a red number to see the sites. "Scouted, no lead" = new-site visits where the person chose not to create a lead (hover for reasons).`}
       </p>
     </div>
   )
