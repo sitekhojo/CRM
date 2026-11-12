@@ -15,6 +15,7 @@ import { BaseMap, FitBounds } from './maps'
 import MultiSelect from './MultiSelect'
 import { Modal, PageLoader, Empty, Field, useToast } from './ui'
 import { PriorityChip } from '../pages/Acquisition'
+import TeamSummary from './TeamSummary'
 
 const numIcon = (n, color) => L.divIcon({
   className: '',
@@ -39,7 +40,8 @@ export default function TeamActivity() {
   const [missingOpen, setMissingOpen] = useState(false)
   const [lastSeen, setLastSeen] = useState({})
 
-  const from = mode === 'week' ? addDays(day, -6) : day
+  const weekStart = (() => { const dow = new Date(day + 'T12:00:00Z').getUTCDay(); return addDays(day, -((dow + 6) % 7)) })() // Monday
+  const from = mode === 'week' ? addDays(day, -6) : mode === 'thisWeek' ? weekStart : mode === 'thisMonth' ? day.slice(0, 8) + '01' : day
   const load = useCallback(() => { setVisits(null); fetchVisits(from, day).then(setVisits).catch(e => { toast(errMsg(e), 'error'); setVisits([]) }) }, [from, day]) // eslint-disable-line
   useEffect(() => { load() }, [load])
   useEffect(() => {
@@ -111,7 +113,7 @@ export default function TeamActivity() {
         </div>
         {day !== today && <button className="btn-ghost text-sm" onClick={() => setDay(today)}>Today</button>}
         <div className="flex overflow-hidden rounded-lg border border-slate-300 text-sm font-semibold">
-          {[['day', 'Day'], ['week', 'Last 7 days']].map(([k, l]) => <button key={k} onClick={() => setMode(k)} className={`px-3 py-1.5 ${mode === k ? 'bg-navy-900 text-white' : 'bg-white text-slate-600'}`}>{l}</button>)}
+          {[['day', 'Day'], ['thisWeek', 'Week'], ['thisMonth', 'Month'], ['week', 'Last 7 days']].map(([k, l]) => <button key={k} onClick={() => setMode(k)} className={`px-3 py-1.5 ${mode === k ? 'bg-navy-900 text-white' : 'bg-white text-slate-600'}`}>{l}</button>)}
         </div>
         <MultiSelect allLabel="All people" noun="people" value={people} onChange={setPeople} options={m.names.map(n => ({ value: n, label: n, color: m.colorOf[n] }))} />
         <div className="flex-1" />
@@ -119,7 +121,11 @@ export default function TeamActivity() {
         {isAdmin && <button className="btn-secondary" onClick={exportXlsx}><Download className="h-4 w-4" />Excel</button>}
       </div>
 
-      {mode === 'week' ? (
+      {mode === 'thisWeek' || mode === 'thisMonth' ? (
+        <TeamSummary label={mode === 'thisWeek' ? `week of ${fmtDay(from)}` : new Date(day + 'T12:00:00Z').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
+          from={from} to={day} visits={m.all} deals={deals} team={team} people={people} colorOf={m.colorOf}
+          onOpenDay={(d, n) => { setDay(d); setPeople([n]); setMode('day') }} />
+      ) : mode === 'week' ? (
         <div className="card overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead className="bg-slate-50"><tr><th className="th">Person</th>{m.days.map(d => <th key={d} className="th text-center">{fmtDay(d)}</th>)}<th className="th text-right">Total</th></tr></thead>
