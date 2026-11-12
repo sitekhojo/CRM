@@ -107,15 +107,15 @@ export default function TeamSummary({ label, from, to, visits, deals, team, peop
           <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
             <tr>
               <th className="th" rowSpan={2}>Person</th>
-              <th className="th border-l border-slate-200 text-center" colSpan={3}>Field</th>
-              <th className="th border-l border-slate-200 bg-violet-50 text-center text-violet-700" colSpan={6}>Leads</th>
+              <th className="th border-l border-slate-200 text-center" colSpan={3}>On the ground</th>
+              <th className="th border-l border-slate-200 bg-violet-50 text-center text-violet-700" colSpan={6}>Their sites (by owner)</th>
               <th className="th border-l border-slate-200 text-right" rowSpan={2}>Handed over</th>
               <th className="th border-l border-slate-200" rowSpan={2}>Missed days</th><th className="th" rowSpan={2}>Last visit</th>
             </tr>
             <tr>
-              <th className="th border-l border-slate-200">Field days</th><th className="th text-right">Visits</th><th className="th text-right">New site</th>
-              <th className="th border-l border-slate-200 bg-violet-50 text-right">Added</th><th className="th bg-violet-50 text-right">QIS</th><th className="th bg-violet-50 text-right">Moved ahead</th>
-              <th className="th bg-violet-50 text-right">Dropped</th><th className="th bg-violet-50 text-right">Open now</th><th className="th bg-violet-50 text-right">Stuck 30d+</th>
+              <th className="th border-l border-slate-200" title="Working days (Mon–Sat) with at least one visit logged">Days out / working days</th><th className="th text-right" title="Visits logged">Visits</th><th className="th text-right" title="Visits marked 'New site scouted'">New sites seen</th>
+              <th className="th border-l border-slate-200 bg-violet-50 text-right" title="New leads created in this period, owned by this person">New leads</th><th className="th bg-violet-50 text-right" title="QIS of those new leads">New lead QIS</th><th className="th bg-violet-50 text-right" title="Their sites (leads or deals) moved to a later stage in this period, by anyone">Moved to next stage</th>
+              <th className="th bg-violet-50 text-right" title="Their sites marked Dropped in this period">Dropped</th><th className="th bg-violet-50 text-right" title="Leads they own that are still open today (QIS in brackets)">Open leads today (QIS)</th><th className="th bg-violet-50 text-right" title="Open leads sitting in the same stage for more than 30 days">Stuck &gt;30 days</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
