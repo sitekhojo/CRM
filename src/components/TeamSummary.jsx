@@ -27,8 +27,10 @@ export default function TeamSummary({ label, from, to, visits, deals, team, peop
 
   const m = useMemo(() => {
     const wd = workingDays(from, to)
-    const active = team.filter(t => t.is_active && t.region !== 'SPP')
-    let names = [...new Set([...active.map(t => t.name), ...visits.map(v => v.member)])]
+    // Field team only: zonal heads, the SPP team and Sneh are left out
+    const excluded = new Set(team.filter(t => t.is_lead || t.region === 'SPP' || /^sneh\b/i.test(t.name)).map(t => t.name))
+    const active = team.filter(t => t.is_active && !excluded.has(t.name))
+    let names = [...new Set([...active.map(t => t.name), ...visits.map(v => v.member)])].filter(n => !excluded.has(n) && !/^sneh\b/i.test(n))
     if (people.length) names = names.filter(n => people.includes(n))
     const regionOf = Object.fromEntries(team.map(t => [t.name, t.region]))
     const order = n => { const i = REGIONS.indexOf(regionOf[n]); return i < 0 ? 9 : i }
@@ -150,7 +152,7 @@ export default function TeamSummary({ label, from, to, visits, deals, team, peop
         </>
       )}
       <p className="border-t border-slate-100 px-4 py-2 text-[11px] text-slate-400">
-        {tab === 'time' ? 'Days out = working days with at least one visit logged. New site: "lead" = the visit created a lead, "no lead" = logged with Don\'t create a lead yet.'
+        {tab === 'time' ? 'Field team only (zonal heads, SPP team and Sneh not shown). Days out = working days with at least one visit logged. New site: "lead" = the visit created a lead, "no lead" = logged with Don\'t create a lead yet.'
           : `By site owner. "With field visit" = created from Log visit, or the owner logged a visit within ${NEAR_M} m of the site up to 3 days after it was created. Imports left out. Click a red number to see the sites. "Scouted, no lead" = new-site visits where the person chose not to create a lead (hover for reasons).`}
       </p>
     </div>
