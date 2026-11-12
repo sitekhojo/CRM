@@ -1,176 +1,150 @@
 import { useEffect, useMemo, useState } from 'react'
-import { isBulkImport } from '../lib/deals'
-import { REGIONS, useConfig } from '../lib/config'
-import { supabase, fetchAll } from '../lib/supabase'
-import { VISIT_TYPES, addDays, fmtDay, fetchVisits, istDay } from '../lib/visits'
+import { isBulkImport, isTrackerSite } from '../lib/deals'
+import { REGIONS } from '../lib/config'
+import { addDays, fmtDay, fetchVisits } from '../lib/visits'
+import { haversine } from '../lib/geo'
 import { fmtNum } from '../lib/format'
 
 /** Working days = Mon–Sat between from and to (inclusive). */
 export const workingDays = (from, to) => { const out = []; for (let d = from; d <= to; d = addDays(d, 1)) if (new Date(d + 'T12:00:00Z').getUTCDay() !== 0) out.push(d); return out }
-const inRange = (d, from, to) => { const x = String(d || '').slice(0, 10); return x >= from && x <= to }
+const day10 = d => String(d || '').slice(0, 10)
 const qisOf = d => Number(d.extra?.qis_count) || 0
+const NEAR_M = 300 // a visit within 300 m of the site counts as a field visit
+
+const TYPES = [['new_site', 'New site'], ['follow_up', 'Follow-up'], ['franchisee_meeting', 'Franchisee'], ['discom', 'Discom'], ['other', 'Other']]
 
 /**
- * Week / month accountability: per person — days in the field vs working days, visits by type,
- * leads & QIS added, handovers, last visit — with team totals and the same stretch before it for comparison.
+ * Two small, shareable tables for a week or month:
+ *  1. Where the time goes — visits per person by type.
+ *  2. Leads & deals created — how many were backed by a logged field visit, and how many were not.
  */
-export default function TeamSummary({ label, from, to, visits, deals, team, people, colorOf, onOpenDay }) {
-  const len = Math.round((new Date(to + 'T12:00:00Z') - new Date(from + 'T12:00:00Z')) / 86400000) + 1
-  const prevTo = addDays(from, -1), prevFrom = addDays(from, -len)
-  const [prev, setPrev] = useState(null)
-  useEffect(() => { setPrev(null); fetchVisits(prevFrom, prevTo).then(setPrev).catch(() => setPrev([])) }, [prevFrom, prevTo])
-  const { stages = [] } = useConfig()
-  const [moves, setMoves] = useState([])
-  const [visitLeads, setVisitLeads] = useState(null) // every site ever created from a logged visit
-  useEffect(() => {
-    fetchAll(() => supabase.from('site_visits').select('site_id').eq('lead_created', true).not('site_id', 'is', null))
-      .then(rs => setVisitLeads(new Set(rs.map(x => x.site_id)))).catch(() => setVisitLeads(new Set()))
-  }, [])
-  useEffect(() => {
-    fetchAll(() => supabase.from('site_stage_history').select('site_id, from_stage_id, to_stage_id, changed_at').gte('changed_at', from + 'T00:00:00+05:30').lte('changed_at', to + 'T23:59:59+05:30'))
-      .then(setMoves).catch(() => setMoves([]))
-  }, [from, to])
+export default function TeamSummary({ label, from, to, visits, deals, team, people, colorOf }) {
+  const [tab, setTab] = useState('time')
+  const [open, setOpen] = useState(null)
+  // Visits from 60 days before the period, to check whether a site was visited before it was created
+  const [history, setHistory] = useState(null)
+  useEffect(() => { setHistory(null); fetchVisits(addDays(from, -60), to).then(setHistory).catch(() => setHistory([])) }, [from, to])
 
   const m = useMemo(() => {
     const wd = workingDays(from, to)
-    const today = istDay()
-    const active = team.filter(t => t.is_active)
-    // SPP team does not do field scouting: only shown if they logged visits
-    let names = [...new Set([...active.filter(t => t.region !== 'SPP').map(t => t.name), ...visits.map(v => v.member)])]
+    const active = team.filter(t => t.is_active && t.region !== 'SPP')
+    let names = [...new Set([...active.map(t => t.name), ...visits.map(v => v.member)])]
     if (people.length) names = names.filter(n => people.includes(n))
     const regionOf = Object.fromEntries(team.map(t => [t.name, t.region]))
-    const leadOf = Object.fromEntries(team.map(t => [t.name, t.is_lead]))
-    const made = deals.filter(d => !isBulkImport(d) && inRange(d.created_at, from, to))
-    const hos = deals.filter(d => inRange(d.extra?.ho_date, from, to))
-    const visitLeadIds = visitLeads || new Set(visits.filter(v => v.lead_created && v.site_id).map(v => v.site_id))
-    const fromVisit = d => visitLeadIds.has(d.id)
-    const stageById = Object.fromEntries(stages.map(st => [st.id, st]))
-    const dealById = Object.fromEntries(deals.map(d => [d.id, d]))
-    // Stage moves in the period on manually-worked sites: forward = to a later stage (not dropped), dropped = to a dropped stage
-    const mv = moves.map(x => ({ ...x, site: dealById[x.site_id], to: stageById[x.to_stage_id], fromSt: stageById[x.from_stage_id] }))
-      .filter(x => x.site && fromVisit(x.site) && x.to)
-    const openLead = d => d.record_type === 'lead' && !['dropped', 'live'].includes(d.stage_category)
-    const rows = names.map(n => {
+    const order = n => { const i = REGIONS.indexOf(regionOf[n]); return i < 0 ? 9 : i }
+
+    // 1. Where the time goes
+    const time = names.map(n => {
       const vs = visits.filter(v => v.member === n)
       const days = new Set(vs.map(v => v.visit_date))
-      const fieldDays = wd.filter(d => days.has(d)).length
-      const missed = wd.filter(d => d <= today && !days.has(d))
-      const mine = made.filter(d => d.owner === n)
-      const ho = hos.filter(d => d.owner === n)
-      const myMv = mv.filter(x => x.site.owner === n)
-      const ahead = new Set(myMv.filter(x => x.to.category !== 'dropped' && (x.to.sort_order ?? 0) > (x.fromSt?.sort_order ?? 0)).map(x => x.site_id))
-      const dropped = new Set(myMv.filter(x => x.to.category === 'dropped').map(x => x.site_id))
-      const open = deals.filter(d => d.owner === n && openLead(d) && fromVisit(d))
-      return {
-        ahead: ahead.size, dropped: dropped.size, open: open.length, openQis: open.reduce((a, d) => a + qisOf(d), 0),
-        stale: open.filter(d => (d.days_in_stage || 0) > 30).length, leadQis: mine.filter(d => d.record_type === 'lead' && visitLeadIds.has(d.id)).reduce((a, d) => a + qisOf(d), 0),
-        name: n, region: regionOf[n] || '—', lead: leadOf[n], color: colorOf[n],
-        visits: vs.length, fieldDays, missed, perDay: fieldDays ? vs.length / fieldDays : 0,
-        byType: Object.fromEntries(Object.keys(VISIT_TYPES).map(k => [k, vs.filter(v => v.visit_type === k).length])),
-        leads: mine.filter(d => d.record_type === 'lead' && visitLeadIds.has(d.id)).length, // only leads created from a logged visit deals: mine.filter(d => d.record_type !== 'lead').length,
-        qisAdded: mine.reduce((a, d) => a + qisOf(d), 0), hoQis: ho.reduce((a, d) => a + qisOf(d), 0), hoSites: ho.length,
-        last: vs.map(v => v.visit_date).sort().pop(),
-      }
-    })
-    const order = r => { const i = REGIONS.indexOf(r.region); return i < 0 ? 9 : i }
-    rows.sort((a, b) => order(a) - order(b) || (b.lead ? 1 : 0) - (a.lead ? 1 : 0) || b.visits - a.visits || a.name.localeCompare(b.name))
-    const sum = k => rows.reduce((a, r) => a + (typeof k === 'function' ? k(r) : r[k]), 0)
-    const prevVisits = prev ? prev.filter(v => names.includes(v.member)) : null
-    const prevMade = deals.filter(d => fromVisit(d) && d.record_type === 'lead' && inRange(d.created_at, prevFrom, prevTo) && names.includes(d.owner))
-    return {
-      rows, wd: wd.filter(d => d <= today), wdAll: wd.length,
-      tot: { ahead: sum('ahead'), dropped: sum('dropped'), open: sum('open'), stale: sum('stale'), leadQis: sum('leadQis'), visits: sum('visits'), newSite: sum(r => r.byType.new_site), leads: sum('leads'), deals: sum('deals'), qis: sum('qisAdded'), ho: sum('hoQis'), missedPeople: rows.filter(r => r.missed.length).length, missedDays: sum(r => r.missed.length) },
-      prev: prevVisits && { visits: prevVisits.length, newSite: prevVisits.filter(v => v.visit_type === 'new_site').length, leads: new Set(prevVisits.filter(v => v.lead_created && v.site_id).map(v => v.site_id)).size, qis: prevMade.reduce((a, d) => a + qisOf(d), 0) },
-    }
-  }, [from, to, visits, deals, team, people, colorOf, prev, prevFrom, prevTo, moves, stages, visitLeads])
+      return { name: n, region: regionOf[n] || '—', visits: vs.length, days: wd.filter(d => days.has(d)).length, byType: Object.fromEntries(TYPES.map(([k]) => [k, vs.filter(v => v.visit_type === k).length])) }
+    }).sort((a, b) => order(a.name) - order(b.name) || b.visits - a.visits || a.name.localeCompare(b.name))
 
-  const delta = (now, before) => {
-    if (before === undefined || before === null) return null
-    const d = now - before
-    return <span className={`ml-1 text-xs font-semibold ${d > 0 ? 'text-emerald-600' : d < 0 ? 'text-red-600' : 'text-slate-400'}`}>{d > 0 ? '▲' : d < 0 ? '▼' : '='} {fmtNum(Math.abs(d))}</span>
-  }
-  const T = m.tot, P = m.prev
-  const Card = ({ l, v, p, sub, cls = 'text-navy-900' }) => (
-    <div className="card p-4"><p className="text-xs font-semibold text-slate-500">{l}</p>
-      <p className={`text-2xl font-extrabold ${cls}`}>{fmtNum(v)}{P && p !== undefined && delta(v, p)}</p>
-      <p className="text-xs text-slate-500">{sub}</p></div>
-  )
+    // 2. Leads & deals created in the period (not imports / tracker), by owner — backed by a field visit or not
+    const all = history || visits
+    const created = deals.filter(d => !isBulkImport(d) && !isTrackerSite(d) && day10(d.created_at) >= from && day10(d.created_at) <= to)
+    const visitedBy = (d, n) => {
+      const until = addDays(day10(d.created_at), 3)
+      return all.some(v => v.member === n && v.visit_date <= until && (
+        v.site_id === d.id ||
+        (d.latitude != null && v.latitude != null && haversine(v.latitude, v.longitude, d.latitude, d.longitude) <= NEAR_M)))
+    }
+    const made = names.map(n => {
+      const mine = created.filter(d => d.owner === n)
+      const ok = mine.filter(d => visitedBy(d, n))
+      const no = mine.filter(d => !ok.includes(d))
+      return { name: n, region: regionOf[n] || '—', total: mine.length, leads: mine.filter(d => d.record_type === 'lead').length, dealsN: mine.filter(d => d.record_type !== 'lead').length, ok: ok.length, no: no.length, noQis: no.reduce((a, d) => a + qisOf(d), 0), noList: no }
+    }).filter(r => r.total || people.length).sort((a, b) => b.no - a.no || b.total - a.total || a.name.localeCompare(b.name))
+
+    return { wd: wd.length, time, made }
+  }, [from, to, visits, deals, team, people, history])
+
+  const tTot = k => m.time.reduce((a, r) => a + (k in r.byType ? r.byType[k] : r[k]), 0)
+  const cTot = k => m.made.reduce((a, r) => a + r[k], 0)
 
   return (
-    <div>
-      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <Card l={`Visits ${label}`} v={T.visits} p={P?.visits} sub={`${T.newSite} new-site visits · ${m.wd.length}/${m.wdAll} working days`} />
-        <Card l="Leads from visits" v={T.leads} p={P?.leads} sub={`${fmtNum(T.leadQis)} QIS · created via Log visit`} cls="text-violet-700" />
-        <Card l="Visit leads moved ahead" v={T.ahead} sub={`${T.dropped} dropped in this period`} cls="text-sky-700" />
-        <Card l="Open visit leads now" v={T.open} sub={<span className={T.stale ? 'font-semibold text-red-600' : ''}>{T.stale} stuck 30+ days in a stage</span>} />
-        <Card l="Handed over" v={T.ho} sub="QIS with HO date in this period" cls="text-teal-700" />
-        <div className={`card p-4 ${T.missedPeople ? 'bg-red-50' : ''}`}><p className="text-xs font-semibold text-red-700">Missed field days</p>
-          <p className="text-2xl font-extrabold text-red-700">{T.missedDays}</p><p className="text-xs text-red-600">{T.missedPeople} people with a working day without a visit</p></div>
+    <div className="card mx-auto max-w-5xl overflow-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
+        <div>
+          <p className="text-base font-extrabold text-navy-900">Team summary · {label}</p>
+          <p className="text-xs text-slate-500">{fmtDay(from)} – {fmtDay(to)} · {m.wd} working days (Mon–Sat)</p>
+        </div>
+        <div className="flex overflow-hidden rounded-lg border border-slate-300 text-sm font-semibold">
+          {[['time', 'Where the time goes'], ['made', 'Leads & deals created']].map(([k, l]) => (
+            <button key={k} onClick={() => setTab(k)} className={`px-3 py-1.5 ${tab === k ? 'bg-navy-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>{l}</button>
+          ))}
+        </div>
       </div>
-      {P && <p className="-mt-2 mb-3 text-xs text-slate-500">▲▼ compared with the {len} days before ({fmtDay(prevFrom)} – {fmtDay(prevTo)}).</p>}
 
-      <div className="card overflow-x-auto">
-        <table className="min-w-full text-sm">
+      {tab === 'time' ? (
+        <table className="w-full text-sm">
           <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
-            <tr>
-              <th className="th" rowSpan={2}>Person</th>
-              <th className="th border-l border-slate-200 text-center" colSpan={3}>On the ground</th>
-              <th className="th border-l border-slate-200 bg-violet-50 text-center text-violet-700" colSpan={6}>Leads from their logged visits</th>
-              <th className="th border-l border-slate-200 text-right" rowSpan={2}>Handed over</th>
-              <th className="th border-l border-slate-200" rowSpan={2}>Missed days</th><th className="th" rowSpan={2}>Last visit</th>
-            </tr>
-            <tr>
-              <th className="th border-l border-slate-200" title="Working days (Mon–Sat) with at least one visit logged">Days out / working days</th><th className="th text-right" title="Visits logged">Visits</th><th className="th text-right" title="Visits marked 'New site scouted'">New sites seen</th>
-              <th className="th border-l border-slate-200 bg-violet-50 text-right" title="Leads created from a logged visit (Log visit → New site scouted) in this period">New leads (from visits)</th><th className="th bg-violet-50 text-right" title="QIS of those visit-created leads">New lead QIS</th><th className="th bg-violet-50 text-right" title="Visit-created sites moved to a later stage in this period">Moved to next stage</th>
-              <th className="th bg-violet-50 text-right" title="Visit-created sites marked Dropped in this period">Dropped</th><th className="th bg-violet-50 text-right" title="Visit-created leads still open today (QIS in brackets)">Open leads today (QIS)</th><th className="th bg-violet-50 text-right" title="Visit-created open leads sitting in the same stage for more than 30 days">Stuck &gt;30 days</th>
-            </tr>
+            <tr><th className="px-4 py-2 text-left">Person</th><th className="px-2 text-center">Days out</th><th className="px-2 text-right">Visits</th>
+              {TYPES.map(([k, l]) => <th key={k} className="px-2 text-right">{l}</th>)}</tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {m.rows.map((r, i) => {
-              const pct = m.wd.length ? r.fieldDays / m.wd.length : 1
-              const newZone = i === 0 || m.rows[i - 1].region !== r.region
-              return [
-                newZone && <tr key={r.region + 'h'} className="bg-slate-50/60"><td colSpan={13} className="px-4 py-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-500">{r.region}</td></tr>,
-                <tr key={r.name} className="hover:bg-slate-50">
-                  <td className="td whitespace-nowrap font-semibold"><span className="mr-2 inline-block h-2.5 w-2.5 rounded-full" style={{ background: r.color }} />{r.name}{r.lead && <span className="ml-1 rounded bg-emerald-50 px-1 text-[10px] font-semibold text-emerald-700">head</span>}</td>
-                  <td className="td whitespace-nowrap">
-                    <div className="flex items-center gap-2"><div className="h-2 w-16 overflow-hidden rounded-full bg-slate-100"><div className={`h-full ${pct >= 0.8 ? 'bg-emerald-500' : pct >= 0.5 ? 'bg-amber-400' : 'bg-red-500'}`} style={{ width: `${pct * 100}%` }} /></div>
-                      <span className="text-xs font-semibold text-slate-600">{r.fieldDays}/{m.wd.length}</span></div>
-                  </td>
-                  <td className="td text-right font-bold" title={Object.entries(r.byType).filter(([, c]) => c).map(([k, c]) => `${VISIT_TYPES[k].label}: ${c}`).join('\n')}>{r.visits || <span className="text-red-500">0</span>}</td>
-                  <td className="td text-right text-emerald-700">{r.byType.new_site || <span className="text-slate-300">—</span>}</td>
-                  <td className={`td border-l border-slate-100 text-right font-bold ${r.leads ? 'text-violet-700' : 'text-slate-300'}`}>{r.leads || '—'}
-</td>
-                  <td className="td text-right text-violet-600">{r.leadQis ? fmtNum(r.leadQis) : <span className="text-slate-300">—</span>}</td>
-                  <td className={`td text-right ${r.ahead ? 'font-semibold text-sky-700' : 'text-slate-300'}`}>{r.ahead || '—'}</td>
-                  <td className={`td text-right ${r.dropped ? 'text-slate-600' : 'text-slate-300'}`}>{r.dropped || '—'}</td>
-                  <td className="td text-right">{r.open ? <>{r.open} <span className="text-[11px] text-slate-400">({fmtNum(r.openQis)})</span></> : <span className="text-slate-300">—</span>}</td>
-                  <td className={`td text-right ${r.stale ? 'font-bold text-red-600' : 'text-slate-300'}`}>{r.stale || '—'}</td>
-                  <td className="td border-l border-slate-100 text-right text-teal-700">{r.hoQis ? <>{fmtNum(r.hoQis)} <span className="text-[11px] text-slate-400">({r.hoSites})</span></> : <span className="text-slate-300">—</span>}</td>
-                  <td className="td">
-                    {r.missed.length ? (
-                      <span className="flex items-center gap-1.5 whitespace-nowrap" title={`No visit on: ${r.missed.map(d => fmtDay(d)).join(', ')}`}>
-                        <b className="text-red-600">{r.missed.length}</b>
-                        <button onClick={() => onOpenDay(r.missed[r.missed.length - 1], r.name)} className="rounded bg-red-50 px-1.5 py-0.5 text-[11px] font-semibold text-red-600 hover:bg-red-100">last {fmtDay(r.missed[r.missed.length - 1]).replace(/^\w+, /, '')}</button>
-                      </span>
-                    ) : <span className="text-xs font-semibold text-emerald-600">✓ none</span>}
-                  </td>
-                  <td className="td whitespace-nowrap text-xs text-slate-500">{r.last ? fmtDay(r.last) : <span className="text-red-500">no visit</span>}</td>
-                </tr>,
-              ]
-            })}
+            {m.time.map(r => (
+              <tr key={r.name}>
+                <td className="px-4 py-1.5 font-semibold text-slate-800"><span className="mr-2 inline-block h-2 w-2 rounded-full" style={{ background: colorOf[r.name] }} />{r.name}<span className="ml-1.5 text-[11px] font-normal text-slate-400">{r.region}</span></td>
+                <td className={`px-2 text-center text-xs font-semibold ${r.days / Math.max(1, m.wd) >= 0.8 ? 'text-emerald-700' : r.days / Math.max(1, m.wd) >= 0.5 ? 'text-amber-600' : 'text-red-600'}`}>{r.days}/{m.wd}</td>
+                <td className={`px-2 text-right font-extrabold ${r.visits ? 'text-navy-900' : 'text-red-600'}`}>{r.visits}</td>
+                {TYPES.map(([k]) => <td key={k} className={`px-2 text-right ${r.byType[k] ? 'text-slate-700' : 'text-slate-300'}`}>{r.byType[k] || '—'}</td>)}
+              </tr>
+            ))}
           </tbody>
           <tfoot className="border-t-2 border-slate-200 bg-slate-50 font-bold">
-            <tr>
-              <td className="td">Team</td><td className="td" /><td className="td text-right">{T.visits}</td><td className="td text-right text-emerald-700">{T.newSite}</td>
-              <td className="td text-right text-violet-700">{T.leads}</td><td className="td text-right text-violet-600">{fmtNum(T.leadQis)}</td><td className="td text-right text-sky-700">{T.ahead}</td>
-              <td className="td text-right">{T.dropped}</td><td className="td text-right">{T.open}</td><td className="td text-right text-red-600">{T.stale}</td><td className="td text-right text-teal-700">{fmtNum(T.ho)}</td>
-              <td className="td text-red-600">{T.missedDays} days</td><td className="td" />
-            </tr>
+            <tr><td className="px-4 py-2">Team</td><td /><td className="px-2 text-right">{tTot('visits')}</td>
+              {TYPES.map(([k]) => <td key={k} className="px-2 text-right">{tTot(k)}</td>)}</tr>
+            <tr className="text-[11px] font-semibold text-slate-500"><td className="px-4 pb-2">Share of visits</td><td /><td />
+              {TYPES.map(([k]) => <td key={k} className="px-2 pb-2 text-right">{tTot('visits') ? Math.round((100 * tTot(k)) / tTot('visits')) : 0}%</td>)}</tr>
           </tfoot>
         </table>
-        <p className="p-3 text-xs text-slate-500">Working days are Mon–Sat up to today. Field days = working days with at least one visit logged. Lead columns count only sites created from a logged visit (Log visit → New site scouted); leads added with Create lead or imports are left out. Moved ahead = a lead or deal moved to a later stage in this period; Stuck 30d+ = open leads 30+ days in the same stage. Hover visits for the split by type. Hover missed days for the dates; click to open the latest one.</p>
-      </div>
+      ) : (
+        <>
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
+              <tr><th className="px-4 py-2 text-left">Person</th><th className="px-2 text-right">Created</th><th className="px-2 text-right">Leads</th><th className="px-2 text-right">Deals</th>
+                <th className="px-2 text-right text-emerald-700">With field visit</th><th className="px-2 text-right text-red-600">No field visit</th><th className="px-2 text-right text-red-600">QIS, no visit</th><th className="px-4 text-right">% backed by visit</th></tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {m.made.map(r => {
+                const pct = r.total ? Math.round((100 * r.ok) / r.total) : 0
+                return (
+                  <tr key={r.name} className={r.no ? 'bg-red-50/40' : ''}>
+                    <td className="px-4 py-1.5 font-semibold text-slate-800"><span className="mr-2 inline-block h-2 w-2 rounded-full" style={{ background: colorOf[r.name] }} />{r.name}<span className="ml-1.5 text-[11px] font-normal text-slate-400">{r.region}</span></td>
+                    <td className="px-2 text-right font-extrabold text-navy-900">{r.total}</td>
+                    <td className="px-2 text-right text-slate-600">{r.leads || '—'}</td><td className="px-2 text-right text-slate-600">{r.dealsN || '—'}</td>
+                    <td className="px-2 text-right font-semibold text-emerald-700">{r.ok || '—'}</td>
+                    <td className="px-2 text-right">{r.no ? <button onClick={() => setOpen(open === r.name ? null : r.name)} className="font-extrabold text-red-600 underline decoration-dotted">{r.no}</button> : <span className="text-slate-300">—</span>}</td>
+                    <td className="px-2 text-right text-red-600">{r.noQis ? fmtNum(r.noQis) : <span className="text-slate-300">—</span>}</td>
+                    <td className="px-4 text-right"><span className={`rounded px-1.5 py-0.5 text-xs font-bold ${pct >= 80 ? 'bg-emerald-50 text-emerald-700' : pct >= 50 ? 'bg-amber-50 text-amber-700' : 'bg-red-100 text-red-700'}`}>{r.total ? `${pct}%` : '—'}</span></td>
+                  </tr>
+                )
+              })}
+              {!m.made.length && <tr><td colSpan={8} className="px-4 py-6 text-center text-slate-400">No leads or deals created in this period.</td></tr>}
+            </tbody>
+            <tfoot className="border-t-2 border-slate-200 bg-slate-50 font-bold">
+              <tr><td className="px-4 py-2">Team</td><td className="px-2 text-right">{cTot('total')}</td><td className="px-2 text-right">{cTot('leads')}</td><td className="px-2 text-right">{cTot('dealsN')}</td>
+                <td className="px-2 text-right text-emerald-700">{cTot('ok')}</td><td className="px-2 text-right text-red-600">{cTot('no')}</td><td className="px-2 text-right text-red-600">{fmtNum(cTot('noQis'))}</td>
+                <td className="px-4 text-right">{cTot('total') ? `${Math.round((100 * cTot('ok')) / cTot('total'))}%` : '—'}</td></tr>
+            </tfoot>
+          </table>
+          {open && (
+            <div className="border-t border-red-100 bg-red-50/50 px-4 py-2">
+              <p className="mb-1 text-xs font-bold text-red-700">{open} · created without a field visit</p>
+              <ul className="grid gap-x-4 text-xs text-slate-700 sm:grid-cols-2">
+                {m.made.find(r => r.name === open)?.noList.map(d => (
+                  <li key={d.id} className="truncate"><a href={`/app/deals/${d.id}`} className="font-mono text-slate-400 hover:underline">{d.site_code}</a> {d.name} · {d.city} · {fmtDay(day10(d.created_at))}{qisOf(d) ? ` · ${fmtNum(qisOf(d))} QIS` : ''}{d.latitude == null ? <span className="text-amber-600"> · no location</span> : ''}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
+      <p className="border-t border-slate-100 px-4 py-2 text-[11px] text-slate-400">
+        {tab === 'time' ? 'Days out = working days with at least one visit logged.'
+          : `By site owner. "With field visit" = created from Log visit, or the owner logged a visit within ${NEAR_M} m of the site up to 3 days after it was created. Imports left out. Click a red number to see the sites.`}
+      </p>
     </div>
   )
 }
