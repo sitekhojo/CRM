@@ -57,12 +57,11 @@ export default function TeamSummary({ label, from, to, visits, deals, team, peop
       const open = deals.filter(d => d.owner === n && openLead(d) && !isBulkImport(d))
       return {
         ahead: ahead.size, dropped: dropped.size, open: open.length, openQis: open.reduce((a, d) => a + qisOf(d), 0),
-        stale: open.filter(d => (d.days_in_stage || 0) > 30).length, leadQis: mine.filter(d => d.record_type === 'lead').reduce((a, d) => a + qisOf(d), 0),
+        stale: open.filter(d => (d.days_in_stage || 0) > 30).length, leadQis: mine.filter(d => d.record_type === 'lead' && visitLeadIds.has(d.id)).reduce((a, d) => a + qisOf(d), 0),
         name: n, region: regionOf[n] || '—', lead: leadOf[n], color: colorOf[n],
         visits: vs.length, fieldDays, missed, perDay: fieldDays ? vs.length / fieldDays : 0,
         byType: Object.fromEntries(Object.keys(VISIT_TYPES).map(k => [k, vs.filter(v => v.visit_type === k).length])),
-        leads: mine.filter(d => d.record_type === 'lead').length,
-        viaVisit: mine.filter(d => d.record_type === 'lead' && visitLeadIds.has(d.id)).length, deals: mine.filter(d => d.record_type !== 'lead').length,
+        leads: mine.filter(d => d.record_type === 'lead' && visitLeadIds.has(d.id)).length, // only leads created from a logged visit deals: mine.filter(d => d.record_type !== 'lead').length,
         qisAdded: mine.reduce((a, d) => a + qisOf(d), 0), hoQis: ho.reduce((a, d) => a + qisOf(d), 0), hoSites: ho.length,
         last: vs.map(v => v.visit_date).sort().pop(),
       }
@@ -75,7 +74,7 @@ export default function TeamSummary({ label, from, to, visits, deals, team, peop
     return {
       rows, wd: wd.filter(d => d <= today), wdAll: wd.length,
       tot: { ahead: sum('ahead'), dropped: sum('dropped'), open: sum('open'), stale: sum('stale'), leadQis: sum('leadQis'), visits: sum('visits'), newSite: sum(r => r.byType.new_site), leads: sum('leads'), deals: sum('deals'), qis: sum('qisAdded'), ho: sum('hoQis'), missedPeople: rows.filter(r => r.missed.length).length, missedDays: sum(r => r.missed.length) },
-      prev: prevVisits && { visits: prevVisits.length, newSite: prevVisits.filter(v => v.visit_type === 'new_site').length, leads: prevMade.filter(d => d.record_type === 'lead').length, qis: prevMade.reduce((a, d) => a + qisOf(d), 0) },
+      prev: prevVisits && { visits: prevVisits.length, newSite: prevVisits.filter(v => v.visit_type === 'new_site').length, leads: new Set(prevVisits.filter(v => v.lead_created && v.site_id).map(v => v.site_id)).size, qis: prevMade.reduce((a, d) => a + qisOf(d), 0) },
     }
   }, [from, to, visits, deals, team, people, colorOf, prev, prevFrom, prevTo, moves, stages])
 
@@ -95,7 +94,7 @@ export default function TeamSummary({ label, from, to, visits, deals, team, peop
     <div>
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Card l={`Visits ${label}`} v={T.visits} p={P?.visits} sub={`${T.newSite} new-site visits · ${m.wd.length}/${m.wdAll} working days`} />
-        <Card l="Leads added" v={T.leads} p={P?.leads} sub={`${fmtNum(T.leadQis)} QIS · + ${T.deals} deals created`} cls="text-violet-700" />
+        <Card l="Leads from visits" v={T.leads} p={P?.leads} sub={`${fmtNum(T.leadQis)} QIS · created via Log visit`} cls="text-violet-700" />
         <Card l="Leads moved ahead" v={T.ahead} sub={`${T.dropped} dropped in this period`} cls="text-sky-700" />
         <Card l="Open leads now" v={T.open} sub={<span className={T.stale ? 'font-semibold text-red-600' : ''}>{T.stale} stuck 30+ days in a stage</span>} />
         <Card l="Handed over" v={T.ho} sub="QIS with HO date in this period" cls="text-teal-700" />
@@ -116,7 +115,7 @@ export default function TeamSummary({ label, from, to, visits, deals, team, peop
             </tr>
             <tr>
               <th className="th border-l border-slate-200" title="Working days (Mon–Sat) with at least one visit logged">Days out / working days</th><th className="th text-right" title="Visits logged">Visits</th><th className="th text-right" title="Visits marked 'New site scouted'">New sites seen</th>
-              <th className="th border-l border-slate-200 bg-violet-50 text-right" title="New leads created in this period, owned by this person — and how many of them came from a logged visit">New leads</th><th className="th bg-violet-50 text-right" title="QIS of those new leads">New lead QIS</th><th className="th bg-violet-50 text-right" title="Their sites (leads or deals) moved to a later stage in this period, by anyone">Moved to next stage</th>
+              <th className="th border-l border-slate-200 bg-violet-50 text-right" title="Leads created from a logged visit (Log visit → New site scouted) in this period">New leads (from visits)</th><th className="th bg-violet-50 text-right" title="QIS of those visit-created leads">New lead QIS</th><th className="th bg-violet-50 text-right" title="Their sites (leads or deals) moved to a later stage in this period, by anyone">Moved to next stage</th>
               <th className="th bg-violet-50 text-right" title="Their sites marked Dropped in this period">Dropped</th><th className="th bg-violet-50 text-right" title="Leads they own that are still open today (QIS in brackets)">Open leads today (QIS)</th><th className="th bg-violet-50 text-right" title="Open leads sitting in the same stage for more than 30 days">Stuck &gt;30 days</th>
             </tr>
           </thead>
@@ -135,7 +134,7 @@ export default function TeamSummary({ label, from, to, visits, deals, team, peop
                   <td className="td text-right font-bold" title={Object.entries(r.byType).filter(([, c]) => c).map(([k, c]) => `${VISIT_TYPES[k].label}: ${c}`).join('\n')}>{r.visits || <span className="text-red-500">0</span>}</td>
                   <td className="td text-right text-emerald-700">{r.byType.new_site || <span className="text-slate-300">—</span>}</td>
                   <td className={`td border-l border-slate-100 text-right font-bold ${r.leads ? 'text-violet-700' : 'text-slate-300'}`}>{r.leads || '—'}
-                    {r.leads > 0 && <p className={`text-[10px] font-semibold ${r.viaVisit < r.leads ? 'text-amber-600' : 'text-emerald-600'}`} title="New leads that came from a logged visit; the rest were added with Create lead / import">{r.viaVisit} from visits</p>}</td>
+</td>
                   <td className="td text-right text-violet-600">{r.leadQis ? fmtNum(r.leadQis) : <span className="text-slate-300">—</span>}</td>
                   <td className={`td text-right ${r.ahead ? 'font-semibold text-sky-700' : 'text-slate-300'}`}>{r.ahead || '—'}</td>
                   <td className={`td text-right ${r.dropped ? 'text-slate-600' : 'text-slate-300'}`}>{r.dropped || '—'}</td>
@@ -164,7 +163,7 @@ export default function TeamSummary({ label, from, to, visits, deals, team, peop
             </tr>
           </tfoot>
         </table>
-        <p className="p-3 text-xs text-slate-500">Working days are Mon–Sat up to today. Field days = working days with at least one visit logged. Leads are counted by site owner (bulk imports left out). Moved ahead = a lead or deal moved to a later stage in this period; Stuck 30d+ = open leads 30+ days in the same stage. Hover visits for the split by type. Hover missed days for the dates; click to open the latest one.</p>
+        <p className="p-3 text-xs text-slate-500">Working days are Mon–Sat up to today. Field days = working days with at least one visit logged. New leads count only leads created from a logged visit; the other columns are by site owner (bulk imports left out). Moved ahead = a lead or deal moved to a later stage in this period; Stuck 30d+ = open leads 30+ days in the same stage. Hover visits for the split by type. Hover missed days for the dates; click to open the latest one.</p>
       </div>
     </div>
   )
