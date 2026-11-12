@@ -5,8 +5,8 @@ import { addDays, fmtDay, fetchVisits } from '../lib/visits'
 import { haversine } from '../lib/geo'
 import { fmtNum } from '../lib/format'
 
-/** Working days = Mon–Sat between from and to (inclusive). */
-export const workingDays = (from, to) => { const out = []; for (let d = from; d <= to; d = addDays(d, 1)) if (new Date(d + 'T12:00:00Z').getUTCDay() !== 0) out.push(d); return out }
+/** Working days = Mon–Fri between from and to (inclusive). */
+export const workingDays = (from, to) => { const out = []; for (let d = from; d <= to; d = addDays(d, 1)) if (![0, 6].includes(new Date(d + 'T12:00:00Z').getUTCDay())) out.push(d); return out }
 const day10 = d => String(d || '').slice(0, 10)
 const qisOf = d => Number(d.extra?.qis_count) || 0
 const NEAR_M = 300 // a visit within 300 m of the site counts as a field visit
@@ -67,7 +67,7 @@ export default function TeamSummary({ label, from, to, visits, deals, team, peop
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
         <div>
           <p className="text-base font-extrabold text-navy-900">Team summary · {label}</p>
-          <p className="text-xs text-slate-500">{fmtDay(from)} – {fmtDay(to)} · {m.wd} working days (Mon–Sat)</p>
+          <p className="text-xs text-slate-500">{fmtDay(from)} – {fmtDay(to)} · {m.wd} working days (Mon–Fri)</p>
         </div>
         <div className="flex overflow-hidden rounded-lg border border-slate-300 text-sm font-semibold">
           {[['time', 'Where the time goes'], ['made', 'Leads & deals created']].map(([k, l]) => (

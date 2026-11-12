@@ -113,7 +113,7 @@ export default function TeamActivity() {
         </div>
         {day !== today && <button className="btn-ghost text-sm" onClick={() => setDay(today)}>Today</button>}
         <div className="flex overflow-hidden rounded-lg border border-slate-300 text-sm font-semibold">
-          {[['day', 'Day'], ['thisWeek', 'Week'], ['thisMonth', 'Month'], ['week', 'Last 7 days']].map(([k, l]) => <button key={k} onClick={() => setMode(k)} className={`px-3 py-1.5 ${mode === k ? 'bg-navy-900 text-white' : 'bg-white text-slate-600'}`}>{l}</button>)}
+          {[['day', 'Day'], ['thisWeek', 'Week'], ['thisMonth', 'Month']].map(([k, l]) => <button key={k} onClick={() => setMode(k)} className={`px-3 py-1.5 ${mode === k ? 'bg-navy-900 text-white' : 'bg-white text-slate-600'}`}>{l}</button>)}
         </div>
         <MultiSelect allLabel="All people" noun="people" value={people} onChange={setPeople} options={m.names.map(n => ({ value: n, label: n, color: m.colorOf[n] }))} />
         <div className="flex-1" />

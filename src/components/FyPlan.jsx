@@ -9,7 +9,7 @@ import { fmtNum, fmtDate } from '../lib/format'
 // Acquisition must be done by 31 Dec of the FY (energisation follows by FY end).
 const acqDeadline = () => { const n = new Date(); const y = n.getMonth() >= 3 ? n.getFullYear() : n.getFullYear() - 1; return `${y}-12-31` }
 export const DEFAULT_PLAN = {
-  company_target: 3034, leads_per_win: 4, qis_per_site: 3, scout_by: acqDeadline(), work_days: 6,
+  company_target: 3034, leads_per_win: 4, qis_per_site: 3, scout_by: acqDeadline(), work_days: 5,
   cities: [
     { city: 'Delhi', target: 525, share: 40 }, { city: 'Bengaluru', target: 934, share: 60 }, { city: 'Hyderabad', target: 480, share: 60 },
     { city: 'Gurugram', target: 205, share: 50 }, { city: 'Ghaziabad', target: 87, share: 100 }, { city: 'Faridabad', target: 20, share: 100 },
@@ -246,7 +246,7 @@ export default function FyPlan({ deals, network, cities = [], team = [], filters
             )
           })}
         </div>
-        <p className="mt-2 text-[11px] text-slate-400">1 in {plan.leads_per_win} scouted sites converts · {plan.qis_per_site} QIS per site · {plan.work_days === 6 ? 'Mon–Sat' : 'Mon–Fri'} · pace = sites added in the last 30 days. To acquire = acquisition target − handed over (sites in the Nov/Dec pipeline still count until they're handed over).</p>
+        <p className="mt-2 text-[11px] text-slate-400">1 in {plan.leads_per_win} scouted sites converts · {plan.qis_per_site} QIS per site · {plan.work_days === 6 ? 'Mon–Sat' : 'Mon–Fri'} · pace = sites added in the last 30 days. To scout = acquisition target − handed over − Nov/Dec visibility.</p>
       </div>
       {edit && <PlanModal plan={plan} onClose={() => setEdit(false)} onSaved={() => { setEdit(false); reload() }} />}
     </div>
