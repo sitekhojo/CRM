@@ -42,6 +42,7 @@ export default function TeamSummary({ label, from, to, visits, deals, team, peop
     // Stage moves in the period on manually-worked sites: forward = to a later stage (not dropped), dropped = to a dropped stage
     const mv = moves.map(x => ({ ...x, site: dealById[x.site_id], to: stageById[x.to_stage_id], fromSt: stageById[x.from_stage_id] }))
       .filter(x => x.site && !isBulkImport(x.site) && x.to)
+    const visitLeadIds = new Set(visits.filter(v => v.lead_created && v.site_id).map(v => v.site_id))
     const openLead = d => d.record_type === 'lead' && !['dropped', 'live'].includes(d.stage_category)
     const rows = names.map(n => {
       const vs = visits.filter(v => v.member === n)
@@ -60,7 +61,8 @@ export default function TeamSummary({ label, from, to, visits, deals, team, peop
         name: n, region: regionOf[n] || '—', lead: leadOf[n], color: colorOf[n],
         visits: vs.length, fieldDays, missed, perDay: fieldDays ? vs.length / fieldDays : 0,
         byType: Object.fromEntries(Object.keys(VISIT_TYPES).map(k => [k, vs.filter(v => v.visit_type === k).length])),
-        leads: mine.filter(d => d.record_type === 'lead').length, deals: mine.filter(d => d.record_type !== 'lead').length,
+        leads: mine.filter(d => d.record_type === 'lead').length,
+        viaVisit: mine.filter(d => d.record_type === 'lead' && visitLeadIds.has(d.id)).length, deals: mine.filter(d => d.record_type !== 'lead').length,
         qisAdded: mine.reduce((a, d) => a + qisOf(d), 0), hoQis: ho.reduce((a, d) => a + qisOf(d), 0), hoSites: ho.length,
         last: vs.map(v => v.visit_date).sort().pop(),
       }
@@ -114,7 +116,7 @@ export default function TeamSummary({ label, from, to, visits, deals, team, peop
             </tr>
             <tr>
               <th className="th border-l border-slate-200" title="Working days (Mon–Sat) with at least one visit logged">Days out / working days</th><th className="th text-right" title="Visits logged">Visits</th><th className="th text-right" title="Visits marked 'New site scouted'">New sites seen</th>
-              <th className="th border-l border-slate-200 bg-violet-50 text-right" title="New leads created in this period, owned by this person">New leads</th><th className="th bg-violet-50 text-right" title="QIS of those new leads">New lead QIS</th><th className="th bg-violet-50 text-right" title="Their sites (leads or deals) moved to a later stage in this period, by anyone">Moved to next stage</th>
+              <th className="th border-l border-slate-200 bg-violet-50 text-right" title="New leads created in this period, owned by this person — and how many of them came from a logged visit">New leads</th><th className="th bg-violet-50 text-right" title="QIS of those new leads">New lead QIS</th><th className="th bg-violet-50 text-right" title="Their sites (leads or deals) moved to a later stage in this period, by anyone">Moved to next stage</th>
               <th className="th bg-violet-50 text-right" title="Their sites marked Dropped in this period">Dropped</th><th className="th bg-violet-50 text-right" title="Leads they own that are still open today (QIS in brackets)">Open leads today (QIS)</th><th className="th bg-violet-50 text-right" title="Open leads sitting in the same stage for more than 30 days">Stuck &gt;30 days</th>
             </tr>
           </thead>
@@ -132,7 +134,8 @@ export default function TeamSummary({ label, from, to, visits, deals, team, peop
                   </td>
                   <td className="td text-right font-bold" title={Object.entries(r.byType).filter(([, c]) => c).map(([k, c]) => `${VISIT_TYPES[k].label}: ${c}`).join('\n')}>{r.visits || <span className="text-red-500">0</span>}</td>
                   <td className="td text-right text-emerald-700">{r.byType.new_site || <span className="text-slate-300">—</span>}</td>
-                  <td className={`td border-l border-slate-100 text-right font-bold ${r.leads ? 'text-violet-700' : 'text-slate-300'}`}>{r.leads || '—'}</td>
+                  <td className={`td border-l border-slate-100 text-right font-bold ${r.leads ? 'text-violet-700' : 'text-slate-300'}`}>{r.leads || '—'}
+                    {r.leads > 0 && <p className={`text-[10px] font-semibold ${r.viaVisit < r.leads ? 'text-amber-600' : 'text-emerald-600'}`} title="New leads that came from a logged visit; the rest were added with Create lead / import">{r.viaVisit} from visits</p>}</td>
                   <td className="td text-right text-violet-600">{r.leadQis ? fmtNum(r.leadQis) : <span className="text-slate-300">—</span>}</td>
                   <td className={`td text-right ${r.ahead ? 'font-semibold text-sky-700' : 'text-slate-300'}`}>{r.ahead || '—'}</td>
                   <td className={`td text-right ${r.dropped ? 'text-slate-600' : 'text-slate-300'}`}>{r.dropped || '—'}</td>
