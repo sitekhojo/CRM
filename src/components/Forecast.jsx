@@ -29,7 +29,7 @@ export const SITE_TYPE_CHIPS = {
 const typeKey = r => r.site_type || 'Not set'
 const typeChip = t => SITE_TYPE_CHIPS[t] || { short: t === 'Not set' ? '?' : t.slice(0, 4), cls: 'bg-slate-100 text-slate-600' }
 /** QIS and site count per site type, biggest first. */
-export const byType = xs => Object.values(xs.reduce((o, r) => { const k = typeKey(r); o[k] = o[k] || { type: k, qis: 0, sites: 0 }; o[k].qis += qisOf(r); o[k].sites++; return o }, {})).sort((a, b) => b.qis - a.qis || b.sites - a.sites)
+export const byType = xs => Object.values(xs.filter(r => r.stage_category !== 'dropped').reduce((o, r) => { const k = typeKey(r); o[k] = o[k] || { type: k, qis: 0, sites: 0 }; o[k].qis += qisOf(r); o[k].sites++; return o }, {})).sort((a, b) => b.qis - a.qis || b.sites - a.sites)
 export const SiteTypeChip = ({ t, children, className = '' }) => <span className={`rounded px-1 text-[10px] font-semibold ${typeChip(t).cls} ${className}`} title={t}>{typeChip(t).short}{children}</span>
 const byIntent = xs => Object.fromEntries(['hot', 'warm', 'cold', ''].map(k => [k, xs.filter(r => (r.extra?.intent || '') === k).reduce((a, r) => a + qisOf(r), 0)]))
 
@@ -224,7 +224,7 @@ export function TypeSplit({ rows, value, onChange }) {
     <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
       <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Site type</span>
       <button onClick={() => onChange('')} className={`rounded-lg border px-2.5 py-1 ${!value ? 'border-navy-900 bg-navy-900 text-white' : 'border-slate-200 hover:bg-slate-50'}`}>
-        Total <b>{fmtNum(xs.reduce((a, x) => a + x.qis, 0))}</b> QIS <span className={!value ? 'text-slate-300' : 'text-slate-400'}>· {rows.length} {rows.length === 1 ? 'site' : 'sites'}</span>
+        Total <b>{fmtNum(xs.reduce((a, x) => a + x.qis, 0))}</b> QIS <span className={!value ? 'text-slate-300' : 'text-slate-400'}>· {xs.reduce((a, x) => a + x.sites, 0)} sites{rows.length > xs.reduce((a, x) => a + x.sites, 0) ? ` · ${rows.length - xs.reduce((a, x) => a + x.sites, 0)} dropped not counted` : ''}</span>
       </button>
       {xs.map(x => (
         <button key={x.type} onClick={() => onChange(value === x.type ? '' : x.type)}
@@ -277,7 +277,7 @@ export function PlanTable({ rows, onChanged, today }) {
         ))}
       </tbody>
       <tfoot className="border-t-2 border-slate-200 bg-slate-50 font-bold">
-        <tr><td className="px-3 py-2" colSpan={5}>Total · {rows.length} {rows.length === 1 ? 'site' : 'sites'}</td><td className="px-2 py-2 text-right">{fmtNum(rows.reduce((a, r) => a + qisOf(r), 0))}</td><td colSpan={6} /></tr>
+        <tr><td className="px-3 py-2" colSpan={5}>{(() => { const live = rows.filter(r => r.stage_category !== 'dropped'); return <>Total · {live.length} {live.length === 1 ? 'site' : 'sites'}{live.length < rows.length && <span className="ml-1 font-normal text-slate-400">(excl. {rows.length - live.length} dropped)</span>}</> })()}</td><td className="px-2 py-2 text-right">{fmtNum(rows.filter(r => r.stage_category !== 'dropped').reduce((a, r) => a + qisOf(r), 0))}</td><td colSpan={6} /></tr>
       </tfoot>
     </table>
   )

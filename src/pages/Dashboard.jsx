@@ -101,7 +101,7 @@ export default function Dashboard() {
     const weeks = Array.from({ length: 12 }, (_, i) => { const d = startOfWeek(); d.setDate(d.getDate() - 7 * (11 - i)); return d })
     const trend = weeks.map((w, i) => {
       const end = weeks[i + 1] || new Date(8.64e15)
-      return { week: w.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }), count: (() => { const xs = rows.filter(r => { const c = new Date(r.created_at); return c >= w && c < end }); return metric === 'qis' ? xs.reduce((a, r) => a + qisOf(r), 0) : xs.length })() }
+      return { week: w.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }), count: (() => { const xs = rows.filter(r => { const c = new Date(r.created_at); return r.stage_category !== 'dropped' && c >= w && c < end }); return metric === 'qis' ? xs.reduce((a, r) => a + qisOf(r), 0) : xs.length })() }
     })
 
     // TAT between stages, restricted to the filtered deals
@@ -127,7 +127,7 @@ export default function Dashboard() {
     const names = [...new Set([...team.filter(t => t.is_active).map(t => t.name), ...rows.map(r => r.owner).filter(Boolean)])]
     const teamRows = [...names.map(n => ({ name: n, t: team.find(x => x.name === n) })), { name: null, t: null }].map(({ name, t }) => {
       const owned = rows.filter(r => (r.owner || null) === name)
-      const added = owned.filter(r => !isBulkImport(r) && inP(r.created_at))
+      const added = owned.filter(r => !isBulkImport(r) && r.stage_category !== 'dropped' && inP(r.created_at))
       return {
         id: name || '_none', name: name || 'Unassigned', region: t?.region || owned[0]?.region || '—', lead: t?.is_lead ? leadLabel(t.region) : null, active: t ? t.is_active : !!name,
         added: qs(added),
@@ -172,7 +172,7 @@ export default function Dashboard() {
     const enPeriod = enItems(d => inP(d + 'T12:00:00'))
     const hoNextMonth = pendingRows.filter(r => selYm?.has(String(r.extra?.expected_ho || '').slice(0, 7)))
     const enNextMonth = notLive.filter(r => selYm?.has(String(r.extra?.expected_en || '').slice(0, 7)))
-    const handedInP = rows.filter(r => inP(hoDate(r)))
+    const handedInP = rows.filter(r => r.stage_category !== 'dropped' && inP(hoDate(r)))
     // Pending handover follows the period: sites whose Expected HO falls in it (whole pipeline for "All time")
     const dueTo = (() => {
       const a = pStart
@@ -221,7 +221,7 @@ export default function Dashboard() {
     })
     // Leads & deals created per week (manual adds only; bulk imports left out)
     const addWeeks = weekSpans.map(w => {
-      const made = rows.filter(r => !isBulkImport(r) && inSpan(localDayOf(r.created_at), w))
+      const made = rows.filter(r => !isBulkImport(r) && r.stage_category !== 'dropped' && inSpan(localDayOf(r.created_at), w))
       const leads = made.filter(r => r.record_type === 'lead'), dealsW = made.filter(r => r.record_type !== 'lead')
       return { ...w, future: w.from > todayStr, leads, deals: dealsW, l: qs(leads), d: qs(dealsW) }
     })
@@ -259,7 +259,7 @@ export default function Dashboard() {
         }).filter(x => x.sites > 0)
       })(),
       period: (() => {
-        const added = rows.filter(r => !isBulkImport(r) && inP(r.created_at))
+        const added = rows.filter(r => !isBulkImport(r) && r.stage_category !== 'dropped' && inP(r.created_at))
         const stillOpen = added.filter(r => ['active', 'approved'].includes(r.stage_category))
         const ho = rows.filter(r => inP(hoDate(r)))
         // energized in period: QIS-tracker dates + CRM energized sites that are not in the tracker
@@ -414,7 +414,7 @@ export default function Dashboard() {
       </div>
 
       <Modal open={!!list} onClose={() => setList(null)} wide="xl"
-        title={list ? `${list.title} · ${fmtNum(listRows.reduce((a, r) => a + (Number(r.extra?.qis_count) || 0), 0))} QIS · ${listRows.length} sites` : ''}
+        title={list ? `${list.title} · ${fmtNum(listRows.filter(r => r.stage_category !== 'dropped').reduce((a, r) => a + (Number(r.extra?.qis_count) || 0), 0))} QIS · ${listRows.filter(r => r.stage_category !== 'dropped').length} sites` : ''}
         footer={<button className="btn-primary" onClick={() => setList(null)}>Close</button>}>
         {list && <TypeSplit rows={listRows} value={listType} onChange={setListType} />}
         {list && <div className="max-h-[62vh] overflow-auto"><PlanTable rows={listRows.filter(r => !listType || (r.site_type || 'Not set') === listType)} onChanged={reload} /></div>}

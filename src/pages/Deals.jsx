@@ -108,7 +108,7 @@ export default function Deals({ fixedType }) {
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div>
           <h1 className="text-xl font-extrabold text-navy-900">{fixedType === 'lead' ? 'Leads' : fixedType === 'deal' ? 'Deals' : 'Leads & Deals'}</h1>
-          <p className="text-sm text-slate-500">{rows.length} of {fixedType ? deals.filter(d => (d.record_type || 'deal') === fixedType).length : deals.length} {fixedType ? `${fixedType}s` : 'sites'} · <b className="text-slate-700">{fmtNum(rows.reduce((a, r) => a + (Number(r.qis) || 0), 0))} QIS</b></p>
+          <p className="text-sm text-slate-500">{rows.filter(r => r.stage_category !== 'dropped').length} of {(fixedType ? deals.filter(d => (d.record_type || 'deal') === fixedType) : deals).filter(d => d.stage_category !== 'dropped').length} {fixedType ? `${fixedType}s` : 'sites'} · <b className="text-slate-700">{fmtNum(rows.filter(r => r.stage_category !== 'dropped').reduce((a, r) => a + (Number(r.qis) || 0), 0))} QIS</b>{rows.some(r => r.stage_category === 'dropped') && <span className="text-slate-400"> · {rows.filter(r => r.stage_category === 'dropped').length} dropped shown, not counted</span>}</p>
         </div>
         <div className="flex-1" />
         <div className="flex rounded-lg border border-slate-300 bg-white p-0.5">
@@ -211,7 +211,7 @@ function Board({ rows, stages }) {
               <div className="flex items-center gap-2 border-t-4 px-3 py-2.5" style={{ borderColor: s.color, borderTopLeftRadius: 12, borderTopRightRadius: 12 }}>
                 <span className="text-sm font-bold text-slate-800">{s.name}</span>
                 <span className="rounded-full bg-white px-2 text-xs font-bold text-slate-500">{items.length}</span>
-                {items.some(r => r.qis) && <span className="text-xs text-slate-500">{items.reduce((a, r) => a + (r.qis || 0), 0)} QIS</span>}
+                {items.some(r => r.qis) && <span className="text-xs text-slate-500">{fmtNum(items.reduce((a, r) => a + (r.qis || 0), 0))} QIS{s.category === 'dropped' ? ' · not in totals' : ''}</span>}
               </div>
               <div className="flex max-h-[calc(100vh-280px)] flex-col gap-2 overflow-y-auto p-2">
                 {items.map(d => (

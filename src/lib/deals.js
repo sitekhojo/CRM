@@ -62,6 +62,8 @@ export const EMPTY_FILTERS = { q: '', city: [], recordType: '', stage: [], siteT
 /** Apply the shared filter bar to a list of deals. */
 /** Energized stations loaded from the QIS tracker (not pipeline work — kept out of pipeline metrics). */
 /** Bulk-imported partner pipeline (e.g. SPP sheet): real pipeline, but not "scouted" by the team on the day it was imported. */
+/** Dropped sites never count in totals. */
+export const isDropped = d => d?.stage_category === 'dropped'
 export const isBulkImport = d => d.extra?.source === 'spp_pipeline'
 export const isTrackerSite = d => d.extra?.source === 'qis_tracker' || d.extra?.source === 'payment_tracker'
 

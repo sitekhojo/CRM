@@ -43,7 +43,7 @@ export default function TeamSummary({ label, from, to, visits, deals, team, peop
 
     // 2. Leads & deals created in the period (not imports / tracker), by owner — backed by a field visit or not
     const all = history || visits
-    const created = deals.filter(d => !isBulkImport(d) && !isTrackerSite(d) && day10(d.created_at) >= from && day10(d.created_at) <= to)
+    const created = deals.filter(d => !isBulkImport(d) && !isTrackerSite(d) && d.stage_category !== 'dropped' && day10(d.created_at) >= from && day10(d.created_at) <= to)
     const visitedBy = (d, n) => {
       const until = addDays(day10(d.created_at), 3)
       return all.some(v => v.member === n && v.visit_date <= until && (

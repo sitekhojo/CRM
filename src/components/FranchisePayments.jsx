@@ -86,11 +86,11 @@ export default function FranchisePayments({ filters: extFilters, compact = false
     }
     const qq = q.trim().toLowerCase()
     const scoped = applyFiltersRows(rows, filters).filter(r => (!status || r.status === status) && (!stageSel || r.stage === stageSel) && (!qq || [r.name, r.deal?.name, r.deal?.site_code, r.city, r.owner].some(v => v && String(v).toLowerCase().includes(qq))))
-    const tot = xs => ({ proposed: xs.reduce((a, r) => a + r.proposed, 0), received: xs.reduce((a, r) => a + r.received, 0), qis: xs.reduce((a, r) => a + r.qis, 0), sites: xs.length,
-      comp: Object.fromEntries(COMPONENTS.map(([k]) => [k, { proposed: xs.reduce((a, r) => a + r.comp[k].proposed, 0), received: xs.reduce((a, r) => a + r.comp[k].received, 0) }])) })
+    const tot = ys => { const xs = ys.filter(r => r.deal?.stage_category !== 'dropped'); return ({ proposed: xs.reduce((a, r) => a + r.proposed, 0), received: xs.reduce((a, r) => a + r.received, 0), qis: xs.reduce((a, r) => a + r.qis, 0), sites: xs.length,
+      comp: Object.fromEntries(COMPONENTS.map(([k]) => [k, { proposed: xs.reduce((a, r) => a + r.comp[k].proposed, 0), received: xs.reduce((a, r) => a + r.comp[k].received, 0) }])) }) }
     const all = tot(applyFiltersRows(rows, filters))
     const thisMonth = new Date().toISOString().slice(0, 7)
-    const collectedMonth = applyFiltersRows(rows, filters).flatMap(r => r.pays).filter(p => p.paid_on && String(p.paid_on).slice(0, 7) === thisMonth).reduce((a, p) => a + Number(p.amount), 0)
+    const collectedMonth = applyFiltersRows(rows, filters).filter(r => r.deal?.stage_category !== 'dropped').flatMap(r => r.pays).filter(p => p.paid_on && String(p.paid_on).slice(0, 7) === thisMonth).reduce((a, p) => a + Number(p.amount), 0)
     const counts = Object.fromEntries(['paid', 'partial', 'none', 'noproposal'].map(k => [k, applyFiltersRows(rows, filters).filter(r => r.status === k).length]))
     const stageCounts = {}
     for (const r of applyFiltersRows(rows, filters)) stageCounts[r.stage] = (stageCounts[r.stage] || 0) + 1
@@ -182,8 +182,8 @@ export default function FranchisePayments({ filters: extFilters, compact = false
             })}
             {m.rows.length === 0 && <tr><td colSpan={14} className="p-6 text-center text-slate-400">No sites match.</td></tr>}
           </tbody>
-          {m.rows.length > 0 && (() => { const t = { p: m.rows.reduce((a, r) => a + r.proposed, 0), r: m.rows.reduce((a, r) => a + r.received, 0), q: m.rows.reduce((a, r) => a + r.qis, 0) }; return (
-            <tfoot className="border-t-2 border-slate-200 bg-slate-50 font-bold"><tr><td className="px-3 py-2">Total · {m.rows.length} sites</td><td /><td /><td /><td className="px-2 py-2 text-right">{t.q}</td><td />{COMPONENTS.map(([k]) => { const c = m.tot(m.rows).comp[k]; return <td key={k} className="whitespace-nowrap px-2 py-2 text-right text-xs"><span className="text-emerald-700">{short(c.received)}</span><div className="font-normal text-slate-500">of {short(c.proposed)}</div></td> })}<td className="px-2 py-2 text-right">{fmtINR(t.p)}</td><td className="px-2 py-2 text-right text-emerald-700">{fmtINR(t.r)}</td><td className="px-2 py-2 text-right text-red-600">{fmtINR(Math.max(0, t.p - t.r))}</td><td className="px-2 py-2 text-xs">{t.p ? Math.round((100 * t.r) / t.p) : 0}%</td><td /></tr></tfoot>) })()}
+          {m.rows.length > 0 && (() => { const kept = m.rows.filter(r => r.deal?.stage_category !== 'dropped'); const t = { n: kept.length, d: m.rows.length - kept.length, p: kept.reduce((a, r) => a + r.proposed, 0), r: kept.reduce((a, r) => a + r.received, 0), q: kept.reduce((a, r) => a + r.qis, 0) }; return (
+            <tfoot className="border-t-2 border-slate-200 bg-slate-50 font-bold"><tr><td className="px-3 py-2">Total · {t.n} sites{t.d > 0 && <span className="ml-1 font-normal text-slate-400">(excl. {t.d} dropped)</span>}</td><td /><td /><td /><td className="px-2 py-2 text-right">{t.q}</td><td />{COMPONENTS.map(([k]) => { const c = m.tot(m.rows).comp[k]; return <td key={k} className="whitespace-nowrap px-2 py-2 text-right text-xs"><span className="text-emerald-700">{short(c.received)}</span><div className="font-normal text-slate-500">of {short(c.proposed)}</div></td> })}<td className="px-2 py-2 text-right">{fmtINR(t.p)}</td><td className="px-2 py-2 text-right text-emerald-700">{fmtINR(t.r)}</td><td className="px-2 py-2 text-right text-red-600">{fmtINR(Math.max(0, t.p - t.r))}</td><td className="px-2 py-2 text-xs">{t.p ? Math.round((100 * t.r) / t.p) : 0}%</td><td /></tr></tfoot>) })()}
         </table>
       </div>
       <PaymentsModal row={open} onClose={() => setOpen(null)} onChanged={refresh} isAdmin={isAdmin} canPay={canPay} />
