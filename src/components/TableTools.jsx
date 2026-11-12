@@ -74,15 +74,18 @@ export function ColumnPicker({ columns, visible, setVisible, reset }) {
 
 /** Horizontal scroller with ◀ ▶ buttons (and edge shadows) when the table is wider than the screen. */
 export function useHScroll() {
-  const ref = useRef(null)
   const [edge, setEdge] = useState({ left: false, right: false })
+  const nodeRef = useRef(null)
   const update = useCallback(() => {
-    const el = ref.current
+    const el = nodeRef.current
     if (!el) return
-    setEdge({ left: el.scrollLeft > 4, right: el.scrollLeft + el.clientWidth < el.scrollWidth - 4 })
+    const left = el.scrollLeft > 4, right = el.scrollLeft + el.clientWidth < el.scrollWidth - 4
+    setEdge(e => (e.left === left && e.right === right ? e : { left, right })) // only re-render when it actually changes
   }, [])
+  const [node, setNode] = useState(null)
+  const ref = useCallback(el => { nodeRef.current = el; setNode(el) }, [])
   useEffect(() => {
-    const el = ref.current
+    const el = node
     if (!el) return
     update()
     el.addEventListener('scroll', update, { passive: true })
@@ -90,8 +93,8 @@ export function useHScroll() {
     ro.observe(el)
     if (el.firstElementChild) ro.observe(el.firstElementChild)
     return () => { el.removeEventListener('scroll', update); ro.disconnect() }
-  })
-  const by = dir => ref.current?.scrollBy({ left: dir * Math.max(300, ref.current.clientWidth * 0.7), behavior: 'smooth' })
+  }, [node, update])
+  const by = dir => nodeRef.current?.scrollBy({ left: dir * Math.max(300, nodeRef.current.clientWidth * 0.7), behavior: 'smooth' })
   return { ref, edge, by }
 }
 

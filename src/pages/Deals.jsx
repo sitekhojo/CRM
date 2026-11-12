@@ -108,7 +108,7 @@ export default function Deals({ fixedType }) {
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div>
           <h1 className="text-xl font-extrabold text-navy-900">{fixedType === 'lead' ? 'Leads' : fixedType === 'deal' ? 'Deals' : 'Leads & Deals'}</h1>
-          <p className="text-sm text-slate-500">{rows.length} of {fixedType ? deals.filter(d => (d.record_type || 'deal') === fixedType).length : deals.length} {fixedType ? `${fixedType}s` : 'sites'} · <b className="text-slate-700">{rows.reduce((a, r) => a + (Number(r.qis) || 0), 0)} QIS</b></p>
+          <p className="text-sm text-slate-500">{rows.length} of {fixedType ? deals.filter(d => (d.record_type || 'deal') === fixedType).length : deals.length} {fixedType ? `${fixedType}s` : 'sites'} · <b className="text-slate-700">{fmtNum(rows.reduce((a, r) => a + (Number(r.qis) || 0), 0))} QIS</b></p>
         </div>
         <div className="flex-1" />
         <div className="flex rounded-lg border border-slate-300 bg-white p-0.5">
