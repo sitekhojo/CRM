@@ -37,7 +37,8 @@ export default function TeamSummary({ label, from, to, visits, deals, team, peop
     const time = names.map(n => {
       const vs = visits.filter(v => v.member === n)
       const days = new Set(vs.map(v => v.visit_date))
-      return { name: n, region: regionOf[n] || '—', visits: vs.length, days: wd.filter(d => days.has(d)).length, byType: Object.fromEntries(TYPES.map(([k]) => [k, vs.filter(v => v.visit_type === k).length])) }
+      const ns = vs.filter(v => v.visit_type === 'new_site')
+      return { nsLead: ns.filter(v => v.lead_created).length, nsNo: ns.filter(v => !v.lead_created).length, name: n, region: regionOf[n] || '—', visits: vs.length, days: wd.filter(d => days.has(d)).length, byType: Object.fromEntries(TYPES.map(([k]) => [k, vs.filter(v => v.visit_type === k).length])) }
     }).sort((a, b) => order(a.name) - order(b.name) || b.visits - a.visits || a.name.localeCompare(b.name))
 
     // 2. Leads & deals created in the period (not imports / tracker), by owner — backed by a field visit or not
@@ -90,13 +91,17 @@ export default function TeamSummary({ label, from, to, visits, deals, team, peop
                 <td className="px-4 py-1.5 font-semibold text-slate-800"><span className="mr-2 inline-block h-2 w-2 rounded-full" style={{ background: colorOf[r.name] }} />{r.name}<span className="ml-1.5 text-[11px] font-normal text-slate-400">{r.region}</span></td>
                 <td className={`px-2 text-center text-xs font-semibold ${r.days / Math.max(1, m.wd) >= 0.8 ? 'text-emerald-700' : r.days / Math.max(1, m.wd) >= 0.5 ? 'text-amber-600' : 'text-red-600'}`}>{r.days}/{m.wd}</td>
                 <td className={`px-2 text-right font-extrabold ${r.visits ? 'text-navy-900' : 'text-red-600'}`}>{r.visits}</td>
-                {TYPES.map(([k]) => <td key={k} className={`px-2 text-right ${r.byType[k] ? 'text-slate-700' : 'text-slate-300'}`}>{r.byType[k] || '—'}</td>)}
+                {TYPES.map(([k]) => (
+                  <td key={k} className={`px-2 text-right ${r.byType[k] ? 'text-slate-700' : 'text-slate-300'}`}>{r.byType[k] || '—'}
+                    {k === 'new_site' && r.byType[k] > 0 && <p className="text-[10px] font-semibold leading-tight"><span className="text-violet-600">{r.nsLead} lead</span> · <span className={r.nsNo ? 'text-amber-600' : 'text-slate-400'}>{r.nsNo} no lead</span></p>}
+                  </td>
+                ))}
               </tr>
             ))}
           </tbody>
           <tfoot className="border-t-2 border-slate-200 bg-slate-50 font-bold">
             <tr><td className="px-4 py-2">Team</td><td /><td className="px-2 text-right">{tTot('visits')}</td>
-              {TYPES.map(([k]) => <td key={k} className="px-2 text-right">{tTot(k)}</td>)}</tr>
+              {TYPES.map(([k]) => <td key={k} className="px-2 text-right">{tTot(k)}{k === 'new_site' && tTot(k) > 0 && <p className="text-[10px] leading-tight"><span className="text-violet-600">{tTot('nsLead')} lead</span> · <span className="text-amber-600">{tTot('nsNo')} no lead</span></p>}</td>)}</tr>
             <tr className="text-[11px] font-semibold text-slate-500"><td className="px-4 pb-2">Share of visits</td><td /><td />
               {TYPES.map(([k]) => <td key={k} className="px-2 pb-2 text-right">{tTot('visits') ? Math.round((100 * tTot(k)) / tTot('visits')) : 0}%</td>)}</tr>
           </tfoot>
@@ -145,7 +150,7 @@ export default function TeamSummary({ label, from, to, visits, deals, team, peop
         </>
       )}
       <p className="border-t border-slate-100 px-4 py-2 text-[11px] text-slate-400">
-        {tab === 'time' ? 'Days out = working days with at least one visit logged.'
+        {tab === 'time' ? 'Days out = working days with at least one visit logged. New site: "lead" = the visit created a lead, "no lead" = logged with Don\'t create a lead yet.'
           : `By site owner. "With field visit" = created from Log visit, or the owner logged a visit within ${NEAR_M} m of the site up to 3 days after it was created. Imports left out. Click a red number to see the sites. "Scouted, no lead" = new-site visits where the person chose not to create a lead (hover for reasons).`}
       </p>
     </div>
