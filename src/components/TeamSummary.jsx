@@ -42,13 +42,13 @@ export default function TeamSummary({ label, from, to, visits, deals, team, peop
     const leadOf = Object.fromEntries(team.map(t => [t.name, t.is_lead]))
     const made = deals.filter(d => !isBulkImport(d) && inRange(d.created_at, from, to))
     const hos = deals.filter(d => inRange(d.extra?.ho_date, from, to))
+    const visitLeadIds = visitLeads || new Set(visits.filter(v => v.lead_created && v.site_id).map(v => v.site_id))
+    const fromVisit = d => visitLeadIds.has(d.id)
     const stageById = Object.fromEntries(stages.map(st => [st.id, st]))
     const dealById = Object.fromEntries(deals.map(d => [d.id, d]))
     // Stage moves in the period on manually-worked sites: forward = to a later stage (not dropped), dropped = to a dropped stage
     const mv = moves.map(x => ({ ...x, site: dealById[x.site_id], to: stageById[x.to_stage_id], fromSt: stageById[x.from_stage_id] }))
       .filter(x => x.site && fromVisit(x.site) && x.to)
-    const visitLeadIds = visitLeads || new Set(visits.filter(v => v.lead_created && v.site_id).map(v => v.site_id))
-    const fromVisit = d => visitLeadIds.has(d.id)
     const openLead = d => d.record_type === 'lead' && !['dropped', 'live'].includes(d.stage_category)
     const rows = names.map(n => {
       const vs = visits.filter(v => v.member === n)
