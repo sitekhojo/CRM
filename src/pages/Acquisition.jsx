@@ -31,7 +31,7 @@ export default function Acquisition() {
   const [f, setF] = useState({ q: '', priority: [], city: [], month: '', status: [] })
   const [open, setOpen] = useState({})
   const [upOpen, setUpOpen] = useState(false)
-  const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).get('tab') || 'forecast')
+  const [tab, setTab] = useState(() => (t => (!t || t === 'forecast' ? 'list' : t))(new URLSearchParams(window.location.search).get('tab')))
 
   const m = useMemo(() => {
     if (!deals) return null
@@ -84,7 +84,7 @@ export default function Acquisition() {
         </>}
       </div>
       <div className="mb-4 flex gap-1 border-b border-slate-200">
-        {[['forecast', 'Forecast'], ['list', 'Pipeline list'], ['payments', 'Franchise payments'], ['team', 'Team activity'], ['locations', `Priority locations${m.all.length ? ` (${m.all.length})` : ''}`]].map(([k, l]) => (
+        {[['list', 'Pipeline list'], ['payments', 'Franchise payments'], ['team', 'Team activity'], ['locations', `Priority locations${m.all.length ? ` (${m.all.length})` : ''}`]].map(([k, l]) => (
           <button key={k} onClick={() => setTab(k)} className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm font-semibold ${tab === k ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>{l}</button>
         ))}
       </div>
