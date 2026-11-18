@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { Table2, Columns3, Download, Upload, Plus, Handshake, ArrowUpDown } from 'lucide-react'
+import { Table2, Columns3, Download, Upload, Rows3, Plus, Handshake, ArrowUpDown } from 'lucide-react'
 import { useDeals, applyFilters, EMPTY_FILTERS } from '../lib/deals'
 import { useAuth } from '../lib/auth'
 import { useConfig, stagesFor } from '../lib/config'
@@ -10,7 +10,7 @@ import PeriodBar, { periodRange, periodLabel, isoDay } from '../components/Perio
 import { StageBadge, PageLoader, Empty, Pill } from '../components/ui'
 import { fmtNum, fmtDate, fmtINR, daysInt, stageAgeTone, AGE_TONES, POWER_FEASIBILITY, RECORD_TYPES, INTENTS, SITE_FORMATS } from '../lib/format'
 import { exportRows, DEAL_COLUMNS } from '../lib/excel'
-import ImportDealsModal from '../components/ImportDealsModal'
+import BulkAddModal from '../components/BulkAddModal'
 import StageCell from '../components/StageCell'
 import TypeCell from '../components/TypeCell'
 import OwnerCell from '../components/OwnerCell'
@@ -119,7 +119,7 @@ export default function Deals({ fixedType }) {
         <div className="flex gap-2">
           {isAdmin && <button className="btn-secondary" onClick={() => exportRows(flatten(rows), DEAL_COLUMNS, `sitekhojo-deals-${new Date().toISOString().slice(0, 10)}`)}><Download className="h-4 w-4" />Excel</button>}
           {isAdmin && <button className="btn-secondary" onClick={() => exportRows(flatten(rows), DEAL_COLUMNS, `sitekhojo-deals-${new Date().toISOString().slice(0, 10)}`, 'csv')}>CSV</button>}
-          {isAdmin && <button className="btn-secondary" onClick={() => setImportOpen(true)}><Upload className="h-4 w-4" />Import</button>}
+          <button className="btn-secondary" onClick={() => setImportOpen(true)}><Rows3 className="h-4 w-4" />Bulk add</button>
         </div>
       </div>
 
@@ -193,7 +193,7 @@ export default function Deals({ fixedType }) {
       ) : (
         <Board rows={rows} stages={stagesFor(stages, filters.siteType)} />
       )}
-      <ImportDealsModal open={importOpen} onClose={() => setImportOpen(false)} onDone={reload} />
+      <BulkAddModal open={importOpen} onClose={() => setImportOpen(false)} onDone={reload} type={fixedType === 'lead' ? 'lead' : 'deal'} deals={deals} />
     </div>
   )
 }
