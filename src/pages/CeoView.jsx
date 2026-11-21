@@ -16,7 +16,6 @@ const teamCity = c => (NCR.includes(c) ? 'Delhi NCR' : c)
 const ym = d => (d ? String(d).slice(0, 7) : null)
 const q = r => Number(r.extra?.qis_count) || 0
 const r1 = n => (n ? Math.round(n * 10) / 10 : 0)
-const sitesL = n => `${n} site${n === 1 ? '' : 's'}`
 const mLabel = m => new Date(m + '-15').toLocaleDateString('en-IN', { month: 'short', year: '2-digit' })
 const addMonths = (m, k) => { const d = new Date(m + '-15'); d.setMonth(d.getMonth() + k); return d.toISOString().slice(0, 7) }
 
@@ -99,7 +98,7 @@ export default function CeoView() {
       const months = prodMonths.map(m => {
         const h = acqAll.filter(d => teamCity(d.city) === b && ym(hoDate(d)) === m)
         const added = acqSites.filter(d => teamCity(d.city) === b && ym(d.created_at) === m)
-        return { m, hoQ: h.reduce((a, d) => a + q(d), 0), hoS: h.length, added: added.length }
+        return { m, hoQ: h.reduce((a, d) => a + q(d), 0), hoS: h.length, added: added.reduce((a, d) => a + q(d), 0) }
       })
       return { base: b, n, names: people.filter(t => t.base_city === b).map(t => t.name.split(' ')[0]).join(', '), months }
     }).sort((a, b) => b.n - a.n || a.base.localeCompare(b.base))
@@ -107,7 +106,7 @@ export default function CeoView() {
       name: t.name, base: t.base_city, lead: t.is_lead,
       months: prodMonths.map(m => {
         const h = acqAll.filter(d => d.owner === t.name && ym(hoDate(d)) === m)
-        return { hoQ: h.reduce((a, d) => a + q(d), 0), hoS: h.length, added: acqSites.filter(d => d.owner === t.name && ym(d.created_at) === m).length }
+        return { hoQ: h.reduce((a, d) => a + q(d), 0), hoS: h.length, added: acqSites.filter(d => d.owner === t.name && ym(d.created_at) === m).reduce((a, d) => a + q(d), 0) }
       }),
     })).sort((a, b) => a.base.localeCompare(b.base) || (b.lead ? 1 : 0) - (a.lead ? 1 : 0) || a.name.localeCompare(b.name))
 
@@ -136,14 +135,14 @@ export default function CeoView() {
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <div>
           <h1 className="text-xl font-extrabold text-navy-900">CEO View</h1>
-          <p className="text-sm text-slate-500">All cities and site types on one page · QIS (sites in grey) · dropped sites never counted · as of {v.asOf.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+          <p className="text-sm text-slate-500">All cities and site types on one page · every number is QIS · dropped sites never counted · as of {v.asOf.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
         </div>
         <div className="flex-1" />
         <button className="btn-secondary print:hidden" onClick={() => window.print()}><Printer className="h-4 w-4" />Print / PDF</button>
       </div>
 
       <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <Kpi label="Live network" value={fmtNum(kpi.liveQ)} sub={`${fmtNum(kpi.liveS)} energized sites`} />
+        <Kpi label="Live network" value={fmtNum(kpi.liveQ)} sub="QIS energized till today" />
         <Kpi label="Energized this FY" value={fmtNum(kpi.fyEnQ)} sub="QIS since 1 April" />
         <Kpi label={`Handover · ${mLabel(v.cur)}`} value={fmtNum(kpi.hoMtdQ)} sub={`done · ${fmtNum(r1(kpi.hoDueQ))} more expected`} tone="emerald" />
         <Kpi label={`Energization · ${mLabel(v.cur)}`} value={fmtNum(kpi.enMtdQ)} sub={`done · ${fmtNum(r1(kpi.enDueQ))} more expected`} tone="emerald" />
@@ -179,11 +178,10 @@ function Kpi({ label, value, sub, tone }) {
 
 function Cell({ x, muted, dueOnly }) {
   if (!x || (!x.qis && !x.dueQ)) return <span className="text-slate-300">·</span>
-  if (dueOnly) return <><div className="font-semibold text-sky-800">{fmtNum(r1(x.dueQ))}</div><div className="whitespace-nowrap text-[10px] text-slate-400">{sitesL(x.dueS)}</div></>
+  if (dueOnly) return <><div className="font-semibold text-sky-800">{fmtNum(r1(x.dueQ))}</div></>
   return (
     <>
       <div className={`font-semibold ${muted ? 'text-slate-500' : 'text-slate-900'}`}>{fmtNum(r1(x.qis))}{x.dueQ ? <span className="ml-1 text-[11px] font-semibold text-sky-700">+{fmtNum(r1(x.dueQ))}</span> : null}</div>
-      <div className="whitespace-nowrap text-[10px] text-slate-400">{x.dueS ? `${x.sites} + ${sitesL(x.dueS)}` : sitesL(x.sites)}</div>
     </>
   )
 }
@@ -252,10 +250,10 @@ function StageTable({ title, defs, by, regionOf }) {
   })
   const tot = defs.map((_, i) => cities.reduce((a, c) => ({ qis: a.qis + by[c][i].qis, sites: a.sites + by[c][i].sites }), { qis: 0, sites: 0 }))
   const rowSum = c => by[c].reduce((a, x) => ({ qis: a.qis + x.qis, sites: a.sites + x.sites }), { qis: 0, sites: 0 })
-  const C = ({ x }) => (x.sites ? <><div className="font-semibold">{fmtNum(r1(x.qis))}</div><div className="whitespace-nowrap text-[10px] text-slate-400">{sitesL(x.sites)}</div></> : <span className="text-slate-300">·</span>)
+  const C = ({ x }) => (x.sites ? <><div className="font-semibold">{fmtNum(r1(x.qis))}</div></> : <span className="text-slate-300">·</span>)
   return (
     <section className="card overflow-hidden">
-      <div className="border-b border-slate-100 px-4 py-3"><h2 className="font-bold text-navy-900">{title}</h2><p className="text-xs text-slate-500">Open sites by current stage (energized and dropped excluded)</p></div>
+      <div className="border-b border-slate-100 px-4 py-3"><h2 className="font-bold text-navy-900">{title}</h2><p className="text-xs text-slate-500">QIS of open sites by current stage (energized and dropped excluded)</p></div>
       <div className="overflow-x-auto">
         <table className="min-w-full text-right text-sm">
           <thead><tr className="border-b border-slate-200 text-xs text-slate-600">
@@ -300,7 +298,7 @@ function Productivity({ v }) {
           <thead>
             <tr className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
               <th className="px-3 py-1 text-left" colSpan={2} />
-              {v.prodMonths.map((m, i) => <th key={m} colSpan={3} className="border-l border-slate-100 px-2 py-1 text-center">{label(m, i)}</th>)}
+              {v.prodMonths.map((m, i) => <th key={m} colSpan={2} className="border-l border-slate-100 px-2 py-1 text-center">{label(m, i)}</th>)}
             </tr>
             <tr className="border-b border-slate-200 text-xs text-slate-600">
               <th className="px-3 py-1.5 text-left">Team</th><th className="px-3 py-1.5">People</th>
@@ -331,7 +329,7 @@ function Productivity({ v }) {
         <table className="min-w-full text-right text-sm">
           <thead><tr className="border-b border-slate-200 text-xs text-slate-600">
             <th className="px-3 py-1.5 text-left">Person</th><th className="px-3 py-1.5 text-left">Base</th>
-            {v.prodMonths.map((m, i) => <th key={m} className="border-l border-slate-100 px-3 py-1.5 font-semibold">{label(m, i)}<div className="text-[10px] font-normal text-slate-400">HO QIS · sites · added</div></th>)}
+            {v.prodMonths.map((m, i) => <th key={m} className="border-l border-slate-100 px-3 py-1.5 font-semibold">{label(m, i)}<div className="text-[10px] font-normal text-slate-400">HO QIS · QIS added</div></th>)}
           </tr></thead>
           <tbody className="divide-y divide-slate-100">
             {v.personRows.map(p => (
@@ -341,7 +339,7 @@ function Productivity({ v }) {
                 {p.months.map((x, i) => (
                   <td key={i} className="border-l border-slate-100 px-3 py-1.5">
                     <span className={x.hoQ ? 'font-bold text-navy-900' : 'text-slate-300'}>{x.hoQ ? fmtNum(r1(x.hoQ)) : '0'}</span>
-                    <span className="text-slate-400"> · {x.hoS} · {x.added}</span>
+                    <span className="text-slate-400"> · {fmtNum(r1(x.added))}</span>
                   </td>
                 ))}
               </tr>
@@ -355,14 +353,12 @@ function Productivity({ v }) {
 
 const FragmentHead = () => <>
   <th className="border-l border-slate-100 px-3 py-1.5 font-semibold" title="Handover QIS per person">HO QIS / person</th>
-  <th className="px-3 py-1.5 font-semibold" title="Sites handed over per person">HO sites / person</th>
-  <th className="px-3 py-1.5 font-semibold" title="New sites added per person">Added / person</th>
+  <th className="px-3 py-1.5 font-semibold" title="QIS of new sites added (scouted) per person">QIS added / person</th>
 </>
 
 function ProdCells({ x, n, per }) {
   return <>
     <td className="border-l border-slate-100 px-3 py-1.5"><span className="font-bold text-navy-900">{fmtNum(per(x.hoQ, n))}</span><div className="whitespace-nowrap text-[10px] text-slate-400">{fmtNum(r1(x.hoQ))} total</div></td>
-    <td className="px-3 py-1.5">{fmtNum(per(x.hoS, n))}<div className="whitespace-nowrap text-[10px] text-slate-400">{x.hoS} total</div></td>
-    <td className="px-3 py-1.5">{fmtNum(per(x.added, n))}<div className="whitespace-nowrap text-[10px] text-slate-400">{x.added} total</div></td>
+    <td className="px-3 py-1.5">{fmtNum(per(x.added, n))}<div className="whitespace-nowrap text-[10px] text-slate-400">{fmtNum(r1(x.added))} total</div></td>
   </>
 }

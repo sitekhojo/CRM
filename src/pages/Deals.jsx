@@ -16,8 +16,11 @@ import TypeCell from '../components/TypeCell'
 import OwnerCell from '../components/OwnerCell'
 import DateCell from '../components/DateCell'
 import IntentCell from '../components/IntentCell'
+import EditCell from '../components/EditCell'
 import { useTargets, matchSite, PRIORITIES, monthLabel } from '../lib/acquisition'
 import { useColumns, ColumnPicker, useHScroll, ScrollButtons, EdgeArrows } from '../components/TableTools'
+
+const late = d => !!d && d < new Date().toISOString().slice(0, 10)
 
 export default function Deals({ fixedType, fixedSiteType }) {
   const { deals, loading, reload } = useDeals()
@@ -59,14 +62,14 @@ export default function Deals({ fixedType, fixedSiteType }) {
     { key: 'site', label: 'Site', sort: 'name', td: 'max-w-[260px]', locked: true, cell: d => <><div className="truncate font-semibold text-slate-900">{d.name}</div><div className="truncate text-xs text-slate-500">{[d.site_type, SITE_FORMATS[d.extra?.site_format], d.address].filter(Boolean).join(' · ') || '—'}{d.latitude === null && <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] font-semibold text-amber-700">No location</span>}</div>{d.target && <div className="mt-0.5 truncate text-[11px] text-slate-600" title={`Priority location · month of acquisition ${d.target_month_label}`}><span className={`mr-1 rounded px-1 font-bold ${PRIORITIES[d.target.priority]?.cls}`}>{d.target.priority}</span>{d.target.name}</div>}</> },
     { key: 'stage', label: 'Stage', sort: 'stage_order', click: true, cell: d => <StageCell deal={d} onChanged={reload} /> },
     { key: 'qis', label: 'QIS', sort: 'qis', td: 'font-semibold', cell: d => fmtNum(d.qis) },
+    { key: 'exp_ho', label: 'Expected HO', sort: 'exp_ho', td: 'whitespace-nowrap', click: true, cell: d => (d.extra?.ho_date || d.stage_category === 'live' ? <span className="text-xs text-slate-400" title="Already handed over">Done</span> : <EditCell deal={d} field="expected_ho" label="Expected HO" onChanged={reload} className={late(d.extra?.expected_ho) ? 'font-semibold text-red-600' : ''} />) },
+    { key: 'exp_en', label: 'Expected energisation', sort: 'exp_en', td: 'whitespace-nowrap', click: true, cell: d => (d.stage_category === 'live' ? <span className="text-xs text-slate-400" title="Already energized">Live</span> : <EditCell deal={d} field="expected_en" label="Expected energisation" onChanged={reload} className={late(d.extra?.expected_en) ? 'font-semibold text-red-600' : ''} />) },
     { key: 'days', label: 'Days in stage', sort: 'days_in_stage', td: 'whitespace-nowrap', cell: d => { const t = stageAgeTone(d.days_in_stage, d.stage_category); return <span title={t.label} className={`inline-block min-w-[2.5rem] rounded-md px-2 py-1 text-center text-sm font-bold ${t.cls}`}>{daysInt(d.days_in_stage) ?? '—'}</span> } },
     { key: 'city', label: 'City', sort: 'city', cell: d => <>{d.city}{d.region && <div className="text-[10px] text-slate-400">{d.region}</div>}</> },
     { key: 'site_type', label: 'Site type', sort: 'site_type', hidden: true, cell: d => d.site_type || '—' },
     { key: 'rent', label: 'Rent', sort: 'rent_expectation', cell: d => fmtINR(d.rent_expectation) },
     { key: 'power', label: 'Power', cell: d => <Pill className={POWER_FEASIBILITY[d.power_feasibility]?.cls}>{POWER_FEASIBILITY[d.power_feasibility]?.label}</Pill> },
-    { key: 'exp_ho', label: 'Expected HO', sort: 'exp_ho', hidden: true, td: 'whitespace-nowrap', cell: d => fmtDate(d.extra?.expected_ho) || '—' },
     { key: 'ho', label: 'HO date', sort: 'ho_sort', td: 'whitespace-nowrap', click: true, cell: d => <DateCell deal={d} field="ho_date" label="Handover date" onChanged={reload} /> },
-    { key: 'exp_en', label: 'Expected energisation', sort: 'exp_en', hidden: true, td: 'whitespace-nowrap', cell: d => fmtDate(d.extra?.expected_en) || '—' },
     { key: 'en', label: 'Energized', sort: 'en_sort', td: 'whitespace-nowrap', click: true, cell: d => <DateCell deal={d} field="energized_on" label="Energization date" onChanged={reload} /> },
     { key: 'owner', label: 'Owner', sort: 'owner', td: 'whitespace-nowrap', click: true, cell: d => <OwnerCell deal={d} onChanged={reload} /> },
     { key: 'landlord', label: 'Landlord', sort: 'landlord_name', hidden: true, cell: d => <>{d.landlord_name || '—'}{d.landlord_phone && <div className="text-[11px] text-slate-400">{d.landlord_phone}</div>}</> },
@@ -76,7 +79,7 @@ export default function Deals({ fixedType, fixedSiteType }) {
     { key: 'created', label: 'Created', sort: 'created_at', td: 'whitespace-nowrap text-slate-500', cell: d => fmtDate(d.created_at) },
     { key: 'updated', label: 'Last updated', sort: 'updated_at', hidden: true, td: 'whitespace-nowrap text-slate-500', cell: d => fmtDate(d.updated_at) },
   ]
-  const cols = useColumns('dealsColumns', COLS)
+  const cols = useColumns('dealsColumns_v3', COLS)
   const hs = useHScroll()
 
   useEffect(() => { setFilters(f => ({ ...f, q: params.get('q') || f.q })) }, [params])
@@ -108,7 +111,7 @@ export default function Deals({ fixedType, fixedSiteType }) {
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div>
           <h1 className="text-xl font-extrabold text-navy-900">{fixedSiteType ? tabLabel(fixedSiteType) : fixedType === 'lead' ? 'Leads' : fixedType === 'deal' ? 'Deals' : 'Leads & Deals'}</h1>
-          <p className="text-sm text-slate-500">{rows.filter(r => r.stage_category !== 'dropped').length} of {deals.filter(d => (!fixedType || (d.record_type || 'deal') === fixedType) && (!fixedSiteType || d.site_type === fixedSiteType)).filter(d => d.stage_category !== 'dropped').length} {fixedType ? `${fixedType}s` : 'sites'}{fixedSiteType && <> ({rows.filter(r => r.stage_category !== 'dropped' && r.record_type === 'lead').length} leads · {rows.filter(r => r.stage_category !== 'dropped' && r.record_type !== 'lead').length} deals)</>} · <b className="text-slate-700">{fmtNum(rows.filter(r => r.stage_category !== 'dropped').reduce((a, r) => a + (Number(r.qis) || 0), 0))} QIS</b>{rows.some(r => r.stage_category === 'dropped') && <span className="text-slate-400"> · {rows.filter(r => r.stage_category === 'dropped').length} dropped shown, not counted</span>}</p>
+          <p className="text-sm text-slate-500">{rows.filter(r => r.stage_category !== 'dropped').length} of {deals.filter(d => (!fixedType || (d.record_type || 'deal') === fixedType) && (!fixedSiteType || d.site_type === fixedSiteType)).filter(d => d.stage_category !== 'dropped').length} {fixedType ? `${fixedType}s` : 'sites'}{fixedSiteType && <> · leads <b className="text-slate-700">{fmtNum(rows.filter(r => r.stage_category !== 'dropped' && r.record_type === 'lead').reduce((a, r) => a + (Number(r.qis) || 0), 0))} QIS</b> · deals <b className="text-slate-700">{fmtNum(rows.filter(r => r.stage_category !== 'dropped' && r.record_type !== 'lead').reduce((a, r) => a + (Number(r.qis) || 0), 0))} QIS</b></>} · <b className="text-slate-700">{fmtNum(rows.filter(r => r.stage_category !== 'dropped').reduce((a, r) => a + (Number(r.qis) || 0), 0))} QIS</b>{rows.some(r => r.stage_category === 'dropped') && <span className="text-slate-400"> · {rows.filter(r => r.stage_category === 'dropped').length} dropped shown, not counted</span>}</p>
         </div>
         <div className="flex-1" />
         <div className="flex rounded-lg border border-slate-300 bg-white p-0.5">
