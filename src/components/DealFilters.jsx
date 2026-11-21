@@ -3,6 +3,7 @@ import { useConfig, stagesFor, REGIONS } from '../lib/config'
 import { EMPTY_FILTERS } from '../lib/deals'
 import { SITE_TYPES } from '../lib/format'
 import MultiSelect, { SingleSelect } from './MultiSelect'
+import { ZONE_KEYS, ZONES } from '../lib/zones'
 
 /** Shared filter bar: search, region, city, owner, lead/deal, stage, site type, date range. */
 export default function DealFilters({ value, onChange, show = ['q', 'region', 'city', 'owner', 'type', 'stage', 'siteType', 'date'], extra, prefix, qPlaceholder = 'Search…' }) {
@@ -34,6 +35,10 @@ export default function DealFilters({ value, onChange, show = ['q', 'region', 'c
       {show.includes('stage') && (
         <MultiSelect allLabel="All stages" noun="stages" value={value.stage} onChange={v => set('stage', v)}
           options={stagesFor(stages, value.siteType).map(s => ({ value: String(s.id), label: s.name, color: s.color }))} />
+      )}
+      {show.includes('zone') && (
+        <MultiSelect allLabel="All zones" noun="zones" value={value.zone || []} onChange={v => set('zone', v)}
+          options={[...ZONE_KEYS.map(k => ({ value: k, label: `${k} · ${ZONES[k].desc}` })), { value: 'none', label: 'No zone' }]} />
       )}
       {show.includes('siteType') && (
         <MultiSelect allLabel="All site types" noun="site types" value={value.siteType} onChange={v => set('siteType', v)}

@@ -57,7 +57,7 @@ export function workedIn(d, from, to) {
 }
 export const dayBefore = day => { const t = new Date(day + 'T12:00:00'); t.setDate(t.getDate() - 1); return localDay(t) }
 
-export const EMPTY_FILTERS = { q: '', city: [], recordType: '', stage: [], siteType: [], region: [], owner: [], member: '', from: '', to: '', overdue: false, mine: false, age: '', ho: '', en: '', openOnly: false, inPipe: '', pipeAt: '', exit: '', worked: '', format: '', eho: '', een: '', iocl: '', cat: [] }
+export const EMPTY_FILTERS = { q: '', city: [], recordType: '', stage: [], siteType: [], region: [], owner: [], member: '', from: '', to: '', zone: [], overdue: false, mine: false, age: '', ho: '', en: '', openOnly: false, inPipe: '', pipeAt: '', exit: '', worked: '', format: '', eho: '', een: '', iocl: '', cat: [] }
 
 /** Apply the shared filter bar to a list of deals. */
 /** Energized stations loaded from the QIS tracker (not pipeline work — kept out of pipeline metrics). */
@@ -77,6 +77,7 @@ export function applyFilters(deals, f, userId) {
     if (f.city?.length && !f.city.includes(d.city)) return false
     if (f.recordType && (d.record_type || 'deal') !== f.recordType) return false
     if (f.siteType?.length && !f.siteType.includes(d.site_type)) return false
+    if (f.zone?.length && !f.zone.includes(d.zone || 'none')) return false
     if (f.stage?.length && !f.stage.map(String).includes(String(d.stage_id))) return false
     if (f.region?.length && !f.region.includes(d.region || '')) return false
     if (f.owner?.length && !f.owner.includes(d.owner || '')) return false
@@ -106,7 +107,7 @@ export function applyFilters(deals, f, userId) {
     const c = new Date(d.created_at)
     if (from && c < from) return false
     if (to && c > to) return false
-    if (q && ![d.name, d.site_code, d.address, d.city, d.pincode, d.landlord_name, d.landlord_phone, d.created_by_name, d.assigned_to_name, d.owner]
+    if (q && ![d.name, d.site_code, d.zone_name, d.address, d.city, d.pincode, d.landlord_name, d.landlord_phone, d.created_by_name, d.assigned_to_name, d.owner]
       .some(v => v && String(v).toLowerCase().includes(q))) return false
     return true
   })

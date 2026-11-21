@@ -17,6 +17,7 @@ import OwnerCell from '../components/OwnerCell'
 import DateCell from '../components/DateCell'
 import IntentCell from '../components/IntentCell'
 import EditCell from '../components/EditCell'
+import { ZONES } from '../lib/zones'
 import { useTargets, matchSite, PRIORITIES, monthLabel } from '../lib/acquisition'
 import { useColumns, ColumnPicker, useHScroll, ScrollButtons, EdgeArrows } from '../components/TableTools'
 
@@ -60,6 +61,7 @@ export default function Deals({ fixedType, fixedSiteType }) {
     { key: 'type', label: 'Lead / Deal', sort: 'record_type', click: true, cell: d => <TypeCell deal={d} onChanged={reload} /> },
     { key: 'intent', label: 'Intent', sort: 'intent_sort', click: true, cell: d => <IntentCell deal={d} onChanged={reload} /> },
     { key: 'site', label: 'Site', sort: 'name', td: 'max-w-[260px]', locked: true, cell: d => <><div className="truncate font-semibold text-slate-900">{d.name}</div><div className="truncate text-xs text-slate-500">{[d.site_type, SITE_FORMATS[d.extra?.site_format], d.address].filter(Boolean).join(' · ') || '—'}{d.latitude === null && <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] font-semibold text-amber-700">No location</span>}</div>{d.target && <div className="mt-0.5 truncate text-[11px] text-slate-600" title={`Priority location · month of acquisition ${d.target_month_label}`}><span className={`mr-1 rounded px-1 font-bold ${PRIORITIES[d.target.priority]?.cls}`}>{d.target.priority}</span>{d.target.name}</div>}</> },
+    { key: 'zone', label: 'Zone', sort: 'zone', cell: d => (d.zone ? <span title={d.zone_name || ''} className={`rounded px-1.5 py-0.5 text-xs font-bold ${ZONES[d.zone]?.cls}`}>{d.zone}</span> : <span className="text-xs text-slate-300">—</span>) },
     { key: 'stage', label: 'Stage', sort: 'stage_order', click: true, cell: d => <StageCell deal={d} onChanged={reload} /> },
     { key: 'qis', label: 'QIS', sort: 'qis', td: 'font-semibold', cell: d => fmtNum(d.qis) },
     { key: 'exp_ho', label: 'Expected HO', sort: 'exp_ho', td: 'whitespace-nowrap', click: true, cell: d => (d.extra?.ho_date || d.stage_category === 'live' ? <span className="text-xs text-slate-400" title="Already handed over">Done</span> : <EditCell deal={d} field="expected_ho" label="Expected HO" onChanged={reload} className={late(d.extra?.expected_ho) ? 'font-semibold text-red-600' : ''} />) },
@@ -79,7 +81,7 @@ export default function Deals({ fixedType, fixedSiteType }) {
     { key: 'created', label: 'Created', sort: 'created_at', td: 'whitespace-nowrap text-slate-500', cell: d => fmtDate(d.created_at) },
     { key: 'updated', label: 'Last updated', sort: 'updated_at', hidden: true, td: 'whitespace-nowrap text-slate-500', cell: d => fmtDate(d.updated_at) },
   ]
-  const cols = useColumns('dealsColumns_v3', COLS)
+  const cols = useColumns('dealsColumns_v4', COLS)
   const hs = useHScroll()
 
   useEffect(() => { setFilters(f => ({ ...f, q: params.get('q') || f.q })) }, [params])
@@ -151,7 +153,7 @@ export default function Deals({ fixedType, fixedSiteType }) {
         </div>
       )}
       <div className="mb-4">
-        <DealFilters value={filters} onChange={f => setFilters({ ...f, recordType: fixedType || f.recordType, siteType: fixedSiteType ? [fixedSiteType] : f.siteType })} show={['q', 'region', 'city', 'owner', ...(fixedType ? [] : ['type']), 'stage', ...(fixedSiteType ? [] : ['siteType']), 'format']} />
+        <DealFilters value={filters} onChange={f => setFilters({ ...f, recordType: fixedType || f.recordType, siteType: fixedSiteType ? [fixedSiteType] : f.siteType })} show={['q', 'region', 'city', 'owner', ...(fixedType ? [] : ['type']), 'stage', 'zone', ...(fixedSiteType ? [] : ['siteType']), 'format']} />
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <PeriodBar allTime value={{ kind: pkind, from: rA, to: rB }} onChange={onPeriod} label={pLabel} prefix={pmode === 'pipe' ? 'Sites in pipeline' : 'Sites added'} />
           {pkind !== 'all' && (

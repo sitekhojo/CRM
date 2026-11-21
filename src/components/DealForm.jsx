@@ -8,6 +8,7 @@ import { evaluateFeasibility, validLatLng, VERDICT } from '../lib/geo'
 import { fetchDeals, fetchNetworkPoints } from '../lib/deals'
 import { useTargets, matchPoint } from '../lib/acquisition'
 import TargetMatch from './TargetMatch'
+import { ZONES, zoneAt } from '../lib/zones'
 
 export const blankDeal = {
   name: '', address: '', city: '', pincode: '', site_type: '', area_sqft: '',
@@ -86,6 +87,13 @@ export default function DealForm({ initial, initialLoc, onSubmit, submitting, mo
   const locOk = validLatLng(loc.lat, loc.lng)
   const { targets } = useTargets()
   const target = locOk ? matchPoint(loc.lat, loc.lng, targets) : null
+  const [zone, setZone] = useState(undefined)
+  useEffect(() => {
+    if (!locOk) { setZone(undefined); return }
+    let on = true
+    const t = setTimeout(() => zoneAt(loc.lat, loc.lng).then(z => on && setZone(z)), 300)
+    return () => { on = false; clearTimeout(t) }
+  }, [loc.lat, loc.lng]) // eslint-disable-line
 
   return (
     <form onSubmit={submit} className="space-y-4">
@@ -93,6 +101,12 @@ export default function DealForm({ initial, initialLoc, onSubmit, submitting, mo
         <LocationPicker value={loc} onChange={setLoc}>
           {check && <DealMarkers deals={check.nearby.pipeline.slice(0, 50)} radius={6} />}
         </LocationPicker>
+        {locOk && zone !== undefined && (
+          <div className="mt-3 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+            {zone ? <><span className={`rounded px-1.5 py-0.5 text-xs font-bold ${ZONES[zone.zone]?.cls}`}>{zone.zone}</span><span className="font-semibold text-slate-800">{zone.name}</span><span className="truncate text-xs text-slate-500">{zone.label}</span></>
+              : <span className="text-slate-500">Outside the network-plan zones</span>}
+          </div>
+        )}
         {locOk && targets.length > 0 && <div className="mt-3"><TargetMatch match={target} /></div>}
         {check && (
           <div className={`mt-3 rounded-lg border px-3 py-2 text-sm ${VERDICT[check.verdict].cls}`}>

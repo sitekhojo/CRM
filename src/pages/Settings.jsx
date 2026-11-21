@@ -8,8 +8,10 @@ import { NETWORK_TYPES } from './Planning'
 import { useAuth } from '../lib/auth'
 import { runFullBackup, fetchLastBackup, daysSince } from '../lib/backup'
 import { SITE_TYPES, normaliseSiteType } from '../lib/format'
+import { ZONES, ZONE_KEYS, parseZoneFile, uploadZones } from '../lib/zones'
+import { fetchDeals } from '../lib/deals'
 
-const TABS = [['stages', 'Pipeline stages'], ['team', 'Team & regions'], ['cities', 'Cities'], ['drops', 'Drop reasons'], ['rules', 'Feasibility rules'], ['network', 'Network data'], ['backup', 'Backup & export']]
+const TABS = [['stages', 'Pipeline stages'], ['team', 'Team & regions'], ['cities', 'Cities'], ['drops', 'Drop reasons'], ['rules', 'Feasibility rules'], ['network', 'Network data'], ['zones', 'Zones'], ['backup', 'Backup & export']]
 
 export default function Settings() {
   const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).get('tab') || 'stages')
@@ -25,6 +27,7 @@ export default function Settings() {
       {tab === 'drops' && <SimpleList table="drop_reasons" col="label" title="Drop reasons" />}
       {tab === 'rules' && <Rules />}
       {tab === 'network' && <Network />}
+      {tab === 'zones' && <Zones />}
       {tab === 'backup' && <Backup />}
     </div>
   )
@@ -318,6 +321,82 @@ function Backup() {
       <div className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
         Other exports: <b>Leads</b> / <b>Deals</b> lists (Excel or CSV of the current filters), <b>Acquisition Desk</b> forecast and pipeline list, <b>Network data</b> tab, and the <b>Priority locations</b> list. Every export includes the record ID, so a backup can be re-imported or matched later.
       </div>
+    </div>
+  )
+}
+
+function Zones() {
+  const toast = useToast()
+  const [zones, setZones] = useState(null)
+  const [sites, setSites] = useState(null)
+  const [busy, setBusy] = useState(null)
+  const load = async () => {
+    try {
+      setZones(await fetchAll(() => supabase.from('zones').select('id,city,zone,version,uploaded_at').order('id')))
+      setSites(await fetchDeals())
+    } catch (e) { setZones([]); toast(errMsg(e), 'error') }
+  }
+  useEffect(() => { load() }, []) // eslint-disable-line
+  const onFile = async e => {
+    const file = e.target.files?.[0]; e.target.value = ''
+    if (!file) return
+    setBusy('Reading file…')
+    try {
+      const rows = parseZoneFile(await file.text())
+      if (!rows.length) throw new Error('No zones found in this file. Upload the network map (.html) or a GeoJSON file.')
+      const version = (file.name.match(/V\d+(\.\d+)*/i) || [file.name.replace(/\.[^.]+$/, '')])[0]
+      if (!window.confirm(`Replace all zones with ${rows.length} zones from ${file.name}?`)) return setBusy(null)
+      await uploadZones(rows, version, (n, t) => setBusy(`Uploading ${n} of ${t} zones…`))
+      toast(`${rows.length} zones uploaded · every site is re-tagged automatically`)
+      await load()
+    } catch (err) { toast(errMsg(err), 'error') } finally { setBusy(null) }
+  }
+  const live = (sites || []).filter(d => d.stage_category !== 'dropped')
+  const cities = [...new Set((zones || []).map(z => z.city).filter(Boolean))].sort()
+  const count = (xs, k) => xs.filter(x => x.zone === k).length
+  const meta = zones?.[0]
+  return (
+    <div className="space-y-4">
+      <div className="card p-4">
+        <div className="flex flex-wrap items-start gap-3">
+          <div className="flex-1">
+            <h3 className="font-bold text-navy-900">Network-plan zones</h3>
+            <p className="text-sm text-slate-500">Upload the Indofast network map (.html) or a GeoJSON of zones. Every site is tagged Z0 / Z1 / Z2 / ZN from its location, including sites added later. Uploading a new version replaces the old zones.</p>
+            <div className="mt-2 flex flex-wrap gap-2 text-xs">
+              {ZONE_KEYS.map(k => <span key={k} className="flex items-center gap-1"><span className={`rounded px-1.5 py-0.5 font-bold ${ZONES[k].cls}`}>{k}</span>{ZONES[k].desc}</span>)}
+            </div>
+          </div>
+          <label className={`btn-primary cursor-pointer ${busy ? 'pointer-events-none opacity-60' : ''}`}>
+            <Upload className="h-4 w-4" />{busy || 'Upload map / GeoJSON'}
+            <input type="file" accept=".html,.htm,.geojson,.json" className="hidden" onChange={onFile} />
+          </label>
+        </div>
+        {meta && <p className="mt-3 text-xs text-slate-500">Current: <b>{meta.version || 'unnamed'}</b> · {zones.length} zones · uploaded {new Date(meta.uploaded_at).toLocaleString('en-IN')}</p>}
+      </div>
+      {zones && zones.length > 0 && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="card overflow-hidden">
+            <p className="border-b border-slate-100 px-4 py-2 text-sm font-bold">Sites by zone <span className="font-normal text-slate-500">(dropped excluded)</span></p>
+            <table className="min-w-full text-sm"><tbody className="divide-y divide-slate-100">
+              {[...ZONE_KEYS, null].map(k => (
+                <tr key={k || 'none'}><td className="px-4 py-1.5">{k ? <span className={`rounded px-1.5 py-0.5 text-xs font-bold ${ZONES[k].cls}`}>{k}</span> : <span className="text-slate-500">{'No zone (no location or outside the map)'}</span>}</td>
+                  <td className="px-4 py-1.5 text-right font-semibold">{live.filter(d => (d.zone || null) === k).length}</td></tr>
+              ))}
+            </tbody></table>
+          </div>
+          <div className="card overflow-hidden">
+            <p className="border-b border-slate-100 px-4 py-2 text-sm font-bold">Zones in the map, by city</p>
+            <div className="max-h-80 overflow-y-auto">
+              <table className="min-w-full text-right text-sm">
+                <thead className="sticky top-0 bg-slate-50 text-xs text-slate-500"><tr><th className="px-4 py-1.5 text-left">City</th>{ZONE_KEYS.map(k => <th key={k} className="px-3 py-1.5">{k}</th>)}</tr></thead>
+                <tbody className="divide-y divide-slate-100">
+                  {cities.map(c => { const xs = zones.filter(z => z.city === c); return <tr key={c}><td className="px-4 py-1 text-left">{c}</td>{ZONE_KEYS.map(k => <td key={k} className="px-3 py-1">{count(xs, k) || '·'}</td>)}</tr> })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
