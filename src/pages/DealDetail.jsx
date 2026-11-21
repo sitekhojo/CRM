@@ -15,7 +15,7 @@ import { Marker } from 'react-leaflet'
 import { hasLoc } from '../lib/geo'
 import StageChangeModal from '../components/StageChangeModal'
 import DealForm from '../components/DealForm'
-import { fmtDateTime, fmtDate, fmtINR, fmtNum, daysLabel, daysInt, stageAgeTone, timeAgo, POWER_FEASIBILITY, RECORD_TYPES, EXTRA_FIELDS, INTENTS, SITE_FORMATS } from '../lib/format'
+import { fmtDateTime, fmtDate, fmtINR, fmtNum, daysLabel, daysInt, stageAgeTone, timeAgo, POWER_FEASIBILITY, RECORD_TYPES, EXTRA_FIELDS, INTENTS, SITE_FORMATS, tabPath, tabLabel } from '../lib/format'
 
 export default function DealDetail() {
   const { id } = useParams()
@@ -77,7 +77,7 @@ export default function DealDetail() {
     if (!window.confirm(`Delete ${deal.site_code} "${deal.name}" permanently? This also deletes its history and comments.`)) return
     const { error } = await supabase.from('sites').delete().eq('id', id)
     if (error) return toast(errMsg(error), 'error')
-    toast('Deal deleted'); nav(deal.record_type === 'lead' ? '/app/leads' : '/app/deals', { replace: true })
+    toast('Deal deleted'); nav(tabPath(deal.site_type), { replace: true })
   }
 
   // merge stage changes + comments into one activity feed
@@ -89,7 +89,7 @@ export default function DealDetail() {
 
   return (
     <div className="p-4 sm:p-6">
-      <Link to={deal.record_type === 'lead' ? '/app/leads' : '/app/deals'} className="mb-2 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"><ArrowLeft className="h-4 w-4" />{deal.record_type === 'lead' ? 'Leads' : 'Deals'}</Link>
+      <Link to={tabPath(deal.site_type)} className="mb-2 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"><ArrowLeft className="h-4 w-4" />{tabLabel(deal.site_type)}</Link>
 
       {/* Header */}
       <div className="card mb-4 p-4 sm:p-5">

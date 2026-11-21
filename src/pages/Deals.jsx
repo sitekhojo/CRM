@@ -8,7 +8,7 @@ import DealFilters from '../components/DealFilters'
 import { SingleSelect } from '../components/MultiSelect'
 import PeriodBar, { periodRange, periodLabel, isoDay } from '../components/PeriodBar'
 import { StageBadge, PageLoader, Empty, Pill } from '../components/ui'
-import { fmtNum, fmtDate, fmtINR, daysInt, stageAgeTone, AGE_TONES, POWER_FEASIBILITY, RECORD_TYPES, INTENTS, SITE_FORMATS } from '../lib/format'
+import { fmtNum, fmtDate, fmtINR, daysInt, stageAgeTone, AGE_TONES, POWER_FEASIBILITY, RECORD_TYPES, INTENTS, SITE_FORMATS, tabLabel } from '../lib/format'
 import { exportRows, DEAL_COLUMNS } from '../lib/excel'
 import BulkAddModal from '../components/BulkAddModal'
 import StageCell from '../components/StageCell'
@@ -19,14 +19,14 @@ import IntentCell from '../components/IntentCell'
 import { useTargets, matchSite, PRIORITIES, monthLabel } from '../lib/acquisition'
 import { useColumns, ColumnPicker, useHScroll, ScrollButtons, EdgeArrows } from '../components/TableTools'
 
-export default function Deals({ fixedType }) {
+export default function Deals({ fixedType, fixedSiteType }) {
   const { deals, loading, reload } = useDeals()
   const { stages = [] } = useConfig()
   const { user, isAdmin } = useAuth()
   const [params] = useSearchParams()
   const list = k => (params.get(k) ? params.get(k).split(',') : [])
   const [filters, setFilters] = useState({
-    ...EMPTY_FILTERS, q: params.get('q') || '', stage: list('stage'), city: list('city'), siteType: list('siteType'), region: list('region'), owner: list('owner'),
+    ...EMPTY_FILTERS, q: params.get('q') || '', stage: list('stage'), city: list('city'), siteType: fixedSiteType ? [fixedSiteType] : list('siteType'), region: list('region'), owner: list('owner'),
     recordType: fixedType || params.get('type') || '', age: params.get('age') || '', from: params.get('from') || '', to: params.get('to') || '',
     ho: params.get('ho') || '', en: params.get('en') || '', openOnly: params.get('open') === '1', inPipe: params.get('inp') || '', pipeAt: params.get('at') || '', exit: params.get('exit') || '', worked: params.get('worked') || '',
   })
@@ -54,7 +54,7 @@ export default function Deals({ fixedType }) {
   const stop = e => e.stopPropagation()
   const COLS = [
     { key: 'id', label: 'ID', sort: 'site_code', td: 'font-mono text-xs text-slate-500', cell: d => d.site_code, locked: true },
-    { key: 'type', label: 'Type', sort: 'record_type', click: true, cell: d => <TypeCell deal={d} onChanged={reload} /> },
+    { key: 'type', label: 'Lead / Deal', sort: 'record_type', click: true, cell: d => <TypeCell deal={d} onChanged={reload} /> },
     { key: 'intent', label: 'Intent', sort: 'intent_sort', click: true, cell: d => <IntentCell deal={d} onChanged={reload} /> },
     { key: 'site', label: 'Site', sort: 'name', td: 'max-w-[260px]', locked: true, cell: d => <><div className="truncate font-semibold text-slate-900">{d.name}</div><div className="truncate text-xs text-slate-500">{[d.site_type, SITE_FORMATS[d.extra?.site_format], d.address].filter(Boolean).join(' · ') || '—'}{d.latitude === null && <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] font-semibold text-amber-700">No location</span>}</div>{d.target && <div className="mt-0.5 truncate text-[11px] text-slate-600" title={`Priority location · month of acquisition ${d.target_month_label}`}><span className={`mr-1 rounded px-1 font-bold ${PRIORITIES[d.target.priority]?.cls}`}>{d.target.priority}</span>{d.target.name}</div>}</> },
     { key: 'stage', label: 'Stage', sort: 'stage_order', click: true, cell: d => <StageCell deal={d} onChanged={reload} /> },
@@ -107,8 +107,8 @@ export default function Deals({ fixedType }) {
     <div className="p-4 sm:p-6">
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div>
-          <h1 className="text-xl font-extrabold text-navy-900">{fixedType === 'lead' ? 'Leads' : fixedType === 'deal' ? 'Deals' : 'Leads & Deals'}</h1>
-          <p className="text-sm text-slate-500">{rows.filter(r => r.stage_category !== 'dropped').length} of {(fixedType ? deals.filter(d => (d.record_type || 'deal') === fixedType) : deals).filter(d => d.stage_category !== 'dropped').length} {fixedType ? `${fixedType}s` : 'sites'} · <b className="text-slate-700">{fmtNum(rows.filter(r => r.stage_category !== 'dropped').reduce((a, r) => a + (Number(r.qis) || 0), 0))} QIS</b>{rows.some(r => r.stage_category === 'dropped') && <span className="text-slate-400"> · {rows.filter(r => r.stage_category === 'dropped').length} dropped shown, not counted</span>}</p>
+          <h1 className="text-xl font-extrabold text-navy-900">{fixedSiteType ? tabLabel(fixedSiteType) : fixedType === 'lead' ? 'Leads' : fixedType === 'deal' ? 'Deals' : 'Leads & Deals'}</h1>
+          <p className="text-sm text-slate-500">{rows.filter(r => r.stage_category !== 'dropped').length} of {deals.filter(d => (!fixedType || (d.record_type || 'deal') === fixedType) && (!fixedSiteType || d.site_type === fixedSiteType)).filter(d => d.stage_category !== 'dropped').length} {fixedType ? `${fixedType}s` : 'sites'}{fixedSiteType && <> ({rows.filter(r => r.stage_category !== 'dropped' && r.record_type === 'lead').length} leads · {rows.filter(r => r.stage_category !== 'dropped' && r.record_type !== 'lead').length} deals)</>} · <b className="text-slate-700">{fmtNum(rows.filter(r => r.stage_category !== 'dropped').reduce((a, r) => a + (Number(r.qis) || 0), 0))} QIS</b>{rows.some(r => r.stage_category === 'dropped') && <span className="text-slate-400"> · {rows.filter(r => r.stage_category === 'dropped').length} dropped shown, not counted</span>}</p>
         </div>
         <div className="flex-1" />
         <div className="flex rounded-lg border border-slate-300 bg-white p-0.5">
@@ -120,6 +120,7 @@ export default function Deals({ fixedType }) {
           {isAdmin && <button className="btn-secondary" onClick={() => exportRows(flatten(rows), DEAL_COLUMNS, `sitekhojo-deals-${new Date().toISOString().slice(0, 10)}`)}><Download className="h-4 w-4" />Excel</button>}
           {isAdmin && <button className="btn-secondary" onClick={() => exportRows(flatten(rows), DEAL_COLUMNS, `sitekhojo-deals-${new Date().toISOString().slice(0, 10)}`, 'csv')}>CSV</button>}
           <button className="btn-secondary" onClick={() => setImportOpen(true)}><Rows3 className="h-4 w-4" />Bulk add</button>
+          {fixedSiteType && <Link className="btn-primary" to={`/app/deals/new?type=lead&site=${fixedSiteType}`}><Plus className="h-4 w-4" />Add {fixedSiteType === 'SPP' ? 'SPP' : fixedSiteType.toLowerCase()} site</Link>}
         </div>
       </div>
 
@@ -134,7 +135,7 @@ export default function Deals({ fixedType }) {
           {filters.pipeAt && <> · in pipeline at end of {filters.pipeAt}</>}
           {filters.worked && <> · in pipeline at some point {filters.worked.replace(',', ' → ')}</>}
           {filters.exit && <> · {filters.exit.startsWith('ho') ? 'handed over' : 'dropped'} {filters.exit.split(',').slice(1).join(' → ')}</>}
-          <button className="ml-auto font-semibold underline" onClick={() => setFilters({ ...EMPTY_FILTERS, recordType: fixedType || '' })}>Show all</button>
+          <button className="ml-auto font-semibold underline" onClick={() => setFilters({ ...EMPTY_FILTERS, recordType: fixedType || '', siteType: fixedSiteType ? [fixedSiteType] : [] })}>Show all</button>
         </div>
       )}
       {filters.age && (
@@ -144,7 +145,7 @@ export default function Deals({ fixedType }) {
         </div>
       )}
       <div className="mb-4">
-        <DealFilters value={filters} onChange={f => setFilters({ ...f, recordType: fixedType || f.recordType })} show={['q', 'region', 'city', 'owner', ...(fixedType ? [] : ['type']), 'stage', 'siteType', 'format']} />
+        <DealFilters value={filters} onChange={f => setFilters({ ...f, recordType: fixedType || f.recordType, siteType: fixedSiteType ? [fixedSiteType] : f.siteType })} show={['q', 'region', 'city', 'owner', ...(fixedType ? [] : ['type']), 'stage', ...(fixedSiteType ? [] : ['siteType']), 'format']} />
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <PeriodBar allTime value={{ kind: pkind, from: rA, to: rB }} onChange={onPeriod} label={pLabel} prefix={pmode === 'pipe' ? 'Sites in pipeline' : 'Sites added'} />
           {pkind !== 'all' && (
@@ -193,7 +194,7 @@ export default function Deals({ fixedType }) {
       ) : (
         <Board rows={rows} stages={stagesFor(stages, filters.siteType)} />
       )}
-      <BulkAddModal open={importOpen} onClose={() => setImportOpen(false)} onDone={reload} type={fixedType === 'lead' ? 'lead' : 'deal'} deals={deals} />
+      <BulkAddModal open={importOpen} onClose={() => setImportOpen(false)} onDone={reload} type={fixedType === 'deal' ? 'deal' : fixedSiteType || fixedType === 'lead' ? 'lead' : 'deal'} siteType={fixedSiteType || ''} deals={deals} />
     </div>
   )
 }

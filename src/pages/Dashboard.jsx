@@ -12,7 +12,7 @@ import TargetTrend, { fyMonths } from '../components/TargetTrend'
 import FyPlan from '../components/FyPlan'
 import { PlanTable, TypeSplit, SITE_TYPE_CHIPS } from '../components/Forecast'
 import { Stat, StageBadge, PageLoader, Modal } from '../components/ui'
-import { fmtNum, daysLabel, daysInt, stageAgeTone, AGE_TONES, startOfWeek, startOfMonth, fmtDate, normaliseSiteType } from '../lib/format'
+import { fmtNum, daysLabel, daysInt, stageAgeTone, AGE_TONES, startOfWeek, startOfMonth, fmtDate, normaliseSiteType, tabPath } from '../lib/format'
 import { haversine, hasLoc } from '../lib/geo'
 
 export default function Dashboard() {
@@ -145,7 +145,7 @@ export default function Dashboard() {
     const todayStr = isoDay(new Date())
     const curYm = todayStr.slice(0, 7)
     const nextYm = (() => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + 1); return isoDay(d).slice(0, 7) })()
-    const PENDING_KEYS = ['scouting', 'scouted', 'deployment_feasibility', 'loi_signed', 'agreement_signed']
+    const PENDING_KEYS = ['scouting', 'scouted', 'deployment_feasibility', 'loi_signed', 'agreement_signed', 'cpt_approved', 'peso_applied', 'peso_approved']
     const pendingStages = stages.filter(s => s.is_active && PENDING_KEYS.includes(s.key)).sort((a, b) => a.sort_order - b.sort_order)
     const pendingIds = new Set(pendingStages.map(s => s.id))
     const pendingRows = rows.filter(r => pendingIds.has(r.stage_id))
@@ -330,8 +330,8 @@ export default function Dashboard() {
   }, [deals, filters, stages, users, team, cities, history, network, metric, period, grain])
 
   if (loading || !m) return <PageLoader />
-  const listPath = t => (t === 'lead' ? '/app/leads' : t === 'deal' ? '/app/deals' : '/app/all')
-  const go = q => nav(`${listPath(filters.recordType)}?${q}`)
+  const listPath = () => (filters.siteType.length === 1 ? tabPath(filters.siteType[0]) : '/app/all')
+  const go = q => nav(`${listPath()}?${q}${filters.recordType ? `&type=${filters.recordType}` : ''}`)
   const openList = (title, rows) => { setListType(''); setList({ title, rows }) }
   // Same sites as when opened, but with their latest values after an edit
   const listRows = list ? list.rows.map(r => deals.find(d => d.id === r.id) || r) : []
@@ -343,7 +343,7 @@ export default function Dashboard() {
     if (filters.owner.length && !extra.owner) p.set('owner', filters.owner.join(','))
     if (filters.recordType) p.set('type', filters.recordType)
     if (filters.stage.length && !extra.stage) p.set('stage', filters.stage.join(','))
-    nav(`${listPath(filters.recordType)}?${p}`)
+    nav(`${listPath()}?${p}`)
   }
 
   return (

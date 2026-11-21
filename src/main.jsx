@@ -12,6 +12,7 @@ import Login from './pages/Login'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Deals = lazy(() => import('./pages/Deals'))
+const CeoView = lazy(() => import('./pages/CeoView'))
 const Acquisition = lazy(() => import('./pages/Acquisition'))
 const DealNew = lazy(() => import('./pages/DealNew'))
 const DealDetail = lazy(() => import('./pages/DealDetail'))
@@ -68,6 +69,10 @@ function App() {
             <Route path="/app" element={<RequireAuth><ConfigProvider><AppLayout /></ConfigProvider></RequireAuth>}>
               <Route index element={<AppHome />} />
               <Route path="dashboard" element={<Lazy><Dashboard /></Lazy>} />
+              <Route path="franchise" element={<Lazy><Deals key="Franchise" fixedSiteType="Franchise" /></Lazy>} />
+              <Route path="private" element={<Lazy><Deals key="Private" fixedSiteType="Private" /></Lazy>} />
+              <Route path="spp" element={<Lazy><Deals key="SPP" fixedSiteType="SPP" /></Lazy>} />
+              <Route path="ceo" element={<Lazy><CeoView /></Lazy>} />
               <Route path="leads" element={<Lazy><Deals key="lead" fixedType="lead" /></Lazy>} />
               <Route path="deals" element={<Lazy><Deals key="deal" fixedType="deal" /></Lazy>} />
               <Route path="all" element={<Lazy><Deals key="all" /></Lazy>} />

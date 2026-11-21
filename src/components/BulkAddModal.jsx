@@ -24,14 +24,15 @@ const COLS = [
   { k: 'address', l: 'Address', w: 'w-56' },
   { k: 'remarks', l: 'Remarks', w: 'w-56' },
 ]
-const blank = () => Object.fromEntries(COLS.map(c => [c.k, '']))
+const blankRow = (siteType = '') => ({ ...Object.fromEntries(COLS.map(c => [c.k, ''])), site_type: siteType || '' })
 const isEmpty = r => COLS.every(c => !String(r[c.k] ?? '').trim())
 
 /**
  * Bulk add leads or deals: a spreadsheet-like grid. Type or paste rows from Excel;
  * every non-empty row becomes its own lead/deal. Pick-lists (city, type, stage, owner, intent) stop bad values.
  */
-export default function BulkAddModal({ open, onClose, type = 'deal', deals = [], onDone }) {
+export default function BulkAddModal({ open, onClose, type = 'deal', deals = [], onDone, siteType = '' }) {
+  const blank = () => blankRow(siteType)
   const { stages = [], cities = [], team = [] } = useConfig()
   const { isAdmin } = useAuth()
   const toast = useToast()

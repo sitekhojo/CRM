@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { NavLink, Outlet, useNavigate, Link } from 'react-router-dom'
-import { LayoutDashboard, Handshake, Target, Crosshair, Map as MapIcon, Radar, Users, Settings, Plus, LogOut, Menu, X, Search, KeyRound, MapPinPlus, Download } from 'lucide-react'
+import { LayoutDashboard, Handshake, Target, Crosshair, Map as MapIcon, Radar, Users, Settings, Plus, Presentation, Store, Building2, LogOut, Menu, X, Search, KeyRound, MapPinPlus, Download } from 'lucide-react'
 import { useAuth } from '../lib/auth'
 import { logOpen } from '../lib/logins'
 import { runFullBackup, fetchLastBackup, daysSince, BACKUP_DUE_DAYS } from '../lib/backup'
@@ -9,8 +9,10 @@ import { Modal, Field, useToast } from './ui'
 
 const NAV = [
   { to: '/app/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/app/leads', label: 'Leads', icon: Target },
-  { to: '/app/deals', label: 'Deals', icon: Handshake },
+  { to: '/app/ceo', label: 'CEO View', icon: Presentation },
+  { to: '/app/franchise', label: 'Franchise', icon: Store },
+  { to: '/app/private', label: 'Private', icon: Building2 },
+  { to: '/app/spp', label: 'Strategic Partnerships', icon: Handshake },
   { to: '/app/acquisition', label: 'Acquisition Desk', icon: Crosshair },
   { to: '/app/visit', label: 'Log visit', icon: MapPinPlus },
   { to: '/app/map', label: 'Map', icon: MapIcon },
@@ -39,7 +41,7 @@ export default function AppLayout() {
   useEffect(() => { if (profile?.is_active) logOpen() }, [profile?.id]) // eslint-disable-line
 
   const link = ({ to, label, icon: Icon }) => (
-    <NavLink key={to} to={to} end={to === '/app/deals'} onClick={() => setOpen(false)}
+    <NavLink key={to} to={to} end onClick={() => setOpen(false)}
       className={({ isActive }) => `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${isActive ? 'bg-white/10 text-white' : 'text-slate-300 hover:bg-white/5 hover:text-white'}`}>
       <Icon className="h-4.5 w-4.5" />{label}
     </NavLink>

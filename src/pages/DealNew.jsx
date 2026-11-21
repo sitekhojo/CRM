@@ -5,6 +5,7 @@ import DealForm from '../components/DealForm'
 import { supabase, errMsg } from '../lib/supabase'
 import { useToast } from '../components/ui'
 import { validLatLng } from '../lib/geo'
+import { SITE_TYPES } from '../lib/format'
 
 export default function DealNew() {
   const nav = useNavigate()
@@ -15,6 +16,7 @@ export default function DealNew() {
   const initialLoc = validLatLng(lat, lng) ? { lat, lng, source: 'map' } : undefined
   const type = params.get('type') === 'lead' ? 'lead' : 'deal'
   const label = type === 'lead' ? 'Lead' : 'Deal'
+  const site = SITE_TYPES.includes(params.get('site')) ? params.get('site') : ''
 
   const submit = async payload => {
     setBusy(true)
@@ -31,7 +33,7 @@ export default function DealNew() {
     <div className="mx-auto max-w-3xl p-4 sm:p-6">
       <Link to={-1} className="mb-2 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"><ArrowLeft className="h-4 w-4" />Back</Link>
       <h1 className="mb-4 text-xl font-extrabold text-navy-900">Create {label.toLowerCase()}</h1>
-      <DealForm key={type} onSubmit={submit} submitting={busy} initialLoc={initialLoc} submitLabel={`Create ${label.toLowerCase()}`} />
+      <DealForm key={type + site} initial={site ? { site_type: site } : undefined} onSubmit={submit} submitting={busy} initialLoc={initialLoc} submitLabel={`Create ${label.toLowerCase()}`} />
     </div>
   )
 }

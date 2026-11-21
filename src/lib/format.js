@@ -90,6 +90,15 @@ export const normFormat = v => { const s = String(v ?? '').trim().toLowerCase();
 /** Fields only an admin edits, from the list (not in the edit form). */
 export const ADMIN_LIST_DATES = ['ho_date', 'energized_on']
 
+/** Site-type tabs (sidebar): one list per site type, each with a Lead / Deal column. */
+export const SITE_TABS = [
+  { siteType: 'Franchise', path: '/app/franchise', label: 'Franchise' },
+  { siteType: 'Private', path: '/app/private', label: 'Private' },
+  { siteType: 'SPP', path: '/app/spp', label: 'Strategic Partnerships' },
+]
+export const tabPath = siteType => SITE_TABS.find(t => t.siteType === siteType)?.path || '/app/all'
+export const tabLabel = siteType => SITE_TABS.find(t => t.siteType === siteType)?.label || 'All sites'
+
 export const RECORD_TYPES = {
   lead: { label: 'Lead', cls: 'bg-sky-100 text-sky-700' },
   deal: { label: 'Deal', cls: 'bg-violet-100 text-violet-700' },
