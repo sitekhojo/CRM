@@ -13,6 +13,8 @@ import { fmtNum } from '../lib/format'
  */
 const NCR = ['Delhi', 'Gurugram', 'Noida', 'Ghaziabad', 'Faridabad']
 const teamCity = c => (NCR.includes(c) ? 'Delhi NCR' : c)
+/** Trend starts here: Site Khojo has no handover dates before September 2026. */
+const TREND_START = '2026-09'
 const ym = d => (d ? String(d).slice(0, 7) : null)
 const q = r => Number(r.extra?.qis_count) || 0
 const r1 = n => (n ? Math.round(n * 10) / 10 : 0)
@@ -38,7 +40,7 @@ export default function CeoView() {
     const regionOf = Object.fromEntries(cities.map(c => [c.name, c.region]))
     const now = new Date()
     const cur = now.toISOString().slice(0, 7)
-    const past = [-5, -4, -3, -2, -1].map(k => addMonths(cur, k))
+    const past = [-5, -4, -3, -2, -1].map(k => addMonths(cur, k)).filter(m => m >= TREND_START)
     const future = [1, 2, 3, 4, 5].map(k => addMonths(cur, k))
     const fyStart = (now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1) + '-04'
 
@@ -150,7 +152,7 @@ export default function CeoView() {
         <Kpi label="Open pipeline" value={fmtNum(r1(kpi.acqPipeQ + kpi.sppPipeQ))} sub={`Acquisition ${fmtNum(r1(kpi.acqPipeQ))} · SPP ${fmtNum(r1(kpi.sppPipeQ))}`} />
       </div>
 
-      <MonthGrid title="Handovers by city" note={`Past months: actual handover dates (Site Khojo has these from ${mLabel(v.firstHo)}). Coming months: expected handover date of sites not yet handed over.`}
+      <MonthGrid title="Handovers by city" note={`Past months: actual handover dates. Coming months: expected handover date of sites not yet handed over.`}
         g={v.ho} v={v} minMonth={v.firstHo} />
       <MonthGrid title="Energizations by city" note='Past months: actual energization dates. Coming months: expected energization date of sites not yet live.'
         g={v.en} v={v} />
