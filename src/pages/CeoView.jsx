@@ -69,7 +69,7 @@ export default function CeoView() {
 
     const cityList = [...new Set([...Object.keys(ho), ...Object.keys(en), ...alive.filter(d => d.stage_category !== 'live').map(d => d.city || 'Not set')])]
     const regionRank = c => { const i = REGIONS.indexOf(regionOf[c]); return i < 0 ? 9 : i }
-    const rowTotal = (g, c) => Object.entries(g[c] || {}).filter(([k]) => k >= cur || k === 'over').reduce((a, [, x]) => a + x.qis + x.dueQ, 0)
+    const rowTotal = (g, c) => Object.entries(g[c] || {}).filter(([k]) => k !== 'over' && k >= cur).reduce((a, [, x]) => a + x.qis + x.dueQ, 0)
     const sortCities = g => cityList.filter(c => g[c]).sort((a, b) => regionRank(a) - regionRank(b) || rowTotal(g, b) - rowTotal(g, a) || a.localeCompare(b))
 
     // stage snapshot (open pipeline)
@@ -150,9 +150,9 @@ export default function CeoView() {
         <Kpi label="Open pipeline" value={fmtNum(r1(kpi.acqPipeQ + kpi.sppPipeQ))} sub={`Acquisition ${fmtNum(r1(kpi.acqPipeQ))} · SPP ${fmtNum(r1(kpi.sppPipeQ))}`} />
       </div>
 
-      <MonthGrid title="Handovers by city" note={`Past months: actual handover dates (Site Khojo has these from ${mLabel(v.firstHo)}). Coming months: expected handover date of sites not yet handed over. "Overdue" = expected date already passed, not handed over.`}
+      <MonthGrid title="Handovers by city" note={`Past months: actual handover dates (Site Khojo has these from ${mLabel(v.firstHo)}). Coming months: expected handover date of sites not yet handed over.`}
         g={v.ho} v={v} minMonth={v.firstHo} />
-      <MonthGrid title="Energizations by city" note='Past months: actual energization dates. Coming months: expected energization date of sites not yet live. "Overdue" = expected date already passed, not live yet.'
+      <MonthGrid title="Energizations by city" note='Past months: actual energization dates. Coming months: expected energization date of sites not yet live.'
         g={v.en} v={v} />
 
       <div className="mb-5 grid gap-5 xl:grid-cols-2">
@@ -188,7 +188,7 @@ function Cell({ x, muted, dueOnly }) {
 
 function MonthGrid({ title, note, g, v, minMonth }) {
   const cities = v.sortCities(g)
-  const cols = [...v.past.map(m => ({ k: m, kind: 'past' })), { k: 'over', kind: 'over' }, { k: v.cur, kind: 'cur' }, ...v.future.map(m => ({ k: m, kind: 'fut' }))]
+  const cols = [...v.past.map(m => ({ k: m, kind: 'past' })), { k: v.cur, kind: 'cur' }, ...v.future.map(m => ({ k: m, kind: 'fut' }))]
   const tot = k => cities.reduce((a, c) => { const x = g[c]?.[k]; if (x) { a.qis += x.qis; a.sites += x.sites; a.dueQ += x.dueQ; a.dueS += x.dueS } return a }, { qis: 0, sites: 0, dueQ: 0, dueS: 0 })
   const ahead = c => cols.filter(x => x.kind !== 'past').reduce((a, x) => { const y = g[c]?.[x.k]; return a + (y ? y.qis + y.dueQ : 0) }, 0)
   const head = (x) => x.kind === 'over' ? 'Overdue' : mLabel(x.k)
@@ -210,7 +210,6 @@ function MonthGrid({ title, note, g, v, minMonth }) {
             <tr className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
               <th className="sticky left-0 bg-white px-3 py-2 text-left">City</th>
               <th colSpan={v.past.length} className="border-l border-slate-100 px-2 py-1 text-center">Trend (actual)</th>
-              <th className="border-l border-slate-100 bg-amber-50 px-2 py-1 text-center">Slipped</th>
               <th className="bg-emerald-50 px-2 py-1 text-center">This month</th>
               <th colSpan={v.future.length} className="bg-sky-50/60 px-2 py-1 text-center">Expected</th>
               <th className="border-l border-slate-100 px-2 py-1">Ahead</th>
@@ -218,7 +217,7 @@ function MonthGrid({ title, note, g, v, minMonth }) {
             <tr className="border-b border-slate-200 text-xs text-slate-600">
               <th className="sticky left-0 bg-white px-3 py-1.5" />
               {cols.map(x => <th key={x.k} className={`px-3 py-1.5 font-semibold ${bg(x)}`}>{head(x)}</th>)}
-              <th className="border-l border-slate-100 px-3 py-1.5 font-semibold" title="This month (done + expected) + overdue + coming months">Total</th>
+              <th className="border-l border-slate-100 px-3 py-1.5 font-semibold" title="This month (done + expected) + coming months">Total</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
