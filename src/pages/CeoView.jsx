@@ -160,7 +160,7 @@ export default function CeoView() {
       const pending = Math.max(0, r.target - r.live)
       const toFind = Math.max(0, pending - r.ho - r.expEn - r.other)
       return { ...r, pending, toFind, perMonth: pending / monthsLeft }
-    }).filter(r => r.target || r.live).sort((a, b) => (b.target - a.target) || a.city.localeCompare(b.city))
+    }).filter(r => r.target > 0).sort((a, b) => (b.target - a.target) || a.city.localeCompare(b.city))
     const other = targetRows.findIndex(r => r.city === 'Other cities')
     if (other >= 0) targetRows.push(targetRows.splice(other, 1)[0])
 
