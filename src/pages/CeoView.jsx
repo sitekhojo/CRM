@@ -102,7 +102,7 @@ export default function CeoView() {
       const n = ms.reduce((a, m) => a + m.w, 0)
       const months = prodMonths.map(m => {
         const h = acqAll.filter(d => teamCity(d.city) === b && ym(hoDate(d)) === m)
-        return { m, hoQ: h.reduce((a, d) => a + q(d), 0) }
+        return { m, hoQ: h.reduce((a, d) => a + q(d), 0), hoS: h.length }
       })
       const names = [...ms.filter(m => !m.head).map(m => m.name), ...ms.filter(m => m.head).map(m => `${m.name} (${m.w === 0.5 ? '½' : m.w < 0.34 ? '⅓' : Math.round(m.w * 100) + '%'})`)].join(', ')
       return { base: b, n, names, months }
@@ -111,7 +111,7 @@ export default function CeoView() {
       name: t.name, base: t.covers?.length ? t.covers.join(', ') : t.base_city, lead: t.is_lead,
       months: prodMonths.map(m => {
         const h = acqAll.filter(d => d.owner === t.name && ym(hoDate(d)) === m)
-        return { hoQ: h.reduce((a, d) => a + q(d), 0), added: acqSites.filter(d => d.owner === t.name && ym(d.created_at) === m).reduce((a, d) => a + q(d), 0) }
+        return { hoQ: h.reduce((a, d) => a + q(d), 0), hoS: h.length, added: acqSites.filter(d => d.owner === t.name && ym(d.created_at) === m).reduce((a, d) => a + q(d), 0) }
       }),
     })).sort((a, b) => (b.lead ? 1 : 0) - (a.lead ? 1 : 0) || a.base.localeCompare(b.base) || a.name.localeCompare(b.name))
 
@@ -366,20 +366,24 @@ function StageTable({ title, defs, by, v, splitNote }) {
 function Productivity({ v }) {
   const per = (x, n) => (n ? r1(x / n) : 0)
   const team = v.prod.reduce((a, p) => a + p.n, 0)
-  const allM = v.prodMonths.map((m, i) => v.prod.reduce((a, p) => a + p.months[i].hoQ, 0))
+  const allM = v.prodMonths.map((m, i) => v.prod.reduce((a, p) => ({ hoQ: a.hoQ + p.months[i].hoQ, hoS: a.hoS + p.months[i].hoS }), { hoQ: 0, hoS: 0 }))
   const label = (m, i) => mLabel(m) + (i === v.prodMonths.length - 1 ? ' (MTD)' : '')
   return (
     <section className="card mb-5 overflow-hidden">
       <div className="border-b border-slate-100 px-4 py-3">
         <h2 className="font-bold text-navy-900">Team productivity · Acquisition (Franchise + Private)</h2>
-        <p className="text-xs text-slate-500">Handover QIS in each city ÷ people working that city (Delhi NCR = Delhi, Gurugram, Noida, Ghaziabad, Faridabad). Zonal heads are split equally across the cities they cover. SPP team not counted.</p>
+        <p className="text-xs text-slate-500">Handovers (sites and QIS) in each city ÷ people working that city (Delhi NCR = Delhi, Gurugram, Noida, Ghaziabad, Faridabad). Zonal heads are split equally across the cities they cover. SPP team not counted.</p>
       </div>
       <div className="overflow-x-auto">
         <table className="min-w-full text-right text-sm">
           <thead>
+            <tr className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+              <th className="px-3 py-1" colSpan={2} />
+              {v.prodMonths.map((m, i) => <th key={m} colSpan={2} className="border-l border-slate-100 px-3 py-1 text-center">{label(m, i)}</th>)}
+            </tr>
             <tr className="border-b border-slate-200 text-xs text-slate-600">
               <th className="px-3 py-1.5 text-left">Team</th><th className="px-3 py-1.5">People</th>
-              {v.prodMonths.map((m, i) => <th key={m} className="border-l border-slate-100 px-3 py-1.5 font-semibold">{label(m, i)}<div className="text-[10px] font-normal text-slate-400">HO QIS / person</div></th>)}
+              {v.prodMonths.map(m => <Fragment key={m}><th className="border-l border-slate-100 px-3 py-1.5 font-semibold">HO sites / person</th><th className="px-3 py-1.5 font-semibold">HO QIS / person</th></Fragment>)}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -387,13 +391,13 @@ function Productivity({ v }) {
               <tr key={p.base}>
                 <td className="px-3 py-1.5 text-left"><div className="font-semibold text-slate-800">{p.base}</div><div className="text-[10px] text-slate-400">{p.names}</div></td>
                 <td className="px-3 py-1.5 font-semibold">{fmtPeople(p.n)}</td>
-                {p.months.map((x, i) => <ProdCell key={i} q={x.hoQ} n={p.n} per={per} />)}
+                {p.months.map((x, i) => <ProdCell key={i} x={x} n={p.n} per={per} />)}
               </tr>
             ))}
           </tbody>
           <tfoot><tr className="border-t-2 border-slate-300 bg-slate-50 font-bold">
             <td className="px-3 py-2 text-left">All teams</td><td className="px-3 py-2">{fmtPeople(Math.round(team * 10) / 10)}</td>
-            {allM.map((x, i) => <ProdCell key={i} q={x} n={team} per={per} />)}
+            {allM.map((x, i) => <ProdCell key={i} x={x} n={team} per={per} />)}
           </tr></tfoot>
         </table>
       </div>
@@ -406,7 +410,7 @@ function Productivity({ v }) {
         <table className="min-w-full text-right text-sm">
           <thead><tr className="border-b border-slate-200 text-xs text-slate-600">
             <th className="px-3 py-1.5 text-left">Person</th><th className="px-3 py-1.5 text-left">Covers</th>
-            {v.prodMonths.map((m, i) => <th key={m} className="border-l border-slate-100 px-3 py-1.5 font-semibold">{label(m, i)}<div className="text-[10px] font-normal text-slate-400">HO QIS · QIS added</div></th>)}
+            {v.prodMonths.map((m, i) => <th key={m} className="border-l border-slate-100 px-3 py-1.5 font-semibold">{label(m, i)}<div className="text-[10px] font-normal text-slate-400">HO sites · HO QIS · QIS added</div></th>)}
           </tr></thead>
           <tbody className="divide-y divide-slate-100">
             {v.personRows.map(p => (
@@ -415,6 +419,8 @@ function Productivity({ v }) {
                 <td className="px-3 py-1.5 text-left text-slate-500">{p.base}</td>
                 {p.months.map((x, i) => (
                   <td key={i} className="border-l border-slate-100 px-3 py-1.5">
+                    <span className={x.hoS ? 'font-semibold text-slate-700' : 'text-slate-300'}>{x.hoS}</span>
+                    <span className="text-slate-400"> · </span>
                     <span className={x.hoQ ? 'font-bold text-navy-900' : 'text-slate-300'}>{x.hoQ ? fmtNum(r1(x.hoQ)) : '0'}</span>
                     <span className="text-slate-400"> · {fmtNum(r1(x.added))}</span>
                   </td>
@@ -428,6 +434,9 @@ function Productivity({ v }) {
   )
 }
 
-function ProdCell({ q: qq, n, per }) {
-  return <td className="border-l border-slate-100 px-3 py-1.5"><span className="font-bold text-navy-900">{fmtNum(per(qq, n))}</span><div className="whitespace-nowrap text-[10px] text-slate-400">{fmtNum(r1(qq))} total</div></td>
+function ProdCell({ x, n, per }) {
+  return <>
+    <td className="border-l border-slate-100 px-3 py-1.5"><span className="font-semibold text-slate-700">{n ? (x.hoS / n).toFixed(1) : '0'}</span><div className="whitespace-nowrap text-[10px] text-slate-400">{x.hoS} site{x.hoS === 1 ? '' : 's'}</div></td>
+    <td className="px-3 py-1.5"><span className="font-bold text-navy-900">{fmtNum(per(x.hoQ, n))}</span><div className="whitespace-nowrap text-[10px] text-slate-400">{fmtNum(r1(x.hoQ))} QIS</div></td>
+  </>
 }
