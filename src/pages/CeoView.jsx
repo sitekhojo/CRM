@@ -320,15 +320,6 @@ function MonthGrid({ title, note, recs, v }) {
             ))}
             {!cities.length && <tr><td colSpan={cols.length + 2} className="py-6 text-center text-slate-400">Nothing for these site types</td></tr>}
           </tbody>
-          {rows.some(r => !r.pending) && (
-            <tbody>
-              <tr className="border-t border-slate-100 text-xs text-slate-500">
-                <td className="px-3 py-1.5" colSpan={10}>
-                  {(() => { const m = rows.filter(r => !r.pending); return `Already at target, not listed: ${m.length} cities (${m.map(r => r.city).join(', ')}) · target ${fmtNum(m.reduce((a, r) => a + r.target, 0))} · energized ${fmtNum(m.reduce((a, r) => a + r.live, 0))}. Included in the Total.` })()}
-                </td>
-              </tr>
-            </tbody>
-          )}
           <tfoot>
             <tr className="cursor-pointer border-t-2 border-slate-300 bg-slate-50 font-bold" onClick={() => setOpen(o => ({ ...o, __total: !o.__total }))}>
               <td className="sticky left-0 bg-slate-50 px-3 py-2 text-left"><span className="mr-1.5 inline-flex h-4 w-4 items-center justify-center rounded border border-slate-300 text-[11px] font-bold leading-none text-slate-600 print:hidden">{open.__total ? '−' : '+'}</span>Total</td>
@@ -595,6 +586,15 @@ function TargetTable({ v }) {
               </tr>
             ))}
           </tbody>
+          {rows.some(r => !r.pending) && (
+            <tbody>
+              <tr className="border-t border-slate-100 text-xs text-slate-500">
+                <td className="px-3 py-1.5" colSpan={10}>
+                  {(() => { const m = rows.filter(r => !r.pending); return `Already at target, not listed: ${m.length} cities (${m.map(r => r.city).join(', ')}) · target ${fmtNum(m.reduce((a, r) => a + r.target, 0))} · energized ${fmtNum(m.reduce((a, r) => a + r.live, 0))}. Included in the Total.` })()}
+                </td>
+              </tr>
+            </tbody>
+          )}
           <tfoot>
             <tr className="border-t-2 border-navy-900 bg-slate-50 font-bold">
               <td className="px-3 py-2">Total <span className="text-[10px] font-semibold text-slate-500">(city by city)</span></td>
