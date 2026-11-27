@@ -26,6 +26,17 @@ const addMonths = (m, k) => { const d = new Date(m + '-15'); d.setMonth(d.getMon
 const isIocl = d => d.extra?.spp_account === 'IOCL' || d.extra?.original_site_type === 'IOCL'
 const fmtPeople = n => (Number.isInteger(n) ? String(n) : n.toFixed(1))
 
+/**
+ * FY26-27 exit targets (QIS) — CEO View only. From the FY26-27 Target column of the Zo_and_targets sheet (total 3,034).
+ * Deliberately not shared with the Dashboard / FY exit plan.
+ */
+const CEO_TARGETS = {
+  Bengaluru: 934, Delhi: 525, Hyderabad: 480, Mumbai: 240, Gurugram: 205, Pune: 130, Chennai: 100, Noida: 95, Ghaziabad: 87,
+  Jaipur: 69, Ahmedabad: 30, Faridabad: 20, Agra: 20, Warangal: 16, Chandigarh: 12, Trivandrum: 11, Sonipat: 10, Panipat: 10,
+  Panchkula: 8, Calicut: 8, Vijayawada: 7, Kochi: 5, Kolkata: 5, Mohali: 4, Puducherry: 3,
+}
+const CEO_TARGET_TOTAL = 3034
+
 const ACQ_STAGES = [
   ['Scouted', ['scouting', 'scouted']], ['Feasibility', ['deployment_feasibility']], ['LOI', ['loi_signed']],
   ['Agreement', ['agreement_signed']], ['HO done', ['ho_done']], ['Hold', ['hold']],
@@ -129,7 +140,31 @@ export default function CeoView() {
       sppPipeQ: sum(alive.filter(d => d.site_type === 'SPP' && d.stage_category !== 'live' && keyOf[d.stage_id] !== 'ho_done')),
       awaitingEnQ: sum(alive.filter(d => keyOf[d.stage_id] === 'ho_done')),
     }
-    return { cur, past, future, hoRecs, enRecs, regionRank, acq, spp, prod, prodMonths, personRows, kpi, regionOf, asOf: now }
+    // FY target view (CEO only): where each city stands against its FY26-27 target and how the pending part is covered.
+    const fyEnd = (Number(fyStart.slice(0, 4)) + 1) + '-03'
+    const monthsLeft = Math.max(1, (Number(fyEnd.slice(0, 4)) - now.getFullYear()) * 12 + Number(fyEnd.slice(5)) - (now.getMonth() + 1) + 1)
+    const tgt = {}
+    const row = c => (tgt[c] ||= { city: c, target: CEO_TARGETS[c] || 0, live: 0, ho: 0, expEn: 0, other: 0 })
+    for (const c of Object.keys(CEO_TARGETS)) row(c)
+    for (const e of events) if (e.date && e.city) row(CEO_TARGETS[e.city] ? e.city : 'Other cities').live += e.qis
+    for (const d of alive) {
+      if (d.stage_category === 'live' || !d.city) continue
+      const k = keyOf[d.stage_id]
+      if (k === 'hold') continue
+      const r = row(CEO_TARGETS[d.city] ? d.city : 'Other cities')
+      if (k === 'ho_done') r.ho += q(d)
+      else if (d.extra?.expected_en && ym(d.extra.expected_en) >= cur && ym(d.extra.expected_en) <= fyEnd) r.expEn += q(d)
+      else r.other += q(d)
+    }
+    const targetRows = Object.values(tgt).map(r => {
+      const pending = Math.max(0, r.target - r.live)
+      const toFind = Math.max(0, pending - r.ho - r.expEn - r.other)
+      return { ...r, pending, toFind, perMonth: pending / monthsLeft }
+    }).filter(r => r.target || r.live).sort((a, b) => (b.target - a.target) || a.city.localeCompare(b.city))
+    const other = targetRows.findIndex(r => r.city === 'Other cities')
+    if (other >= 0) targetRows.push(targetRows.splice(other, 1)[0])
+
+    return { targetRows, monthsLeft, fyEnd, cur, past, future, hoRecs, enRecs, regionRank, acq, spp, prod, prodMonths, personRows, kpi, regionOf, asOf: now }
   }, [deals, ready, stages, team, cities, network])
 
   if (loading || !v) return <PageLoader />
@@ -154,6 +189,8 @@ export default function CeoView() {
         <Kpi label="Handed over, not live" value={fmtNum(kpi.awaitingEnQ)} sub="QIS awaiting energization" tone="amber" />
         <Kpi label="Open pipeline" value={fmtNum(r1(kpi.acqPipeQ + kpi.sppPipeQ))} sub={`Acquisition ${fmtNum(r1(kpi.acqPipeQ))} · SPP ${fmtNum(r1(kpi.sppPipeQ))}`} />
       </div>
+
+      <TargetTable v={v} />
 
       <MonthGrid title="Handovers by city" note="Past months: actual handover dates. Coming months: expected handover date of sites not yet handed over."
         recs={v.hoRecs} v={v} />
@@ -479,5 +516,93 @@ function ByPerson({ v, label }) {
         </table>
       </div>
     </>
+  )
+}
+
+function TargetTable({ v }) {
+  const rows = v.targetRows
+  const T = rows.reduce((a, r) => { for (const k of ['live', 'pending', 'ho', 'expEn', 'other', 'toFind', 'perMonth']) a[k] += r[k]; return a },
+    { live: 0, pending: 0, ho: 0, expEn: 0, other: 0, toFind: 0, perMonth: 0 })
+  T.target = CEO_TARGET_TOTAL
+  const totalPending = Math.max(0, CEO_TARGET_TOTAL - T.live)
+  const pct = r => (r.target ? Math.round((100 * r.live) / r.target) : null)
+  const n = x => (x ? fmtNum(Math.ceil(x)) : <span className="text-slate-300">·</span>)
+  const endLbl = mLabel(v.fyEnd)
+  const Bar = ({ r }) => {
+    const p = pct(r)
+    if (p === null) return <span className="text-slate-300">·</span>
+    const c = p >= 100 ? 'bg-emerald-500' : p >= 75 ? 'bg-sky-500' : 'bg-amber-500'
+    return (
+      <div className="flex items-center justify-end gap-2">
+        <div className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-100"><div className={`h-full ${c}`} style={{ width: `${Math.min(100, p)}%` }} /></div>
+        <span className={`w-10 text-right font-semibold ${p >= 100 ? 'text-emerald-700' : 'text-slate-700'}`}>{p}%</span>
+      </div>
+    )
+  }
+  const head = 'px-2 py-2 text-right font-semibold'
+  return (
+    <section className="card mb-5 overflow-hidden">
+      <div className="flex flex-wrap items-end gap-4 border-b border-slate-100 px-4 py-3">
+        <div className="min-w-0 flex-1">
+          <h2 className="font-bold text-navy-900">FY26-27 target · where we are</h2>
+          <p className="text-xs text-slate-500">Pending = target − energized, then how the pending is covered: handed over (awaiting energization) → pipeline expected to energize by {endLbl} → other open pipeline (no date / later) → still to find. Hold sites not counted.</p>
+        </div>
+        <div className="flex gap-5 text-right">
+          <div><p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">FY target</p><p className="text-xl font-extrabold text-navy-900">{fmtNum(CEO_TARGET_TOTAL)}</p></div>
+          <div><p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Energized</p><p className="text-xl font-extrabold text-emerald-700">{fmtNum(T.live)} <span className="text-sm">({Math.round((100 * T.live) / CEO_TARGET_TOTAL)}%)</span></p></div>
+          <div><p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Pending</p><p className="text-xl font-extrabold text-amber-700">{fmtNum(totalPending)}</p></div>
+          <div><p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Needed / month</p><p className="text-xl font-extrabold text-navy-900">{fmtNum(Math.ceil(totalPending / v.monthsLeft))}</p><p className="text-[10px] text-slate-500">{v.monthsLeft} months to {endLbl}</p></div>
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
+            <tr>
+              <th className="px-3 py-2 text-left font-semibold">City</th>
+              <th className={head}>FY target</th>
+              <th className={head}>Energized</th>
+              <th className={head}>% achieved</th>
+              <th className={`${head} border-l border-slate-200 bg-amber-50`}>Pending</th>
+              <th className={`${head} bg-emerald-50/60`}>Handed over</th>
+              <th className={`${head} bg-sky-50/70`}>Expected by {endLbl}</th>
+              <th className={head}>Other pipeline</th>
+              <th className={`${head} bg-rose-50`}>Still to find</th>
+              <th className={`${head} border-l border-slate-200`}>Needed / month</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.city} className="border-t border-slate-100 hover:bg-slate-50/60">
+                <td className="px-3 py-1.5 font-semibold text-slate-900">{r.city}</td>
+                <td className="px-2 py-1.5 text-right">{n(r.target)}</td>
+                <td className="px-2 py-1.5 text-right font-semibold">{n(r.live)}</td>
+                <td className="px-2 py-1.5"><Bar r={r} /></td>
+                <td className="border-l border-slate-200 bg-amber-50/50 px-2 py-1.5 text-right font-bold text-amber-800">{r.target ? (r.pending ? fmtNum(Math.ceil(r.pending)) : <span className="text-xs font-semibold text-emerald-700">Met</span>) : <span className="text-slate-300">·</span>}</td>
+                <td className="bg-emerald-50/30 px-2 py-1.5 text-right">{n(r.ho)}</td>
+                <td className="bg-sky-50/40 px-2 py-1.5 text-right">{n(r.expEn)}</td>
+                <td className="px-2 py-1.5 text-right text-slate-600">{n(r.other)}</td>
+                <td className={`bg-rose-50/40 px-2 py-1.5 text-right ${r.toFind ? 'font-bold text-rose-700' : ''}`}>{n(r.toFind)}</td>
+                <td className="border-l border-slate-200 px-2 py-1.5 text-right">{r.pending ? fmtNum(Math.ceil(r.perMonth)) : <span className="text-slate-300">·</span>}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="border-t-2 border-navy-900 bg-slate-50 font-bold">
+              <td className="px-3 py-2">Total <span className="text-[10px] font-semibold text-slate-500">(city by city)</span></td>
+              <td className="px-2 py-2 text-right">{fmtNum(CEO_TARGET_TOTAL)}</td>
+              <td className="px-2 py-2 text-right">{fmtNum(T.live)}</td>
+              <td className="px-2 py-2"><Bar r={T} /></td>
+              <td className="border-l border-slate-200 bg-amber-50 px-2 py-2 text-right text-amber-800">{fmtNum(Math.ceil(T.pending))}</td>
+              <td className="bg-emerald-50/60 px-2 py-2 text-right">{fmtNum(Math.ceil(T.ho))}</td>
+              <td className="bg-sky-50/70 px-2 py-2 text-right">{fmtNum(Math.ceil(T.expEn))}</td>
+              <td className="px-2 py-2 text-right">{fmtNum(Math.ceil(T.other))}</td>
+              <td className="bg-rose-50 px-2 py-2 text-right text-rose-700">{fmtNum(Math.ceil(T.toFind))}</td>
+              <td className="border-l border-slate-200 px-2 py-2 text-right">{fmtNum(Math.ceil(T.perMonth))}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <p className="border-t border-slate-100 px-4 py-2 text-[11px] text-slate-500">Pending is counted city by city, so cities above target don't offset cities below it; the headline Pending is the company number (3,034 − energized). City pipeline beyond its pending isn't shown as surplus. Every number is QIS, rounded up.</p>
+    </section>
   )
 }
