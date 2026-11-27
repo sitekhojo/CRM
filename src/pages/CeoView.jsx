@@ -153,8 +153,7 @@ export default function CeoView() {
       if (k === 'hold') continue
       const r = row(CEO_TARGETS[d.city] ? d.city : 'Other cities')
       if (k === 'ho_done') r.ho += q(d)
-      else if (d.extra?.expected_en && ym(d.extra.expected_en) >= cur && ym(d.extra.expected_en) <= fyEnd) r.expEn += q(d)
-      else r.other += q(d)
+      else r.expEn += q(d) // all open pipeline (any or no expected date) is counted as expected by FY end
     }
     const targetRows = Object.values(tgt).map(r => {
       const pending = Math.max(0, r.target - r.live)
@@ -548,7 +547,7 @@ function TargetTable({ v }) {
       <div className="flex flex-wrap items-end gap-4 border-b border-slate-100 px-4 py-3">
         <div className="min-w-0 flex-1">
           <h2 className="font-bold text-navy-900">FY26-27 target · where we are</h2>
-          <p className="text-xs text-slate-500">Pending = target − energized, then how the pending is covered: handed over (awaiting energization) → pipeline expected to energize by {endLbl} → other open pipeline (no date / later) → still to find. Hold sites not counted.</p>
+          <p className="text-xs text-slate-500">Pending = target − energized, then how the pending is covered: handed over (awaiting energization) → open pipeline, all counted as expected by {endLbl} → still to find. Hold sites not counted.</p>
         </div>
         <div className="flex gap-5 text-right">
           <div><p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">FY target</p><p className="text-xl font-extrabold text-navy-900">{fmtNum(CEO_TARGET_TOTAL)}</p></div>
@@ -568,7 +567,6 @@ function TargetTable({ v }) {
               <th className={`${head} border-l border-slate-200 bg-amber-50`}>Pending</th>
               <th className={`${head} bg-emerald-50/60`}>Handed over</th>
               <th className={`${head} bg-sky-50/70`}>Expected by {endLbl}</th>
-              <th className={head}>Other pipeline</th>
               <th className={`${head} bg-rose-50`}>Still to find</th>
               <th className={`${head} border-l border-slate-200`}>Needed / month</th>
             </tr>
@@ -589,7 +587,6 @@ function TargetTable({ v }) {
                 <td className="border-l border-slate-200 bg-amber-50/50 px-2 py-1.5 text-right"><span className="text-xs font-semibold text-emerald-700">Met</span></td>
                 <td className="bg-emerald-50/30 px-2 py-1.5 text-right">{n(M.ho)}</td>
                 <td className="bg-sky-50/40 px-2 py-1.5 text-right">{n(M.expEn)}</td>
-                <td className="px-2 py-1.5 text-right text-slate-600">{n(M.other)}</td>
                 <td className="bg-rose-50/40 px-2 py-1.5 text-right">{n(0)}</td>
                 <td className="border-l border-slate-200 px-2 py-1.5 text-right"><span className="text-slate-300">·</span></td>
               </tr>
@@ -605,7 +602,6 @@ function TargetTable({ v }) {
               <td className="border-l border-slate-200 bg-amber-50 px-2 py-2 text-right text-amber-800">{fmtNum(Math.ceil(T.pending))}</td>
               <td className="bg-emerald-50/60 px-2 py-2 text-right">{fmtNum(Math.ceil(T.ho))}</td>
               <td className="bg-sky-50/70 px-2 py-2 text-right">{fmtNum(Math.ceil(T.expEn))}</td>
-              <td className="px-2 py-2 text-right">{fmtNum(Math.ceil(T.other))}</td>
               <td className="bg-rose-50 px-2 py-2 text-right text-rose-700">{fmtNum(Math.ceil(T.toFind))}</td>
               <td className="border-l border-slate-200 px-2 py-2 text-right">{fmtNum(Math.ceil(T.perMonth))}</td>
             </tr>
@@ -627,7 +623,6 @@ function TargetRow({ r, n, Bar, sub }) {
       <td className="border-l border-slate-200 bg-amber-50/50 px-2 py-1.5 text-right font-bold text-amber-800">{r.pending ? fmtNum(Math.ceil(r.pending)) : <span className="text-xs font-semibold text-emerald-700">Met</span>}</td>
       <td className="bg-emerald-50/30 px-2 py-1.5 text-right">{n(r.ho)}</td>
       <td className="bg-sky-50/40 px-2 py-1.5 text-right">{n(r.expEn)}</td>
-      <td className="px-2 py-1.5 text-right text-slate-600">{n(r.other)}</td>
       <td className={`bg-rose-50/40 px-2 py-1.5 text-right ${r.toFind ? 'font-bold text-rose-700' : ''}`}>{n(r.toFind)}</td>
       <td className="border-l border-slate-200 px-2 py-1.5 text-right">{r.pending ? fmtNum(Math.ceil(r.perMonth)) : <span className="text-slate-300">·</span>}</td>
     </tr>
