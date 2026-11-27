@@ -94,7 +94,7 @@ export default function CeoView() {
     const share = {} // team city → [{ name, w }]
     for (const t of people) {
       const cs = t.covers?.length ? t.covers : [t.base_city]
-      for (const c of cs) (share[c] ||= []).push({ name: t.name.split(' ')[0], w: 1 / cs.length, head: !!t.covers?.length })
+      for (const c of cs) (share[c] ||= []).push({ name: t.covers?.length ? t.name.split(' ')[0] : t.name, w: 1 / cs.length, head: !!t.covers?.length })
     }
     const acqSites = alive.filter(d => ['Franchise', 'Private'].includes(d.site_type) && !['qis_tracker', 'payment_tracker', 'spp_pipeline'].includes(d.extra?.source))
     const acqAll = alive.filter(d => ['Franchise', 'Private'].includes(d.site_type))
@@ -108,10 +108,10 @@ export default function CeoView() {
       return { base: b, n, names, months }
     }).sort((a, b) => b.n - a.n || a.base.localeCompare(b.base))
     const personRows = people.map(t => ({
-      name: t.name, base: t.covers?.length ? t.covers.join(', ') : t.base_city, lead: t.is_lead,
+      name: t.name, base: t.covers?.length ? t.covers.join(', ') : t.base_city, group: t.covers?.length ? 'Zonal heads' : t.base_city, lead: t.is_lead,
       months: prodMonths.map(m => {
         const h = acqAll.filter(d => d.owner === t.name && ym(hoDate(d)) === m)
-        return { hoQ: h.reduce((a, d) => a + q(d), 0), hoS: h.length, added: acqSites.filter(d => d.owner === t.name && ym(d.created_at) === m).reduce((a, d) => a + q(d), 0) }
+        return { hoQ: h.reduce((a, d) => a + q(d), 0), hoS: h.length, added: acqSites.filter(d => d.owner === t.name && ym(d.created_at) === m).length }
       }),
     })).sort((a, b) => (b.lead ? 1 : 0) - (a.lead ? 1 : 0) || a.base.localeCompare(b.base) || a.name.localeCompare(b.name))
 
@@ -402,34 +402,7 @@ function Productivity({ v }) {
         </table>
       </div>
 
-      <div className="border-t border-slate-100 px-4 py-3">
-        <h3 className="text-sm font-bold text-navy-900">By person</h3>
-        <p className="text-xs text-slate-500">Handovers credited to the site owner. Older sites sit under zonal heads, so their numbers include their team's earlier work.</p>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="min-w-full text-right text-sm">
-          <thead><tr className="border-b border-slate-200 text-xs text-slate-600">
-            <th className="px-3 py-1.5 text-left">Person</th><th className="px-3 py-1.5 text-left">Covers</th>
-            {v.prodMonths.map((m, i) => <th key={m} className="border-l border-slate-100 px-3 py-1.5 font-semibold">{label(m, i)}<div className="text-[10px] font-normal text-slate-400">HO sites · HO QIS · QIS added</div></th>)}
-          </tr></thead>
-          <tbody className="divide-y divide-slate-100">
-            {v.personRows.map(p => (
-              <tr key={p.name}>
-                <td className="px-3 py-1.5 text-left font-semibold text-slate-800">{p.name}{p.lead && <span className="ml-1 rounded bg-slate-100 px-1 text-[10px] font-semibold text-slate-500">lead</span>}</td>
-                <td className="px-3 py-1.5 text-left text-slate-500">{p.base}</td>
-                {p.months.map((x, i) => (
-                  <td key={i} className="border-l border-slate-100 px-3 py-1.5">
-                    <span className={x.hoS ? 'font-semibold text-slate-700' : 'text-slate-300'}>{x.hoS}</span>
-                    <span className="text-slate-400"> · </span>
-                    <span className={x.hoQ ? 'font-bold text-navy-900' : 'text-slate-300'}>{x.hoQ ? fmtNum(r1(x.hoQ)) : '0'}</span>
-                    <span className="text-slate-400"> · {fmtNum(r1(x.added))}</span>
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <ByPerson v={v} label={label} />
     </section>
   )
 }
@@ -439,4 +412,62 @@ function ProdCell({ x, n, per }) {
     <td className="border-l border-slate-100 px-3 py-1.5"><span className="font-semibold text-slate-700">{n ? (x.hoS / n).toFixed(1) : '0'}</span><div className="whitespace-nowrap text-[10px] text-slate-400">{x.hoS} site{x.hoS === 1 ? '' : 's'}</div></td>
     <td className="px-3 py-1.5"><span className="font-bold text-navy-900">{fmtNum(per(x.hoQ, n))}</span><div className="whitespace-nowrap text-[10px] text-slate-400">{fmtNum(r1(x.hoQ))} QIS</div></td>
   </>
+}
+
+function ByPerson({ v, label }) {
+  const groups = []
+  for (const p of v.personRows) { let g = groups.find(x => x.name === p.group); if (!g) groups.push(g = { name: p.group, rows: [] }); g.rows.push(p) }
+  groups.sort((a, b) => (a.name === 'Zonal heads' ? -1 : b.name === 'Zonal heads' ? 1 : b.rows.length - a.rows.length || a.name.localeCompare(b.name)))
+  const shade = i => (i % 2 ? 'bg-slate-50/60' : '')
+  const num = (n, strong) => (n ? <span className={strong ? 'font-bold text-navy-900' : 'font-semibold text-slate-700'}>{fmtNum(r1(n))}</span> : <span className="text-slate-300">–</span>)
+  const sumG = (rows, i, k) => rows.reduce((a, p) => a + p.months[i][k], 0)
+  const cells = (ms, sub) => ms.map((x, i) => (
+    <Fragment key={i}>
+      <td className={`border-l border-slate-200 px-3 py-1.5 ${shade(i)}`}>{sub ? <span className="font-semibold text-slate-500">{fmtNum(x.added)}</span> : num(x.added)}</td>
+      <td className={`px-3 py-1.5 ${shade(i)}`}>{sub ? <span className="font-semibold text-slate-500">{fmtNum(x.hoS)}</span> : num(x.hoS)}</td>
+      <td className={`px-3 py-1.5 ${shade(i)}`}>{sub ? <span className="font-bold text-slate-600">{fmtNum(r1(x.hoQ))}</span> : num(x.hoQ, true)}</td>
+    </Fragment>
+  ))
+  return (
+    <>
+      <div className="border-t border-slate-100 px-4 py-3">
+        <h3 className="text-sm font-bold text-navy-900">By person</h3>
+        <p className="text-xs text-slate-500">Sites added = new sites the person brought in that month. Handovers are credited to the site owner; older sites sit under zonal heads, so heads' numbers include earlier team work.</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-right text-sm">
+          <thead>
+            <tr className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+              <th className="sticky left-0 bg-white px-3 py-1" />
+              {v.prodMonths.map((m, i) => <th key={m} colSpan={3} className={`border-l border-slate-200 px-3 py-1.5 text-center ${shade(i)}`}>{label(m, i)}</th>)}
+            </tr>
+            <tr className="border-b border-slate-200 text-xs text-slate-600">
+              <th className="sticky left-0 bg-white px-3 py-1.5 text-left">Person</th>
+              {v.prodMonths.map((m, i) => (
+                <Fragment key={m}>
+                  <th className={`border-l border-slate-200 px-3 py-1.5 font-semibold ${shade(i)}`}>Sites added</th>
+                  <th className={`px-3 py-1.5 font-semibold ${shade(i)}`}>Sites HO</th>
+                  <th className={`px-3 py-1.5 font-semibold ${shade(i)}`}>QIS HO</th>
+                </Fragment>
+              ))}
+            </tr>
+          </thead>
+          {groups.map(g => (
+            <tbody key={g.name} className="divide-y divide-slate-100 border-b border-slate-200">
+              <tr className="bg-slate-100/80 text-xs">
+                <td className="sticky left-0 bg-slate-100 px-3 py-1 text-left font-bold uppercase tracking-wide text-slate-600">{g.name}{g.rows.length > 1 && <span className="ml-1 font-normal normal-case text-slate-400">· {g.rows.length} people</span>}</td>
+                {g.rows.length > 1 ? cells(v.prodMonths.map((_, i) => ({ added: sumG(g.rows, i, 'added'), hoS: sumG(g.rows, i, 'hoS'), hoQ: sumG(g.rows, i, 'hoQ') })), true) : v.prodMonths.map(m => <td key={m} colSpan={3} className="border-l border-slate-200" />)}
+              </tr>
+              {g.rows.map(p => (
+                <tr key={p.name} className="hover:bg-slate-50">
+                  <td className="sticky left-0 whitespace-nowrap bg-white py-1.5 pl-6 pr-3 text-left font-semibold text-slate-800">{p.name}{g.name === 'Zonal heads' && <span className="ml-2 text-[11px] font-normal text-slate-400">{p.base}</span>}</td>
+                  {cells(p.months)}
+                </tr>
+              ))}
+            </tbody>
+          ))}
+        </table>
+      </div>
+    </>
+  )
 }
