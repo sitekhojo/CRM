@@ -414,54 +414,64 @@ function ProdCell({ x, n, per }) {
   </>
 }
 
+// heat colours per metric: sites added (amber), sites HO (sky), QIS HO (emerald)
+const HEAT = { added: [245, 158, 11], hoS: [14, 165, 233], hoQ: [16, 185, 129] }
+const METRICS = [['added', 'Sites added'], ['hoS', 'Sites HO'], ['hoQ', 'QIS HO']]
+
 function ByPerson({ v, label }) {
   const groups = []
   for (const p of v.personRows) { let g = groups.find(x => x.name === p.group); if (!g) groups.push(g = { name: p.group, rows: [] }); g.rows.push(p) }
   groups.sort((a, b) => (a.name === 'Zonal heads' ? -1 : b.name === 'Zonal heads' ? 1 : b.rows.length - a.rows.length || a.name.localeCompare(b.name)))
-  const shade = i => (i % 2 ? 'bg-slate-50/60' : '')
-  const num = (n, strong) => (n ? <span className={strong ? 'font-bold text-navy-900' : 'font-semibold text-slate-700'}>{fmtNum(r1(n))}</span> : <span className="text-slate-300">–</span>)
+  // max per month × metric, for shading
+  const max = v.prodMonths.map((_, i) => Object.fromEntries(METRICS.map(([k]) => [k, Math.max(1, ...v.personRows.map(p => p.months[i][k]))])))
   const sumG = (rows, i, k) => rows.reduce((a, p) => a + p.months[i][k], 0)
-  const cells = (ms, sub) => ms.map((x, i) => (
-    <Fragment key={i}>
-      <td className={`border-l border-slate-200 px-3 py-1.5 ${shade(i)}`}>{sub ? <span className="font-semibold text-slate-500">{fmtNum(x.added)}</span> : num(x.added)}</td>
-      <td className={`px-3 py-1.5 ${shade(i)}`}>{sub ? <span className="font-semibold text-slate-500">{fmtNum(x.hoS)}</span> : num(x.hoS)}</td>
-      <td className={`px-3 py-1.5 ${shade(i)}`}>{sub ? <span className="font-bold text-slate-600">{fmtNum(r1(x.hoQ))}</span> : num(x.hoQ, true)}</td>
-    </Fragment>
-  ))
+  const edge = j => (j === 0 ? 'border-l-2 border-l-slate-300' : 'border-l border-l-slate-200')
+  const personCells = ms => ms.flatMap((x, i) => METRICS.map(([k], j) => {
+    const n = x[k], t = n / max[i][k], [r, g, b] = HEAT[k]
+    return (
+      <td key={`${i}${k}`} className={`${edge(j)} px-3 py-1.5 text-center tabular-nums`} style={n ? { backgroundColor: `rgba(${r},${g},${b},${0.08 + 0.42 * t})` } : undefined}>
+        {n ? <span className={t > 0.6 ? 'font-bold text-slate-900' : 'font-semibold text-slate-700'}>{fmtNum(r1(n))}</span> : <span className="text-slate-300">–</span>}
+      </td>
+    )
+  }))
+  const groupCells = rows => v.prodMonths.flatMap((_, i) => METRICS.map(([k], j) => (
+    <td key={`${i}${k}`} className={`${edge(j)} px-3 py-1 text-center text-xs font-bold tabular-nums text-slate-600`}>{fmtNum(r1(sumG(rows, i, k))) || '–'}</td>
+  )))
   return (
     <>
       <div className="border-t border-slate-100 px-4 py-3">
         <h3 className="text-sm font-bold text-navy-900">By person</h3>
-        <p className="text-xs text-slate-500">Sites added = new sites the person brought in that month. Handovers are credited to the site owner; older sites sit under zonal heads, so heads' numbers include earlier team work.</p>
+        <p className="text-xs text-slate-500">
+          <span className="mr-2 inline-block h-2.5 w-2.5 rounded-sm align-middle" style={{ background: 'rgba(245,158,11,.45)' }} />Sites added (brought in)
+          <span className="ml-3 mr-2 inline-block h-2.5 w-2.5 rounded-sm align-middle" style={{ background: 'rgba(14,165,233,.45)' }} />Sites handed over
+          <span className="ml-3 mr-2 inline-block h-2.5 w-2.5 rounded-sm align-middle" style={{ background: 'rgba(16,185,129,.45)' }} />QIS handed over
+          <span className="ml-3">· darker = higher that month. Handovers credited to the site owner; older sites sit under zonal heads.</span>
+        </p>
       </div>
       <div className="overflow-x-auto">
-        <table className="min-w-full text-right text-sm">
+        <table className="min-w-full border-collapse text-sm">
           <thead>
-            <tr className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
-              <th className="sticky left-0 bg-white px-3 py-1" />
-              {v.prodMonths.map((m, i) => <th key={m} colSpan={3} className={`border-l border-slate-200 px-3 py-1.5 text-center ${shade(i)}`}>{label(m, i)}</th>)}
+            <tr className="text-[11px] font-bold uppercase tracking-wide text-slate-600">
+              <th className="sticky left-0 bg-white px-3 py-1.5" />
+              {v.prodMonths.map((m, i) => <th key={m} colSpan={3} className="border-l-2 border-l-slate-300 bg-slate-100 px-3 py-1.5 text-center">{label(m, i)}</th>)}
             </tr>
-            <tr className="border-b border-slate-200 text-xs text-slate-600">
+            <tr className="border-b-2 border-slate-300 text-xs text-slate-600">
               <th className="sticky left-0 bg-white px-3 py-1.5 text-left">Person</th>
-              {v.prodMonths.map((m, i) => (
-                <Fragment key={m}>
-                  <th className={`border-l border-slate-200 px-3 py-1.5 font-semibold ${shade(i)}`}>Sites added</th>
-                  <th className={`px-3 py-1.5 font-semibold ${shade(i)}`}>Sites HO</th>
-                  <th className={`px-3 py-1.5 font-semibold ${shade(i)}`}>QIS HO</th>
-                </Fragment>
-              ))}
+              {v.prodMonths.map(m => METRICS.map(([k, l], j) => (
+                <th key={m + k} className={`${edge(j)} px-3 py-1.5 text-center font-semibold`} style={{ borderBottom: `3px solid rgba(${HEAT[k].join(',')},.6)` }}>{l}</th>
+              )))}
             </tr>
           </thead>
           {groups.map(g => (
-            <tbody key={g.name} className="divide-y divide-slate-100 border-b border-slate-200">
-              <tr className="bg-slate-100/80 text-xs">
-                <td className="sticky left-0 bg-slate-100 px-3 py-1 text-left font-bold uppercase tracking-wide text-slate-600">{g.name}{g.rows.length > 1 && <span className="ml-1 font-normal normal-case text-slate-400">· {g.rows.length} people</span>}</td>
-                {g.rows.length > 1 ? cells(v.prodMonths.map((_, i) => ({ added: sumG(g.rows, i, 'added'), hoS: sumG(g.rows, i, 'hoS'), hoQ: sumG(g.rows, i, 'hoQ') })), true) : v.prodMonths.map(m => <td key={m} colSpan={3} className="border-l border-slate-200" />)}
+            <tbody key={g.name} className="border-b border-slate-200">
+              <tr className="bg-slate-100">
+                <td className="sticky left-0 bg-slate-100 px-3 py-1 text-left text-xs font-bold uppercase tracking-wide text-slate-600">{g.name}<span className="ml-1 font-normal normal-case text-slate-400">· {g.rows.length} {g.rows.length === 1 ? 'person' : 'people'}</span></td>
+                {groupCells(g.rows)}
               </tr>
               {g.rows.map(p => (
-                <tr key={p.name} className="hover:bg-slate-50">
+                <tr key={p.name} className="border-t border-slate-100">
                   <td className="sticky left-0 whitespace-nowrap bg-white py-1.5 pl-6 pr-3 text-left font-semibold text-slate-800">{p.name}{g.name === 'Zonal heads' && <span className="ml-2 text-[11px] font-normal text-slate-400">{p.base}</span>}</td>
-                  {cells(p.months)}
+                  {personCells(p.months)}
                 </tr>
               ))}
             </tbody>
