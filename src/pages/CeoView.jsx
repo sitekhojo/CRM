@@ -205,6 +205,7 @@ function Cell({ x, muted, dueOnly }) {
 
 function MonthGrid({ title, note, recs, v }) {
   const [types, setTypes] = useState(ALL_TYPES)
+  const [open, setOpen] = useState({})
   const cols = [...v.past.map(m => ({ k: m, kind: 'past' })), { k: v.cur, kind: 'cur' }, ...v.future.map(m => ({ k: m, kind: 'fut' }))]
   const shown = new Set(cols.map(c => c.k))
   const g = useMemo(() => {
@@ -212,16 +213,21 @@ function MonthGrid({ title, note, recs, v }) {
     const out = {}
     for (const r of recs) {
       if (!shown.has(r.month) || !(types.includes(r.type) || all)) continue
-      const x = ((out[r.city || 'Not set'] ||= {})[r.month] ||= { qis: 0, dueQ: 0 })
-      if (r.due) x.dueQ += r.qis; else x.qis += r.qis
+      const c = r.city || 'Not set'
+      for (const key of [c, `${c}\u0000${r.type}`]) {
+        const x = ((out[key] ||= {})[r.month] ||= { qis: 0, dueQ: 0 })
+        if (r.due) x.dueQ += r.qis; else x.qis += r.qis
+      }
     }
     return out
   }, [recs, types]) // eslint-disable-line
   const ahead = c => cols.filter(x => x.kind !== 'past').reduce((a, x) => { const y = g[c]?.[x.k]; return a + (y ? y.qis + y.dueQ : 0) }, 0)
   // only cities with something to show in the visible months
-  const cities = Object.keys(g).filter(c => cols.some(x => { const y = g[c][x.k]; return y && (y.qis || y.dueQ) }))
+  const cities = Object.keys(g).filter(c => !c.includes('\u0000')).filter(c => cols.some(x => { const y = g[c][x.k]; return y && (y.qis || y.dueQ) }))
     .sort((a, b) => v.regionRank(a) - v.regionRank(b) || ahead(b) - ahead(a) || a.localeCompare(b))
   const tot = k => cities.reduce((a, c) => { const x = g[c]?.[k]; if (x) { a.qis += x.qis; a.dueQ += x.dueQ } return a }, { qis: 0, dueQ: 0 })
+  const subTypes = c => TYPES.map(([k]) => k).filter(k => types.includes(k) && g[`${c}\u0000${k}`])
+  const allOpen = cities.length > 0 && cities.every(c => open[c]) && !!open.__total
   const bg = x => (x.kind === 'cur' ? 'bg-emerald-50' : x.kind === 'fut' ? 'bg-sky-50/60' : '')
   const cell = (x, y) => <Cell x={y} dueOnly={x.kind === 'fut'} muted={x.kind === 'past'} />
   return (
@@ -231,7 +237,10 @@ function MonthGrid({ title, note, recs, v }) {
           <h2 className="font-bold text-navy-900">{title}{types.length < ALL_TYPES.length && <span className="ml-2 text-sm font-semibold text-slate-500">· {types.join(' + ')}</span>}</h2>
           <p className="text-xs text-slate-500">{note} Current month: done <span className="font-semibold text-sky-700">+ still expected</span>.</p>
         </div>
-        <TypeTicks value={types} onChange={setTypes} />
+        <div className="flex flex-col items-end gap-1.5">
+          <TypeTicks value={types} onChange={setTypes} />
+          <button className="text-xs font-semibold text-brand-700 hover:underline print:hidden" onClick={() => setOpen(allOpen ? {} : { ...Object.fromEntries(cities.map(c => [c, true])), __total: true })}>{allOpen ? '− Collapse all' : '+ Expand all by site type'}</button>
+        </div>
       </div>
       <div className="overflow-x-auto">
         <table className="min-w-full text-right text-sm">
@@ -251,20 +260,46 @@ function MonthGrid({ title, note, recs, v }) {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {cities.map(c => (
-              <tr key={c}>
-                <td className="sticky left-0 bg-white px-3 py-1.5 text-left font-semibold text-slate-800">{c}<span className="ml-1 text-[10px] font-normal text-slate-400">{v.regionOf[c] || ''}</span></td>
-                {cols.map(x => <td key={x.k} className={`px-3 py-1.5 ${bg(x)}`}>{cell(x, g[c]?.[x.k])}</td>)}
-                <td className="border-l border-slate-100 px-3 py-1.5 font-bold text-navy-900">{fmtNum(r1(ahead(c))) || '·'}</td>
-              </tr>
+              <Fragment key={c}>
+                <tr className="cursor-pointer hover:bg-slate-50" onClick={() => setOpen(o => ({ ...o, [c]: !o[c] }))}>
+                  <td className="sticky left-0 whitespace-nowrap bg-white px-3 py-1.5 text-left font-semibold text-slate-800">
+                    <span className="mr-1.5 inline-flex h-4 w-4 items-center justify-center rounded border border-slate-300 text-[11px] font-bold leading-none text-slate-600 print:hidden">{open[c] ? '−' : '+'}</span>
+                    {c}<span className="ml-1 text-[10px] font-normal text-slate-400">{v.regionOf[c] || ''}</span>
+                  </td>
+                  {cols.map(x => <td key={x.k} className={`px-3 py-1.5 ${bg(x)}`}>{cell(x, g[c]?.[x.k])}</td>)}
+                  <td className="border-l border-slate-100 px-3 py-1.5 font-bold text-navy-900">{fmtNum(r1(ahead(c))) || '·'}</td>
+                </tr>
+                {open[c] && subTypes(c).map(t => {
+                  const k = `${c}\u0000${t}`
+                  return (
+                    <tr key={k} className="bg-slate-50/70 text-[13px]">
+                      <td className="sticky left-0 bg-slate-50 py-1 pl-10 pr-3 text-left text-slate-600">{t === 'SPP' ? 'SPP' : t === 'Private' ? 'PVT · Private' : 'FRN · Franchise'}</td>
+                      {cols.map(x => <td key={x.k} className={`px-3 py-1 ${bg(x)}`}>{cell(x, g[k]?.[x.k])}</td>)}
+                      <td className="border-l border-slate-100 px-3 py-1 font-semibold text-slate-700">{fmtNum(r1(ahead(k))) || '·'}</td>
+                    </tr>
+                  )
+                })}
+              </Fragment>
             ))}
             {!cities.length && <tr><td colSpan={cols.length + 2} className="py-6 text-center text-slate-400">Nothing for these site types</td></tr>}
           </tbody>
           <tfoot>
-            <tr className="border-t-2 border-slate-300 bg-slate-50 font-bold">
-              <td className="sticky left-0 bg-slate-50 px-3 py-2 text-left">Total</td>
+            <tr className="cursor-pointer border-t-2 border-slate-300 bg-slate-50 font-bold" onClick={() => setOpen(o => ({ ...o, __total: !o.__total }))}>
+              <td className="sticky left-0 bg-slate-50 px-3 py-2 text-left"><span className="mr-1.5 inline-flex h-4 w-4 items-center justify-center rounded border border-slate-300 text-[11px] font-bold leading-none text-slate-600 print:hidden">{open.__total ? '−' : '+'}</span>Total</td>
               {cols.map(x => <td key={x.k} className={`px-3 py-2 ${bg(x)}`}>{cell(x, tot(x.k))}</td>)}
               <td className="border-l border-slate-100 px-3 py-2 text-navy-900">{fmtNum(r1(cities.reduce((a, c) => a + ahead(c), 0)))}</td>
             </tr>
+            {open.__total && TYPES.map(([t]) => t).filter(t => types.includes(t)).map(t => {
+              const keys = cities.map(c => `${c}\u0000${t}`)
+              const tt = k => keys.reduce((a, kk) => { const x = g[kk]?.[k]; if (x) { a.qis += x.qis; a.dueQ += x.dueQ } return a }, { qis: 0, dueQ: 0 })
+              return (
+                <tr key={t} className="border-t border-slate-200 bg-slate-50/70 text-[13px]">
+                  <td className="sticky left-0 bg-slate-50 py-1 pl-10 pr-3 text-left text-slate-600">{t === 'SPP' ? 'SPP' : t === 'Private' ? 'PVT · Private' : 'FRN · Franchise'}</td>
+                  {cols.map(x => <td key={x.k} className={`px-3 py-1 ${bg(x)}`}>{cell(x, tt(x.k))}</td>)}
+                  <td className="border-l border-slate-100 px-3 py-1 font-semibold text-slate-700">{fmtNum(r1(keys.reduce((a, kk) => a + ahead(kk), 0)))}</td>
+                </tr>
+              )
+            })}
           </tfoot>
         </table>
       </div>
