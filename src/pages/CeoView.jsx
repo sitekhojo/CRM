@@ -320,6 +320,15 @@ function MonthGrid({ title, note, recs, v }) {
             ))}
             {!cities.length && <tr><td colSpan={cols.length + 2} className="py-6 text-center text-slate-400">Nothing for these site types</td></tr>}
           </tbody>
+          {rows.some(r => !r.pending) && (
+            <tbody>
+              <tr className="border-t border-slate-100 text-xs text-slate-500">
+                <td className="px-3 py-1.5" colSpan={10}>
+                  {(() => { const m = rows.filter(r => !r.pending); return `Already at target, not listed: ${m.length} cities (${m.map(r => r.city).join(', ')}) · target ${fmtNum(m.reduce((a, r) => a + r.target, 0))} · energized ${fmtNum(m.reduce((a, r) => a + r.live, 0))}. Included in the Total.` })()}
+                </td>
+              </tr>
+            </tbody>
+          )}
           <tfoot>
             <tr className="cursor-pointer border-t-2 border-slate-300 bg-slate-50 font-bold" onClick={() => setOpen(o => ({ ...o, __total: !o.__total }))}>
               <td className="sticky left-0 bg-slate-50 px-3 py-2 text-left"><span className="mr-1.5 inline-flex h-4 w-4 items-center justify-center rounded border border-slate-300 text-[11px] font-bold leading-none text-slate-600 print:hidden">{open.__total ? '−' : '+'}</span>Total</td>
@@ -571,7 +580,7 @@ function TargetTable({ v }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map(r => (
+            {rows.filter(r => r.pending > 0).map(r => (
               <tr key={r.city} className="border-t border-slate-100 hover:bg-slate-50/60">
                 <td className="px-3 py-1.5 font-semibold text-slate-900">{r.city}</td>
                 <td className="px-2 py-1.5 text-right">{n(r.target)}</td>
