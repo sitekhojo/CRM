@@ -125,6 +125,17 @@ export default function CeoView() {
         return { hoQ: h.reduce((a, d) => a + q(d), 0), hoS: h.length, added: acqSites.filter(d => d.owner === t.name && ym(d.created_at) === m).length }
       }),
     })).sort((a, b) => (b.lead ? 1 : 0) - (a.lead ? 1 : 0) || a.base.localeCompare(b.base) || a.name.localeCompare(b.name))
+    // Zonal head row = their own sites + everything their city teams did (the team rolls up to the head).
+    for (const t of people.filter(x => x.covers?.length)) {
+      const hr = personRows.find(r => r.name === t.name)
+      const members = personRows.filter(r => r.group !== 'Zonal heads' && t.covers.includes(r.group))
+      hr.isHead = true
+      hr.months = hr.months.map((x, i) => {
+        const o = { ...x }
+        for (const mb of members) for (const k of ['hoQ', 'hoS', 'added']) o[k] += mb.months[i][k]
+        return o
+      })
+    }
 
     // headline numbers (all site types)
     const sum = xs => xs.reduce((a, d) => a + q(d), 0)
@@ -466,11 +477,11 @@ function ByPerson({ v, label }) {
   for (const p of v.personRows) { let g = groups.find(x => x.name === p.group); if (!g) groups.push(g = { name: p.group, rows: [] }); g.rows.push(p) }
   groups.sort((a, b) => (a.name === 'Zonal heads' ? -1 : b.name === 'Zonal heads' ? 1 : b.rows.length - a.rows.length || a.name.localeCompare(b.name)))
   // max per month × metric, for shading
-  const max = v.prodMonths.map((_, i) => Object.fromEntries(METRICS.map(([k]) => [k, Math.max(1, ...v.personRows.map(p => p.months[i][k]))])))
+  const max = v.prodMonths.map((_, i) => Object.fromEntries(METRICS.map(([k]) => [k, Math.max(1, ...v.personRows.filter(p => !p.isHead).map(p => p.months[i][k]))])))
   const sumG = (rows, i, k) => rows.reduce((a, p) => a + p.months[i][k], 0)
   const edge = j => (j === 0 ? 'border-l-2 border-l-slate-300' : 'border-l border-l-slate-200')
   const personCells = ms => ms.flatMap((x, i) => METRICS.map(([k], j) => {
-    const n = x[k], t = n / max[i][k], [r, g, b] = HEAT[k]
+    const n = x[k], t = Math.min(1, n / max[i][k]), [r, g, b] = HEAT[k]
     return (
       <td key={`${i}${k}`} className={`${edge(j)} px-3 py-1.5 text-center tabular-nums`} style={n ? { backgroundColor: `rgba(${r},${g},${b},${0.08 + 0.42 * t})` } : undefined}>
         {n ? <span className={t > 0.6 ? 'font-bold text-slate-900' : 'font-semibold text-slate-700'}>{fmtNum(r1(n))}</span> : <span className="text-slate-300">–</span>}
@@ -488,7 +499,7 @@ function ByPerson({ v, label }) {
           <span className="mr-2 inline-block h-2.5 w-2.5 rounded-sm align-middle" style={{ background: 'rgba(245,158,11,.45)' }} />Sites added (brought in)
           <span className="ml-3 mr-2 inline-block h-2.5 w-2.5 rounded-sm align-middle" style={{ background: 'rgba(14,165,233,.45)' }} />Sites handed over
           <span className="ml-3 mr-2 inline-block h-2.5 w-2.5 rounded-sm align-middle" style={{ background: 'rgba(16,185,129,.45)' }} />QIS handed over
-          <span className="ml-3">· darker = higher that month. Handovers credited to the site owner; older sites sit under zonal heads.</span>
+          <span className="ml-3">· darker = higher that month. Handovers credited to the site owner. Zonal head rows = their own sites + their city teams' total.</span>
         </p>
       </div>
       <div className="overflow-x-auto">
@@ -513,7 +524,7 @@ function ByPerson({ v, label }) {
               </tr>
               {g.rows.map(p => (
                 <tr key={p.name} className="border-t border-slate-100">
-                  <td className="sticky left-0 whitespace-nowrap bg-white py-1.5 pl-6 pr-3 text-left font-semibold text-slate-800">{p.name}{g.name === 'Zonal heads' && <span className="ml-2 text-[11px] font-normal text-slate-400">{p.base}</span>}</td>
+                  <td className="sticky left-0 whitespace-nowrap bg-white py-1.5 pl-6 pr-3 text-left font-semibold text-slate-800">{p.name}{g.name === 'Zonal heads' && <span className="ml-2 text-[11px] font-normal text-slate-400">{p.base} · incl. team</span>}</td>
                   {personCells(p.months)}
                 </tr>
               ))}
