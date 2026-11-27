@@ -144,7 +144,9 @@ export default function CeoView() {
     const fyEnd = (Number(fyStart.slice(0, 4)) + 1) + '-03'
     const monthsLeft = Math.max(1, (Number(fyEnd.slice(0, 4)) - now.getFullYear()) * 12 + Number(fyEnd.slice(5)) - (now.getMonth() + 1) + 1)
     const tgt = {}
-    const row = c => (tgt[c] ||= { city: c, target: CEO_TARGETS[c] || 0, live: 0, ho: 0, expEn: 0, other: 0 })
+    const planMonths = []
+    for (let m = cur; m <= fyEnd; m = addMonths(m, 1)) planMonths.push(m)
+    const row = c => (tgt[c] ||= { city: c, target: CEO_TARGETS[c] || 0, live: 0, ho: 0, expEn: 0, other: 0, byMonth: {} })
     for (const c of Object.keys(CEO_TARGETS)) row(c)
     for (const e of events) if (e.date && e.city) row(CEO_TARGETS[e.city] ? e.city : 'Other cities').live += e.qis
     for (const d of alive) {
@@ -153,7 +155,12 @@ export default function CeoView() {
       if (k === 'hold') continue
       const r = row(CEO_TARGETS[d.city] ? d.city : 'Other cities')
       if (k === 'ho_done') r.ho += q(d)
-      else r.expEn += q(d) // all open pipeline (any or no expected date) is counted as expected by FY end
+      else {
+        r.expEn += q(d) // all open pipeline (any or no expected date) is counted as expected by FY end
+        const em = ym(d.extra?.expected_en)
+        const key = em && em >= cur && em <= fyEnd ? em : 'nodate'
+        r.byMonth[key] = (r.byMonth[key] || 0) + q(d)
+      }
     }
     const targetRows = Object.values(tgt).map(r => {
       const pending = Math.max(0, r.target - r.live)
@@ -163,7 +170,7 @@ export default function CeoView() {
     const other = targetRows.findIndex(r => r.city === 'Other cities')
     if (other >= 0) targetRows.push(targetRows.splice(other, 1)[0])
 
-    return { targetRows, monthsLeft, fyEnd, cur, past, future, hoRecs, enRecs, regionRank, acq, spp, prod, prodMonths, personRows, kpi, regionOf, asOf: now }
+    return { targetRows, planMonths, monthsLeft, fyEnd, cur, past, future, hoRecs, enRecs, regionRank, acq, spp, prod, prodMonths, personRows, kpi, regionOf, asOf: now }
   }, [deals, ready, stages, team, cities, network])
 
   if (loading || !v) return <PageLoader />
@@ -520,16 +527,22 @@ function ByPerson({ v, label }) {
 
 function TargetTable({ v }) {
   const rows = v.targetRows
-  const T = rows.reduce((a, r) => { for (const k of ['live', 'pending', 'ho', 'expEn', 'other', 'toFind', 'perMonth']) a[k] += r[k]; return a },
-    { live: 0, pending: 0, ho: 0, expEn: 0, other: 0, toFind: 0, perMonth: 0 })
-  T.target = CEO_TARGET_TOTAL
+  const cols = [...v.planMonths, 'nodate']
+  const colLbl = k => (k === 'nodate' ? 'No date' : mLabel(k))
+  const add = (list, init) => list.reduce((a, r) => {
+    for (const k of ['target', 'live', 'pending', 'ho', 'expEn', 'toFind']) a[k] += r[k] || 0
+    for (const [m, x] of Object.entries(r.byMonth || {})) a.byMonth[m] = (a.byMonth[m] || 0) + x
+    return a
+  }, { target: 0, live: 0, pending: 0, ho: 0, expEn: 0, toFind: 0, byMonth: {}, ...init })
+  const T = add(rows, {}); T.target = CEO_TARGET_TOTAL
   const totalPending = Math.max(0, CEO_TARGET_TOTAL - T.live)
   const pct = r => (r.target ? Math.round((100 * r.live) / r.target) : null)
   const n = x => (x ? fmtNum(Math.ceil(x)) : <span className="text-slate-300">·</span>)
   const endLbl = mLabel(v.fyEnd)
   const [showMet, setShowMet] = useState(false)
+  const [showPlan, setShowPlan] = useState(false)
   const met = rows.filter(r => !r.pending)
-  const M = met.reduce((a, r) => { for (const k of ['target', 'live', 'ho', 'expEn', 'other']) a[k] += r[k]; return a }, { target: 0, live: 0, ho: 0, expEn: 0, other: 0 })
+  const M = add(met, {})
   const Bar = ({ r }) => {
     const p = pct(r)
     if (p === null) return <span className="text-slate-300">·</span>
@@ -542,18 +555,18 @@ function TargetTable({ v }) {
     )
   }
   const head = 'px-2 py-2 text-right font-semibold'
+  const plan = { show: showPlan, cols }
   return (
     <section className="card mb-5 overflow-hidden">
       <div className="flex flex-wrap items-end gap-4 border-b border-slate-100 px-4 py-3">
         <div className="min-w-0 flex-1">
           <h2 className="font-bold text-navy-900">FY26-27 target · where we are</h2>
-          <p className="text-xs text-slate-500">Pending = target − energized, then how the pending is covered: handed over (awaiting energization) → open pipeline, all counted as expected by {endLbl} → still to find. Hold sites not counted.</p>
+          <p className="text-xs text-slate-500">Pending = target − energized, then how the pending is covered: handed over (awaiting energization) → open pipeline, all counted as expected by {endLbl} (click it for the month-wise energization plan) → still to find. Hold sites not counted.</p>
         </div>
         <div className="flex gap-5 text-right">
           <div><p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">FY target</p><p className="text-xl font-extrabold text-navy-900">{fmtNum(CEO_TARGET_TOTAL)}</p></div>
           <div><p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Energized</p><p className="text-xl font-extrabold text-emerald-700">{fmtNum(T.live)} <span className="text-sm">({Math.round((100 * T.live) / CEO_TARGET_TOTAL)}%)</span></p></div>
           <div><p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Pending</p><p className="text-xl font-extrabold text-amber-700">{fmtNum(totalPending)}</p></div>
-          <div><p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Needed / month</p><p className="text-xl font-extrabold text-navy-900">{fmtNum(Math.ceil(totalPending / v.monthsLeft))}</p><p className="text-[10px] text-slate-500">{v.monthsLeft} months to {endLbl}</p></div>
         </div>
       </div>
       <div className="overflow-x-auto">
@@ -566,13 +579,17 @@ function TargetTable({ v }) {
               <th className={head}>% achieved</th>
               <th className={`${head} border-l border-slate-200 bg-amber-50`}>Pending</th>
               <th className={`${head} bg-emerald-50/60`}>Handed over</th>
-              <th className={`${head} bg-sky-50/70`}>Expected by {endLbl}</th>
+              <th className={`${head} cursor-pointer bg-sky-50/70 hover:bg-sky-100 print:cursor-auto`} onClick={() => setShowPlan(x => !x)} title="Click for the month-wise energization plan">
+                <span className="inline-flex items-center justify-end gap-1">
+                  {showPlan ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}Expected by {endLbl}
+                </span>
+              </th>
+              {showPlan && cols.map(k => <th key={k} className={`${head} bg-sky-50/40 normal-case text-sky-800 ${k === 'nodate' ? 'italic' : ''}`}>{colLbl(k)}</th>)}
               <th className={`${head} bg-rose-50`}>Still to find</th>
-              <th className={`${head} border-l border-slate-200`}>Needed / month</th>
             </tr>
           </thead>
           <tbody>
-            {rows.filter(r => r.pending > 0).map(r => <TargetRow key={r.city} r={r} n={n} Bar={Bar} />)}
+            {rows.filter(r => r.pending > 0).map(r => <TargetRow key={r.city} r={r} n={n} Bar={Bar} plan={plan} />)}
             {met.length > 0 && (
               <tr className="cursor-pointer border-t border-slate-200 bg-slate-50/70 hover:bg-slate-100" onClick={() => setShowMet(x => !x)}>
                 <td className="px-3 py-1.5 font-semibold text-slate-900">
@@ -587,11 +604,11 @@ function TargetTable({ v }) {
                 <td className="border-l border-slate-200 bg-amber-50/50 px-2 py-1.5 text-right"><span className="text-xs font-semibold text-emerald-700">Met</span></td>
                 <td className="bg-emerald-50/30 px-2 py-1.5 text-right">{n(M.ho)}</td>
                 <td className="bg-sky-50/40 px-2 py-1.5 text-right">{n(M.expEn)}</td>
+                {showPlan && cols.map(k => <td key={k} className="bg-sky-50/20 px-2 py-1.5 text-right text-sky-900">{n(M.byMonth[k])}</td>)}
                 <td className="bg-rose-50/40 px-2 py-1.5 text-right">{n(0)}</td>
-                <td className="border-l border-slate-200 px-2 py-1.5 text-right"><span className="text-slate-300">·</span></td>
               </tr>
             )}
-            {showMet && met.map(r => <TargetRow key={r.city} r={r} n={n} Bar={Bar} sub />)}
+            {showMet && met.map(r => <TargetRow key={r.city} r={r} n={n} Bar={Bar} plan={plan} sub />)}
           </tbody>
           <tfoot>
             <tr className="border-t-2 border-navy-900 bg-slate-50 font-bold">
@@ -602,18 +619,18 @@ function TargetTable({ v }) {
               <td className="border-l border-slate-200 bg-amber-50 px-2 py-2 text-right text-amber-800">{fmtNum(Math.ceil(T.pending))}</td>
               <td className="bg-emerald-50/60 px-2 py-2 text-right">{fmtNum(Math.ceil(T.ho))}</td>
               <td className="bg-sky-50/70 px-2 py-2 text-right">{fmtNum(Math.ceil(T.expEn))}</td>
+              {showPlan && cols.map(k => <td key={k} className="bg-sky-50/40 px-2 py-2 text-right text-sky-900">{fmtNum(Math.ceil(T.byMonth[k] || 0))}</td>)}
               <td className="bg-rose-50 px-2 py-2 text-right text-rose-700">{fmtNum(Math.ceil(T.toFind))}</td>
-              <td className="border-l border-slate-200 px-2 py-2 text-right">{fmtNum(Math.ceil(T.perMonth))}</td>
             </tr>
           </tfoot>
         </table>
       </div>
-      <p className="border-t border-slate-100 px-4 py-2 text-[11px] text-slate-500">Pending is counted city by city, so cities above target don't offset cities below it; the headline Pending is the company number (3,034 − energized). City pipeline beyond its pending isn't shown as surplus. Every number is QIS, rounded up.</p>
+      <p className="border-t border-slate-100 px-4 py-2 text-[11px] text-slate-500">Pending is counted city by city, so cities above target don't offset cities below it; the headline Pending is the company number (3,034 − energized). Month-wise plan = expected energization date of open pipeline sites; "No date" = no date, a date already passed, or after {endLbl}. Every number is QIS, rounded up.</p>
     </section>
   )
 }
 
-function TargetRow({ r, n, Bar, sub }) {
+function TargetRow({ r, n, Bar, sub, plan }) {
   return (
     <tr className={`border-t border-slate-100 hover:bg-slate-50/60 ${sub ? 'bg-slate-50/40 text-[13px]' : ''}`}>
       <td className={`py-1.5 ${sub ? 'pl-9 pr-3 text-slate-700' : 'px-3 font-semibold text-slate-900'}`}>{r.city}</td>
@@ -623,8 +640,8 @@ function TargetRow({ r, n, Bar, sub }) {
       <td className="border-l border-slate-200 bg-amber-50/50 px-2 py-1.5 text-right font-bold text-amber-800">{r.pending ? fmtNum(Math.ceil(r.pending)) : <span className="text-xs font-semibold text-emerald-700">Met</span>}</td>
       <td className="bg-emerald-50/30 px-2 py-1.5 text-right">{n(r.ho)}</td>
       <td className="bg-sky-50/40 px-2 py-1.5 text-right">{n(r.expEn)}</td>
+      {plan.show && plan.cols.map(k => <td key={k} className="bg-sky-50/20 px-2 py-1.5 text-right text-sky-900">{n(r.byMonth?.[k])}</td>)}
       <td className={`bg-rose-50/40 px-2 py-1.5 text-right ${r.toFind ? 'font-bold text-rose-700' : ''}`}>{n(r.toFind)}</td>
-      <td className="border-l border-slate-200 px-2 py-1.5 text-right">{r.pending ? fmtNum(Math.ceil(r.perMonth)) : <span className="text-slate-300">·</span>}</td>
     </tr>
   )
 }
