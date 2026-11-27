@@ -528,6 +528,9 @@ function TargetTable({ v }) {
   const pct = r => (r.target ? Math.round((100 * r.live) / r.target) : null)
   const n = x => (x ? fmtNum(Math.ceil(x)) : <span className="text-slate-300">·</span>)
   const endLbl = mLabel(v.fyEnd)
+  const [showMet, setShowMet] = useState(false)
+  const met = rows.filter(r => !r.pending)
+  const M = met.reduce((a, r) => { for (const k of ['target', 'live', 'ho', 'expEn', 'other']) a[k] += r[k]; return a }, { target: 0, live: 0, ho: 0, expEn: 0, other: 0 })
   const Bar = ({ r }) => {
     const p = pct(r)
     if (p === null) return <span className="text-slate-300">·</span>
@@ -571,30 +574,28 @@ function TargetTable({ v }) {
             </tr>
           </thead>
           <tbody>
-            {rows.filter(r => r.pending > 0).map(r => (
-              <tr key={r.city} className="border-t border-slate-100 hover:bg-slate-50/60">
-                <td className="px-3 py-1.5 font-semibold text-slate-900">{r.city}</td>
-                <td className="px-2 py-1.5 text-right">{n(r.target)}</td>
-                <td className="px-2 py-1.5 text-right font-semibold">{n(r.live)}</td>
-                <td className="px-2 py-1.5"><Bar r={r} /></td>
-                <td className="border-l border-slate-200 bg-amber-50/50 px-2 py-1.5 text-right font-bold text-amber-800">{r.target ? (r.pending ? fmtNum(Math.ceil(r.pending)) : <span className="text-xs font-semibold text-emerald-700">Met</span>) : <span className="text-slate-300">·</span>}</td>
-                <td className="bg-emerald-50/30 px-2 py-1.5 text-right">{n(r.ho)}</td>
-                <td className="bg-sky-50/40 px-2 py-1.5 text-right">{n(r.expEn)}</td>
-                <td className="px-2 py-1.5 text-right text-slate-600">{n(r.other)}</td>
-                <td className={`bg-rose-50/40 px-2 py-1.5 text-right ${r.toFind ? 'font-bold text-rose-700' : ''}`}>{n(r.toFind)}</td>
-                <td className="border-l border-slate-200 px-2 py-1.5 text-right">{r.pending ? fmtNum(Math.ceil(r.perMonth)) : <span className="text-slate-300">·</span>}</td>
-              </tr>
-            ))}
-          </tbody>
-          {rows.some(r => !r.pending) && (
-            <tbody>
-              <tr className="border-t border-slate-100 text-xs text-slate-500">
-                <td className="px-3 py-1.5" colSpan={10}>
-                  {(() => { const m = rows.filter(r => !r.pending); return `Already at target, not listed: ${m.length} cities (${m.map(r => r.city).join(', ')}) · target ${fmtNum(m.reduce((a, r) => a + r.target, 0))} · energized ${fmtNum(m.reduce((a, r) => a + r.live, 0))}. Included in the Total.` })()}
+            {rows.filter(r => r.pending > 0).map(r => <TargetRow key={r.city} r={r} n={n} Bar={Bar} />)}
+            {met.length > 0 && (
+              <tr className="cursor-pointer border-t border-slate-200 bg-slate-50/70 hover:bg-slate-100" onClick={() => setShowMet(x => !x)}>
+                <td className="px-3 py-1.5 font-semibold text-slate-900">
+                  <span className="inline-flex items-center gap-1">
+                    {showMet ? <ChevronDown className="h-4 w-4 text-slate-500" /> : <ChevronRight className="h-4 w-4 text-slate-500" />}
+                    Others <span className="text-xs font-normal text-slate-500">({met.length} cities at target)</span>
+                  </span>
                 </td>
+                <td className="px-2 py-1.5 text-right">{n(M.target)}</td>
+                <td className="px-2 py-1.5 text-right font-semibold">{n(M.live)}</td>
+                <td className="px-2 py-1.5"><Bar r={M} /></td>
+                <td className="border-l border-slate-200 bg-amber-50/50 px-2 py-1.5 text-right"><span className="text-xs font-semibold text-emerald-700">Met</span></td>
+                <td className="bg-emerald-50/30 px-2 py-1.5 text-right">{n(M.ho)}</td>
+                <td className="bg-sky-50/40 px-2 py-1.5 text-right">{n(M.expEn)}</td>
+                <td className="px-2 py-1.5 text-right text-slate-600">{n(M.other)}</td>
+                <td className="bg-rose-50/40 px-2 py-1.5 text-right">{n(0)}</td>
+                <td className="border-l border-slate-200 px-2 py-1.5 text-right"><span className="text-slate-300">·</span></td>
               </tr>
-            </tbody>
-          )}
+            )}
+            {showMet && met.map(r => <TargetRow key={r.city} r={r} n={n} Bar={Bar} sub />)}
+          </tbody>
           <tfoot>
             <tr className="border-t-2 border-navy-900 bg-slate-50 font-bold">
               <td className="px-3 py-2">Total <span className="text-[10px] font-semibold text-slate-500">(city by city)</span></td>
@@ -613,5 +614,22 @@ function TargetTable({ v }) {
       </div>
       <p className="border-t border-slate-100 px-4 py-2 text-[11px] text-slate-500">Pending is counted city by city, so cities above target don't offset cities below it; the headline Pending is the company number (3,034 − energized). City pipeline beyond its pending isn't shown as surplus. Every number is QIS, rounded up.</p>
     </section>
+  )
+}
+
+function TargetRow({ r, n, Bar, sub }) {
+  return (
+    <tr className={`border-t border-slate-100 hover:bg-slate-50/60 ${sub ? 'bg-slate-50/40 text-[13px]' : ''}`}>
+      <td className={`py-1.5 ${sub ? 'pl-9 pr-3 text-slate-700' : 'px-3 font-semibold text-slate-900'}`}>{r.city}</td>
+      <td className="px-2 py-1.5 text-right">{n(r.target)}</td>
+      <td className="px-2 py-1.5 text-right font-semibold">{n(r.live)}</td>
+      <td className="px-2 py-1.5"><Bar r={r} /></td>
+      <td className="border-l border-slate-200 bg-amber-50/50 px-2 py-1.5 text-right font-bold text-amber-800">{r.pending ? fmtNum(Math.ceil(r.pending)) : <span className="text-xs font-semibold text-emerald-700">Met</span>}</td>
+      <td className="bg-emerald-50/30 px-2 py-1.5 text-right">{n(r.ho)}</td>
+      <td className="bg-sky-50/40 px-2 py-1.5 text-right">{n(r.expEn)}</td>
+      <td className="px-2 py-1.5 text-right text-slate-600">{n(r.other)}</td>
+      <td className={`bg-rose-50/40 px-2 py-1.5 text-right ${r.toFind ? 'font-bold text-rose-700' : ''}`}>{n(r.toFind)}</td>
+      <td className="border-l border-slate-200 px-2 py-1.5 text-right">{r.pending ? fmtNum(Math.ceil(r.perMonth)) : <span className="text-slate-300">·</span>}</td>
+    </tr>
   )
 }
