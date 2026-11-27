@@ -125,13 +125,13 @@ export default function CeoView() {
         return { hoQ: h.reduce((a, d) => a + q(d), 0), hoS: h.length, added: acqSites.filter(d => d.owner === t.name && ym(d.created_at) === m).length }
       }),
     })).sort((a, b) => (b.lead ? 1 : 0) - (a.lead ? 1 : 0) || a.base.localeCompare(b.base) || a.name.localeCompare(b.name))
-    // Zonal head row = their own sites + everything their city teams did (the team rolls up to the head).
+    // Zonal head row = everything their city teams did. Heads don't bring in sites themselves, so their own numbers aren't added.
     for (const t of people.filter(x => x.covers?.length)) {
       const hr = personRows.find(r => r.name === t.name)
       const members = personRows.filter(r => r.group !== 'Zonal heads' && t.covers.includes(r.group))
       hr.isHead = true
       hr.months = hr.months.map((x, i) => {
-        const o = { ...x }
+        const o = { hoQ: 0, hoS: 0, added: 0 }
         for (const mb of members) for (const k of ['hoQ', 'hoS', 'added']) o[k] += mb.months[i][k]
         return o
       })
@@ -499,7 +499,7 @@ function ByPerson({ v, label }) {
           <span className="mr-2 inline-block h-2.5 w-2.5 rounded-sm align-middle" style={{ background: 'rgba(245,158,11,.45)' }} />Sites added (brought in)
           <span className="ml-3 mr-2 inline-block h-2.5 w-2.5 rounded-sm align-middle" style={{ background: 'rgba(14,165,233,.45)' }} />Sites handed over
           <span className="ml-3 mr-2 inline-block h-2.5 w-2.5 rounded-sm align-middle" style={{ background: 'rgba(16,185,129,.45)' }} />QIS handed over
-          <span className="ml-3">· darker = higher that month. Handovers credited to the site owner. Zonal head rows = their own sites + their city teams' total.</span>
+          <span className="ml-3">· darker = higher that month. Handovers credited to the site owner. Zonal head rows = total of their city teams.</span>
         </p>
       </div>
       <div className="overflow-x-auto">
@@ -524,7 +524,7 @@ function ByPerson({ v, label }) {
               </tr>
               {g.rows.map(p => (
                 <tr key={p.name} className="border-t border-slate-100">
-                  <td className="sticky left-0 whitespace-nowrap bg-white py-1.5 pl-6 pr-3 text-left font-semibold text-slate-800">{p.name}{g.name === 'Zonal heads' && <span className="ml-2 text-[11px] font-normal text-slate-400">{p.base} · incl. team</span>}</td>
+                  <td className="sticky left-0 whitespace-nowrap bg-white py-1.5 pl-6 pr-3 text-left font-semibold text-slate-800">{p.name}{g.name === 'Zonal heads' && <span className="ml-2 text-[11px] font-normal text-slate-400">{p.base} · team total</span>}</td>
                   {personCells(p.months)}
                 </tr>
               ))}
