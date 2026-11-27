@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { energizationEvents } from '../lib/energized'
 import { Flag, Pencil, Plus, Trash2 } from 'lucide-react'
 import { supabase, errMsg } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
@@ -36,6 +37,7 @@ export function usePlan() {
 
 /** FY exit plan by city + scouting productivity needed to close the gap. */
 export default function FyPlan({ deals, network, cities = [], team = [], filters }) {
+  const evs = useMemo(() => energizationEvents(deals, network), [deals, network]) // same definition as Dashboard / CEO View
   const { isAdmin } = useAuth()
   const { plan, reload } = usePlan()
   const [edit, setEdit] = useState(false)
@@ -56,7 +58,7 @@ export default function FyPlan({ deals, network, cities = [], team = [], filters
     const list = plan.cities.filter(c => keep(c.city)).map(c => {
       const lc = c.city.toLowerCase()
       const inCity = rows0.filter(r => String(r.city || '').toLowerCase() === lc)
-      const energised = network.filter(n => n.point_type === 'own_station' && String(n.city || '').toLowerCase() === lc).reduce((a, n) => a + (Number(n.weight) || 0), 0)
+      const energised = evs.filter(e => String(e.city || '').toLowerCase() === lc).reduce((a, e) => a + e.qis, 0)
       const target = Number(c.target) || 0, share = Number(c.share) || 0
       const short = Math.max(0, target - energised)
       const acq = Math.ceil((short * share) / 100) // whole QIS, rounded up
@@ -88,8 +90,7 @@ export default function FyPlan({ deals, network, cities = [], team = [], filters
   const T = sumUp(list, m.days)
   // Headline energised = the whole QIS-tracker network (all cities) for All zones, or every city of the zone.
   const regionOfCity = Object.fromEntries(cities.map(c => [c.name.toLowerCase(), c.region]))
-  const netEnergised = network.filter(n => n.point_type === 'own_station' && (zone === 'All' || regionOfCity[String(n.city || '').toLowerCase()] === zone))
-    .reduce((a, n) => a + (Number(n.weight) || 0), 0)
+  const netEnergised = evs.filter(e => zone === 'All' || regionOfCity[String(e.city || '').toLowerCase()] === zone).reduce((a, e) => a + e.qis, 0)
   const company = Number(plan.company_target) || 0
   const exit = zone === 'All' && company ? company : T.target
   const zoneOf = z => sumUp(z === 'All' ? m.list : m.list.filter(x => x.region === z), m.days)

@@ -13,7 +13,7 @@ import FyPlan from '../components/FyPlan'
 import { PlanTable, TypeSplit, SITE_TYPE_CHIPS } from '../components/Forecast'
 import { Stat, StageBadge, PageLoader, Modal } from '../components/ui'
 import { fmtNum, daysLabel, daysInt, stageAgeTone, AGE_TONES, startOfWeek, startOfMonth, fmtDate, normaliseSiteType, tabPath } from '../lib/format'
-import { haversine, hasLoc } from '../lib/geo'
+import { energizationEvents } from '../lib/energized'
 
 export default function Dashboard() {
   const { deals, loading, reload } = useDeals()
@@ -66,19 +66,22 @@ export default function Dashboard() {
       c.sites += 1; c.qis += qisOf(r); return acc
     }, {})).sort((a, b) => b[metric] - a[metric] || b.sites - a.sites)
     const energizedDeals = rows.filter(r => r.stage_category === 'live')
-    const near = (d, n) => hasLoc(d) && haversine(d.latitude, d.longitude, n.latitude, n.longitude) <= 100
     const cityRegion = Object.fromEntries((cities || []).map(c => [c.name.toLowerCase(), c.region]))
-    const netOk = n => n.point_type === 'own_station' && (!filters.city.length || filters.city.includes(n.city)) && (!filters.siteType.length || filters.siteType.includes(normaliseSiteType(n.site_type))) && (!filters.region.length || filters.region.includes(cityRegion[String(n.city || '').toLowerCase()]))
-    const netAll = network.filter(netOk)
-    const net = network.filter(netOk)
-      .filter(n => !energizedDeals.some(d => near(d, n))) // already counted as a deal
+    // Energisations: one shared definition with the CEO View (tracker + Site Khojo-only, dropped excluded)
+    const evOk = e => (!filters.city.length || filters.city.includes(e.city)) && (!filters.siteType.length || filters.siteType.includes(e.siteType)) && (!filters.region.length || filters.region.includes(cityRegion[String(e.city || '').toLowerCase()]))
+    const evF = energizationEvents(deals, network).filter(evOk)
+    const evSiteKey = e => (e.stationId ? 'n' + e.stationId : 'd' + e.siteId)
+    const evGroup = test => Object.values(evF.filter(e => e.date && test(e.date)).reduce((o, e) => {
+      const k = evSiteKey(e); const x = o[k] || (o[k] = { key: k, name: e.name, city: e.city, siteType: e.siteType, qis: 0, date: '', source: e.source, dealId: e.siteId || energizedDeals.find(d => e.stationId && String(d.extra?.network_point_id) === String(e.stationId))?.id })
+      x.qis += e.qis; if (e.date > x.date) x.date = e.date; return o
+    }, {})).sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.qis - a.qis)
 
     // energisation + handover trend (WoW / MoM)
     const delivery = (() => {
       const enEvents = [
-        ...netAll.flatMap(n => Object.entries(n.energized_dates || {}).map(([d, c]) => ({ d, qis: Number(c) || 0 }))),
+        ...evF.map(e => ({ d: e.date, qis: e.qis })),
       ]
-      const hoEvents = rows.map(r => ({ d: String(hoDate(r) || '').slice(0, 10), qis: qisOf(r) })).filter(x => x.d)
+      const hoEvents = rows.filter(r => r.stage_category !== 'dropped').map(r => ({ d: String(hoDate(r) || '').slice(0, 10), qis: qisOf(r) })).filter(x => x.d)
       const N = 12
       const starts = grain === 'week'
         ? Array.from({ length: N }, (_, i) => { const d = startOfWeek(); d.setDate(d.getDate() - 7 * (N - 1 - i)); return d })
@@ -156,19 +159,7 @@ export default function Dashboard() {
     // Energized in the period = CRM sites at an Energized stage whose energisation date falls in the period
     const crmEnDate = r => r.extra?.energized_on || (isTrackerSite(r) ? null : enDate(r))
     const enDone = energizedDeals.filter(r => inP(crmEnDate(r)))
-    // Energized items = QIS-tracker energisations + CRM-energised sites the tracker doesn't have yet (matched by location)
-    const nm = x => String(x || '').toLowerCase().replace(/[^a-z0-9]/g, '')
-    const netNames = new Set(network.map(n => nm(n.name)))
-    const crmNotInTracker = energizedDeals.filter(d => !netNames.has(nm(d.name)) && !network.some(n => n.point_type === 'own_station' && near(d, n)))
-    const enItems = test => [
-      ...netAll.flatMap(n => {
-        const ds = Object.entries(n.energized_dates || {}).filter(([d]) => test(d))
-        if (!ds.length) return []
-        const deal = energizedDeals.find(d => near(d, n))
-        return [{ key: 'n' + n.id, name: n.name, city: n.city, siteType: normaliseSiteType(n.site_type) || 'Not set', qis: ds.reduce((a, [, c]) => a + (Number(c) || 0), 0), date: ds.map(([d]) => d).sort().pop(), source: deal ? 'Tracker + CRM' : 'QIS tracker', dealId: deal?.id }]
-      }),
-      ...crmNotInTracker.filter(r => test(String(crmEnDate(r) || '').slice(0, 10))).map(r => ({ key: 'd' + r.id, name: r.name, city: r.city, siteType: r.site_type || 'Not set', qis: qisOf(r), date: String(crmEnDate(r)).slice(0, 10), source: 'CRM (not in tracker yet)', dealId: r.id })),
-    ].sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.qis - a.qis)
+    const enItems = test => evGroup(test)
     const enPeriod = enItems(d => inP(d + 'T12:00:00'))
     const hoNextMonth = pendingRows.filter(r => selYm?.has(String(r.extra?.expected_ho || '').slice(0, 7)))
     const enNextMonth = notLive.filter(r => selYm?.has(String(r.extra?.expected_en || '').slice(0, 7)))
@@ -236,13 +227,13 @@ export default function Dashboard() {
     // Target-trend series (FY, by month)
     const byMonth = (xs, dateOf) => xs.reduce((o, r) => { const k = String(dateOf(r) || '').slice(0, 7); if (k) o[k] = (o[k] || 0) + qisOf(r); return o }, {})
     const enActual = {}
-    for (const n of netAll) for (const [d, c] of Object.entries(n.energized_dates || {})) { const k = d.slice(0, 7); enActual[k] = (enActual[k] || 0) + (Number(c) || 0) }
+    for (const e of evF) { const k = String(e.date || '').slice(0, 7); if (k) enActual[k] = (enActual[k] || 0) + e.qis }
     const expMonth = d => (d && d.slice(0, 7) < curYm ? curYm : String(d || '').slice(0, 7))
     const series = {
       scout: { actual: byMonth(rows.filter(r => !isBulkImport(r)), r => r.created_at), expected: null },
-      ho: { actual: byMonth(rows, hoDate), expected: byMonth(pendingRows.filter(r => r.extra?.expected_ho), r => expMonth(r.extra.expected_ho)) },
+      ho: { actual: byMonth(rows.filter(r => r.stage_category !== 'dropped'), hoDate), expected: byMonth(pendingRows.filter(r => r.extra?.expected_ho), r => expMonth(r.extra.expected_ho)) },
       en: { actual: enActual, expected: byMonth(notLive.filter(r => r.extra?.expected_en), r => expMonth(r.extra.expected_en)),
-        base: netAll.reduce((a, n) => a + (Number(n.weight) || 0), 0) - fyMonths().reduce((a, k) => a + (enActual[k] || 0), 0) },
+        base: evF.reduce((a, e) => a + e.qis, 0) - fyMonths().reduce((a, k) => a + (enActual[k] || 0), 0) },
     }
 
     const out = {
@@ -261,21 +252,12 @@ export default function Dashboard() {
       period: (() => {
         const added = rows.filter(r => !isBulkImport(r) && r.stage_category !== 'dropped' && inP(r.created_at))
         const stillOpen = added.filter(r => ['active', 'approved'].includes(r.stage_category))
-        const ho = rows.filter(r => inP(hoDate(r)))
+        const ho = rows.filter(r => r.stage_category !== 'dropped' && inP(hoDate(r)))
         // energized in period: QIS-tracker dates + CRM energized sites that are not in the tracker
-        const trackerEn = netAll.reduce((a, n) => a + Object.entries(n.energized_dates || {}).reduce((b, [d, c]) => b + (inP(d + 'T12:00:00') ? c : 0), 0), 0)
-        const crmOnly = energizedDeals.filter(d => !netAll.some(n => near(d, n)))
-        const crmEn = crmOnly.filter(r => inP(enDate(r)))
-        const crmMatchedIds = new Set(energizedDeals.filter(d => !crmOnly.includes(d)).map(d => d.id))
-        const enSites = netAll.filter(n => Object.keys(n.energized_dates || {}).some(d => inP(d + 'T12:00:00'))).length
-        const enList = [
-          ...netAll.flatMap(n => {
-            const ds = Object.entries(n.energized_dates || {}).filter(([d]) => inP(d + 'T12:00:00'))
-            if (!ds.length) return []
-            const deal = energizedDeals.find(d => near(d, n))
-            return [{ key: 'n' + n.id, name: n.name, city: n.city, siteType: n.site_type, qis: ds.reduce((a, [, c]) => a + (Number(c) || 0), 0), date: ds.map(([d]) => d).sort().pop(), source: 'QIS tracker', dealId: deal?.id }]
-          }),
-        ].sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.qis - a.qis)
+        const enList = evGroup(d => inP(d + 'T12:00:00'))
+        const trackerEn = enList.reduce((a, x) => a + x.qis, 0)
+        const enSites = enList.length
+        const crmMatchedIds = new Set(enList.filter(x => x.dealId).map(x => x.dealId))
         const pFrom = isoDay(pStart), pTo = isoDay(pEnd)
         const pipe = rows.filter(r => inPipeline(r, pFrom, pTo))
         const carried = pipe.filter(r => String(r.created_at).slice(0, 10) < pFrom)
@@ -307,8 +289,8 @@ export default function Dashboard() {
       awaiting: qs(rows.filter(r => r.stage_category === 'approved')),
       weekQis: sumQis(open.filter(r => new Date(r.created_at) >= wk)),
       monthQis: sumQis(open.filter(r => new Date(r.created_at) >= mo)),
-      netSites: netAll.length,
-      netQis: netAll.reduce((a, n) => a + (Number(n.weight) || 0), 0),
+      netSites: new Set(evF.map(evSiteKey)).size,
+      netQis: evF.reduce((a, e) => a + e.qis, 0),
       leads: open.filter(r => r.record_type === 'lead').length,
       deals: open.filter(r => r.record_type !== 'lead').length,
       week: open.filter(r => new Date(r.created_at) >= wk).length,
