@@ -206,14 +206,14 @@ export default function CeoView() {
     const tgt = {}
     const planMonths = []
     for (let m = cur; m <= fyEnd; m = addMonths(m, 1)) planMonths.push(m)
-    const row = c => (tgt[c] ||= { city: c, target: CEO_TARGETS[c] || 0, live: 0, ho: 0, expEn: 0, other: 0, byMonth: {} })
+    const row = c => (tgt[c] ||= { city: c, target: CEO_TARGETS[c] || 0, live: 0, ho: 0, hold: 0, expEn: 0, other: 0, byMonth: {} })
     for (const c of Object.keys(CEO_TARGETS)) row(c)
     for (const e of events) if (e.date && e.city) row(CEO_TARGETS[e.city] ? e.city : 'Other cities').live += e.qis
     for (const d of alive) {
       if (d.stage_category === 'live' || !d.city) continue
       const k = keyOf[d.stage_id]
-      if (k === 'hold') continue
       const r = row(CEO_TARGETS[d.city] ? d.city : 'Other cities')
+      if (k === 'hold') { r.hold += q(d); continue } // shown separately, not counted towards the target
       if (k === 'ho_done') r.ho += q(d)
       else {
         r.expEn += q(d) // all open pipeline (any or no expected date) is counted as expected by FY end
@@ -638,10 +638,10 @@ function TargetTable({ v }) {
   const cols = [...v.planMonths, 'nodate']
   const colLbl = k => (k === 'nodate' ? 'No date' : mLabel(k))
   const add = (list, init) => list.reduce((a, r) => {
-    for (const k of ['target', 'live', 'pending', 'ho', 'expEn', 'toFind']) a[k] += r[k] || 0
+    for (const k of ['target', 'live', 'pending', 'ho', 'hold', 'expEn', 'toFind']) a[k] += r[k] || 0
     for (const [m, x] of Object.entries(r.byMonth || {})) a.byMonth[m] = (a.byMonth[m] || 0) + x
     return a
-  }, { target: 0, live: 0, pending: 0, ho: 0, expEn: 0, toFind: 0, byMonth: {}, ...init })
+  }, { target: 0, live: 0, pending: 0, ho: 0, hold: 0, expEn: 0, toFind: 0, byMonth: {}, ...init })
   const T = add(rows, {}); T.target = CEO_TARGET_TOTAL
   const totalPending = Math.max(0, CEO_TARGET_TOTAL - T.live)
   const pct = r => (r.target ? Math.round((100 * r.live) / r.target) : null)
@@ -668,6 +668,7 @@ function TargetTable({ v }) {
     const base = { cities: cs, card: `FY target · ${label} · ` }
     if (k === 'live') return v.href({ ...base, cat: 'live', card: base.card + 'energized', note: 'Energized sites in Site Khojo. The Energized figure also counts QIS-tracker stations, so it can differ by a few QIS.' })
     if (k === 'ho') return v.href({ ...base, stages: ['ho_done'], card: base.card + 'handed over, awaiting energization' })
+    if (k === 'hold') return v.href({ ...base, stages: ['hold'], card: base.card + 'on hold (not counted)' })
     if (k === 'expEn') return v.href({ ...base, stages: v.openKeys, card: base.card + `open pipeline (expected by ${endLbl})` })
     if (k === 'nodate') return v.href({ ...base, stages: v.openKeys, een: `out,${v.cur}-01,${v.fyEnd}-31`, card: base.card + 'open pipeline · no energization date in plan' })
     return v.href({ ...base, stages: v.openKeys, een: monthRange(k), card: base.card + `expected energization ${mLabel(k)}` })
@@ -678,7 +679,7 @@ function TargetTable({ v }) {
       <div className="flex flex-wrap items-end gap-4 border-b border-slate-100 px-4 py-3">
         <div className="min-w-0 flex-1">
           <h2 className="font-bold text-navy-900">FY26-27 target · where we are</h2>
-          <p className="text-xs text-slate-500">Pending = target − energized, then how the pending is covered: handed over (awaiting energization) → open pipeline, all counted as expected by {endLbl} (click it for the month-wise energization plan) → still to find. Hold sites not counted.</p>
+          <p className="text-xs text-slate-500">Pending = target − energized, then how the pending is covered: handed over (awaiting energization) → open pipeline, all counted as expected by {endLbl} (click it for the month-wise energization plan) → still to find. On hold is shown for information and not counted towards the target.</p>
         </div>
         <div className="flex gap-5 text-right">
           <div><p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">FY target</p><p className="text-xl font-extrabold text-navy-900">{fmtNum(CEO_TARGET_TOTAL)}</p></div>
@@ -696,6 +697,7 @@ function TargetTable({ v }) {
               <th className={head}>% achieved</th>
               <th className={`${head} border-l border-slate-200 bg-amber-50`}>Pending</th>
               <th className={`${head} bg-emerald-50/60`}>Handed over</th>
+              <th className={`${head} bg-amber-50/70 text-amber-800`} title="Open sites on Hold — shown for information, not counted towards the target">On hold</th>
               <th className={`${head} cursor-pointer bg-sky-50/70 hover:bg-sky-100 print:cursor-auto`} onClick={() => setShowPlan(x => !x)} title="Click for the month-wise energization plan">
                 <span className="inline-flex items-center justify-end gap-1">
                   {showPlan ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}Expected by {endLbl}
@@ -720,6 +722,7 @@ function TargetTable({ v }) {
                 <td className="px-2 py-1.5"><Bar r={M} /></td>
                 <td className="border-l border-slate-200 bg-amber-50/50 px-2 py-1.5 text-right"><span className="text-xs font-semibold text-emerald-700">Met</span></td>
                 <td className="bg-emerald-50/30 px-2 py-1.5 text-right"><Go to={drill(met.flatMap(citiesOf), 'Others')('ho')}>{n(M.ho)}</Go></td>
+                <td className="bg-amber-50/40 px-2 py-1.5 text-right text-amber-800"><Go to={M.hold ? drill(met.flatMap(citiesOf), 'Others')('hold') : null}>{n(M.hold)}</Go></td>
                 <td className="bg-sky-50/40 px-2 py-1.5 text-right"><Go to={drill(met.flatMap(citiesOf), 'Others')('expEn')}>{n(M.expEn)}</Go></td>
                 {showPlan && cols.map(k => <td key={k} className="bg-sky-50/20 px-2 py-1.5 text-right text-sky-900"><Go to={drill(met.flatMap(citiesOf), 'Others')(k)}>{n(M.byMonth[k])}</Go></td>)}
                 <td className="bg-rose-50/40 px-2 py-1.5 text-right">{n(0)}</td>
@@ -735,6 +738,7 @@ function TargetTable({ v }) {
               <td className="px-2 py-2"><Bar r={T} /></td>
               <td className="border-l border-slate-200 bg-amber-50 px-2 py-2 text-right text-amber-800">{fmtNum(Math.ceil(T.pending))}</td>
               <td className="bg-emerald-50/60 px-2 py-2 text-right"><Go to={drill(null, 'all cities')('ho')}>{fmtNum(Math.ceil(T.ho))}</Go></td>
+              <td className="bg-amber-50/70 px-2 py-2 text-right text-amber-800"><Go to={drill(null, 'all cities')('hold')}>{fmtNum(Math.ceil(T.hold))}</Go></td>
               <td className="bg-sky-50/70 px-2 py-2 text-right"><Go to={drill(null, 'all cities')('expEn')}>{fmtNum(Math.ceil(T.expEn))}</Go></td>
               {showPlan && cols.map(k => <td key={k} className="bg-sky-50/40 px-2 py-2 text-right text-sky-900"><Go to={drill(null, 'all cities')(k)}>{fmtNum(Math.ceil(T.byMonth[k] || 0))}</Go></td>)}
               <td className="bg-rose-50 px-2 py-2 text-right text-rose-700">{fmtNum(Math.ceil(T.toFind))}</td>
@@ -756,6 +760,7 @@ function TargetRow({ r, n, Bar, sub, plan, go }) {
       <td className="px-2 py-1.5"><Bar r={r} /></td>
       <td className="border-l border-slate-200 bg-amber-50/50 px-2 py-1.5 text-right font-bold text-amber-800">{r.pending ? fmtNum(Math.ceil(r.pending)) : <span className="text-xs font-semibold text-emerald-700">Met</span>}</td>
       <td className="bg-emerald-50/30 px-2 py-1.5 text-right"><Go to={r.ho ? go('ho') : null}>{n(r.ho)}</Go></td>
+      <td className="bg-amber-50/40 px-2 py-1.5 text-right text-amber-800"><Go to={r.hold ? go('hold') : null}>{n(r.hold)}</Go></td>
       <td className="bg-sky-50/40 px-2 py-1.5 text-right"><Go to={r.expEn ? go('expEn') : null}>{n(r.expEn)}</Go></td>
       {plan.show && plan.cols.map(k => <td key={k} className="bg-sky-50/20 px-2 py-1.5 text-right text-sky-900"><Go to={r.byMonth?.[k] ? go(k) : null}>{n(r.byMonth?.[k])}</Go></td>)}
       <td className={`bg-rose-50/40 px-2 py-1.5 text-right ${r.toFind ? 'font-bold text-rose-700' : ''}`}>{n(r.toFind)}</td>
