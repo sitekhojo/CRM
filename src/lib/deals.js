@@ -57,7 +57,7 @@ export function workedIn(d, from, to) {
 }
 export const dayBefore = day => { const t = new Date(day + 'T12:00:00'); t.setDate(t.getDate() - 1); return localDay(t) }
 
-export const EMPTY_FILTERS = { q: '', city: [], recordType: '', stage: [], siteType: [], region: [], owner: [], member: '', from: '', to: '', overdue: false, mine: false, age: '', ho: '', en: '', openOnly: false, inPipe: '', pipeAt: '', exit: '', worked: '', format: '' }
+export const EMPTY_FILTERS = { q: '', city: [], recordType: '', stage: [], siteType: [], region: [], owner: [], member: '', from: '', to: '', overdue: false, mine: false, age: '', ho: '', en: '', openOnly: false, inPipe: '', pipeAt: '', exit: '', worked: '', format: '', eho: '', een: '', iocl: '', cat: [] }
 
 /** Apply the shared filter bar to a list of deals. */
 /** Energized stations loaded from the QIS tracker (not pipeline work — kept out of pipeline metrics). */
@@ -89,6 +89,14 @@ export function applyFilters(deals, f, userId) {
     if (f.worked) { const [a, b] = f.worked.split(','); if (!workedIn(d, a, b)) return false }
     if (f.exit) { const [k, a, b] = f.exit.split(','); const x = exitOf(d); if (!x || x.kind !== k || !x.date || x.date < a || x.date > b) return false }
     if (f.inPipe) { const [a, b] = f.inPipe.split(','); if (!inPipeline(d, a, b)) return false }
+    if (f.cat?.length && !f.cat.includes(d.stage_category)) return false
+    if (f.iocl) { const io = d.extra?.spp_account === 'IOCL' || d.extra?.original_site_type === 'IOCL'; if ((f.iocl === '1') !== io) return false }
+    if (f.eho) { const [a, b] = f.eho.split(','); const x = d.extra?.expected_ho; if (d.extra?.ho_date || d.stage_category === 'live' || !x || x < a || x > b) return false }
+    if (f.een) {
+      if (d.stage_category === 'live') return false
+      const x = d.extra?.expected_en
+      if (f.een === 'none') { if (x) return false } else if (f.een.startsWith('out,')) { const [, a, b] = f.een.split(','); if (x && x >= a && x <= b) return false } else { const [a, b] = f.een.split(','); if (!x || x < a || x > b) return false }
+    }
     if (f.ho) { const [a, b] = f.ho.split(','); const x = d.extra?.ho_date; if (!x || x < a || x > b) return false }
     if (f.en) { const [a, b] = f.en.split(','); const x = d.extra?.energized_on; if (!x || x < a || x > b) return false }
     if (f.age) {

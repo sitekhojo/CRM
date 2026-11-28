@@ -1,10 +1,11 @@
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Printer, ChevronRight, ChevronDown } from 'lucide-react'
-import { useDeals, fetchNetworkPoints } from '../lib/deals'
+import { useDeals, fetchNetworkPoints, applyFilters, EMPTY_FILTERS } from '../lib/deals'
 import { useConfig, REGIONS } from '../lib/config'
 import { energizationEvents, isTrackerCopy } from '../lib/energized'
-import { PageLoader } from '../components/ui'
-import { fmtNum } from '../lib/format'
+import { PageLoader, Modal } from '../components/ui'
+import { fmtNum, fmtDate, tabPath } from '../lib/format'
 
 /**
  * CEO View: everything on one page.
@@ -37,6 +38,53 @@ const CEO_TARGETS = {
 }
 const CEO_TARGET_TOTAL = 3034
 
+const monthRange = m => `${m}-01,${m}-31`
+const DrillCtx = createContext(null)
+/** Pivot-style drill-down: click a number to see the sites behind it. Looks like plain text until hovered. */
+function Go({ to, children }) {
+  const open = useContext(DrillCtx)
+  if (!to || !open) return children
+  return <span role="button" tabIndex={0} title="Click to see these sites" className="cursor-pointer decoration-dotted underline-offset-2 hover:underline"
+    onClick={e => { e.stopPropagation(); open(to) }} onKeyDown={e => e.key === 'Enter' && open(to)}>{children}</span>
+}
+
+function DrillModal({ drill, deals, onClose }) {
+  const rows = useMemo(() => (drill ? applyFilters(deals, drill.filters).sort((a, b) => (a.city || '').localeCompare(b.city || '') || (Number(b.extra?.qis_count) || 0) - (Number(a.extra?.qis_count) || 0)) : []), [drill, deals])
+  if (!drill) return null
+  const qs = rows.reduce((a, d) => a + (Number(d.extra?.qis_count) || 0), 0)
+  return (
+    <Modal open onClose={onClose} wide="xl" title={drill.card}>
+      <div className="mb-3 flex flex-wrap items-center gap-3 text-sm">
+        <span className="font-semibold text-slate-700">{rows.length} sites · {fmtNum(r1(qs))} QIS</span>
+        <div className="flex-1" />
+        <Link to={drill.url} className="btn-secondary">Open in list with filters</Link>
+      </div>
+      {drill.note && <p className="mb-2 text-xs text-slate-500">{drill.note}</p>}
+      <div className="overflow-x-auto rounded-lg border border-slate-200">
+        <table className="min-w-full text-sm">
+          <thead className="bg-slate-50 text-xs text-slate-600"><tr>
+            {['Site', 'City', 'Type', 'Stage', 'Owner', 'QIS', 'HO date', 'Expected HO', 'Energized', 'Expected energization'].map(h => <th key={h} className={`px-3 py-2 font-semibold ${h === 'QIS' ? 'text-right' : 'text-left'}`}>{h}</th>)}
+          </tr></thead>
+          <tbody className="divide-y divide-slate-100">
+            {rows.map(d => (
+              <tr key={d.id} className="hover:bg-slate-50">
+                <td className="max-w-[260px] truncate px-3 py-1.5"><Link to={`/app/deals/${d.id}`} className="font-semibold text-brand-700 hover:underline">{d.name}</Link><div className="text-[10px] text-slate-400">{d.site_code}</div></td>
+                <td className="px-3 py-1.5">{d.city}</td>
+                <td className="px-3 py-1.5">{d.site_type}</td>
+                <td className="px-3 py-1.5"><span className="whitespace-nowrap rounded px-1.5 py-0.5 text-xs font-semibold text-white" style={{ background: d.stage_color }}>{d.stage_name}</span></td>
+                <td className="px-3 py-1.5 text-slate-600">{d.owner || '—'}</td>
+                <td className="px-3 py-1.5 text-right font-semibold">{fmtNum(r1(Number(d.extra?.qis_count) || 0))}</td>
+                {['ho_date', 'expected_ho', 'energized_on', 'expected_en'].map(k => <td key={k} className="whitespace-nowrap px-3 py-1.5 text-slate-600">{d.extra?.[k] ? fmtDate(d.extra[k]) : '—'}</td>)}
+              </tr>
+            ))}
+            {!rows.length && <tr><td colSpan={10} className="py-6 text-center text-slate-400">No sites</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </Modal>
+  )
+}
+
 const ACQ_STAGES = [
   ['Scouted', ['scouting', 'scouted']], ['Feasibility', ['deployment_feasibility']], ['LOI', ['loi_signed']],
   ['Agreement', ['agreement_signed']], ['HO done', ['ho_done']], ['Hold', ['hold']],
@@ -50,6 +98,7 @@ export default function CeoView() {
   const { deals, loading } = useDeals()
   const { stages = [], team = [], cities = [], ready } = useConfig()
   const [network, setNetwork] = useState(null)
+  const [drill, setDrill] = useState(null)
   useEffect(() => { fetchNetworkPoints().then(setNetwork).catch(() => setNetwork([])) }, [])
 
   const v = useMemo(() => {
@@ -181,13 +230,35 @@ export default function CeoView() {
     const other = targetRows.findIndex(r => r.city === 'Other cities')
     if (other >= 0) targetRows.push(targetRows.splice(other, 1)[0])
 
-    return { targetRows, planMonths, monthsLeft, fyEnd, cur, past, future, hoRecs, enRecs, regionRank, acq, spp, prod, prodMonths, personRows, kpi, regionOf, asOf: now }
+    const idsOf = keys => stages.filter(s => keys.includes(s.key)).map(s => s.id)
+    const openKeys = stages.filter(s => ['active', 'approved'].includes(s.category) && !['ho_done', 'hold'].includes(s.key)).map(s => s.key)
+    const otherCities = [...new Set([...alive.map(d => d.city), ...events.map(e => e.city)].filter(c => c && !CEO_TARGETS[c]))]
+    /** drill-down: { cities, types, ho, en, eho, een, stages (keys), cat, iocl, card, note } → { card, filters, url } */
+    const href = o => {
+      const types0 = o.types && o.types.length < ALL_TYPES.length ? o.types : []
+      const filters = { ...EMPTY_FILTERS, openOnly: true, city: o.cities || [], siteType: types0, ho: o.ho || '', en: o.en || '', eho: o.eho || '', een: o.een || '', iocl: o.iocl || '', stage: o.stages ? idsOf(o.stages).map(String) : [], cat: o.cat ? [o.cat] : [] }
+      return { card: o.card, note: o.note, filters, url: url(o) }
+    }
+    const url = o => {
+      const p = new URLSearchParams({ src: 'ceo', open: '1' })
+      const types = o.types && o.types.length < ALL_TYPES.length ? o.types : null
+      if (o.cities?.length) p.set('city', o.cities.join(','))
+      if (types && types.length > 1) p.set('siteType', types.join(','))
+      for (const k of ['ho', 'en', 'eho', 'een', 'iocl']) if (o[k]) p.set(k, o[k])
+      if (o.stages) p.set('stage', idsOf(o.stages).join(','))
+      if (o.cat) p.set('cat', o.cat)
+      p.set('card', o.card)
+      return `${types?.length === 1 ? tabPath(types[0]) : '/app/all'}?${p.toString().replace(/%2C/g, ',')}`
+    }
+    return { href, openKeys, otherCities, targetRows, planMonths, monthsLeft, fyEnd, cur, past, future, hoRecs, enRecs, regionRank, acq, spp, prod, prodMonths, personRows, kpi, regionOf, asOf: now }
   }, [deals, ready, stages, team, cities, network])
 
   if (loading || !v) return <PageLoader />
   const { kpi } = v
 
   return (
+    <DrillCtx.Provider value={setDrill}>
+    <DrillModal drill={drill} deals={deals} onClose={() => setDrill(null)} />
     <div className="mx-auto max-w-[1500px] p-4 sm:p-6 print:p-0">
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <div>
@@ -199,37 +270,38 @@ export default function CeoView() {
       </div>
 
       <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <Kpi label="Live network" value={fmtNum(kpi.liveQ)} sub="QIS energized till today" />
+        <Kpi go={v.href({ cat: 'live', card: 'Live network · energized sites' })} label="Live network" value={fmtNum(kpi.liveQ)} sub="QIS energized till today" />
         <Kpi label="Energized this FY" value={fmtNum(kpi.fyEnQ)} sub="QIS since 1 April" />
-        <Kpi label={`Handover · ${mLabel(v.cur)}`} value={fmtNum(kpi.hoMtdQ)} sub={`done · ${fmtNum(r1(kpi.hoDueQ))} more expected`} tone="emerald" />
-        <Kpi label={`Energization · ${mLabel(v.cur)}`} value={fmtNum(kpi.enMtdQ)} sub={`done · ${fmtNum(r1(kpi.enDueQ))} more expected`} tone="emerald" />
-        <Kpi label="Handed over, not live" value={fmtNum(kpi.awaitingEnQ)} sub="QIS awaiting energization" tone="amber" />
-        <Kpi label="Open pipeline" value={fmtNum(r1(kpi.acqPipeQ + kpi.sppPipeQ))} sub={`Acquisition ${fmtNum(r1(kpi.acqPipeQ))} · SPP ${fmtNum(r1(kpi.sppPipeQ))}`} />
+        <Kpi go={v.href({ ho: monthRange(v.cur), card: `Handed over in ${mLabel(v.cur)}` })} label={`Handover · ${mLabel(v.cur)}`} value={fmtNum(kpi.hoMtdQ)} sub={`done · ${fmtNum(r1(kpi.hoDueQ))} more expected`} tone="emerald" />
+        <Kpi go={v.href({ en: monthRange(v.cur), card: `Energized in ${mLabel(v.cur)}` })} label={`Energization · ${mLabel(v.cur)}`} value={fmtNum(kpi.enMtdQ)} sub={`done · ${fmtNum(r1(kpi.enDueQ))} more expected`} tone="emerald" />
+        <Kpi go={v.href({ stages: ['ho_done'], card: 'Handed over, awaiting energization' })} label="Handed over, not live" value={fmtNum(kpi.awaitingEnQ)} sub="QIS awaiting energization" tone="amber" />
+        <Kpi go={v.href({ stages: [...v.openKeys, 'hold'], card: 'Open pipeline (incl. hold, excl. handed over)' })} label="Open pipeline" value={fmtNum(r1(kpi.acqPipeQ + kpi.sppPipeQ))} sub={`Acquisition ${fmtNum(r1(kpi.acqPipeQ))} · SPP ${fmtNum(r1(kpi.sppPipeQ))}`} />
       </div>
 
       <TargetTable v={v} />
 
-      <MonthGrid title="Handovers by city" note="Past months: actual handover dates. Coming months: expected handover date of sites not yet handed over."
+      <MonthGrid kind="ho" title="Handovers by city" note="Past months: actual handover dates. Coming months: expected handover date of sites not yet handed over."
         recs={v.hoRecs} v={v} />
-      <MonthGrid title="Energizations by city" note="Past months: actual energizations (QIS tracker + sites energized in Site Khojo not yet in the tracker). Coming months: expected energization date of sites not yet live."
+      <MonthGrid kind="en" title="Energizations by city" note="Past months: actual energizations (QIS tracker + sites energized in Site Khojo not yet in the tracker). Coming months: expected energization date of sites not yet live."
         recs={v.enRecs} v={v} />
 
       <div className="mb-5 grid gap-5 xl:grid-cols-2">
-        <StageTable title="Where the pipeline is · Acquisition (Franchise + Private)" defs={ACQ_STAGES} by={v.acq} v={v} />
-        <StageTable title="Where the pipeline is · Strategic Partnerships" defs={SPP_STAGES} by={v.spp} v={v} splitNote="Click a city to split IOCL / non-IOCL" />
+        <StageTable types={['Franchise', 'Private']} title="Where the pipeline is · Acquisition (Franchise + Private)" defs={ACQ_STAGES} by={v.acq} v={v} />
+        <StageTable types={['SPP']} title="Where the pipeline is · Strategic Partnerships" defs={SPP_STAGES} by={v.spp} v={v} splitNote="Click a city to split IOCL / non-IOCL" />
       </div>
 
       <Productivity v={v} />
     </div>
+    </DrillCtx.Provider>
   )
 }
 
-function Kpi({ label, value, sub, tone }) {
+function Kpi({ label, value, sub, tone, go }) {
   const c = tone === 'emerald' ? 'text-emerald-700' : tone === 'amber' ? 'text-amber-700' : 'text-navy-900'
   return (
     <div className="card p-3">
       <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className={`mt-1 text-2xl font-extrabold ${c}`}>{value}</p>
+      <p className={`mt-1 text-2xl font-extrabold ${c}`}><Go to={go}>{value}</Go></p>
       <p className="text-xs text-slate-500">{sub}</p>
     </div>
   )
@@ -251,13 +323,13 @@ function TypeTicks({ value, onChange }) {
   )
 }
 
-function Cell({ x, muted, dueOnly }) {
+function Cell({ x, muted, dueOnly, doneTo, dueTo }) {
   if (!x || (!x.qis && !x.dueQ)) return <span className="text-slate-300">·</span>
-  if (dueOnly) return <div className="font-semibold text-sky-800">{fmtNum(r1(x.dueQ))}</div>
-  return <div className={`font-semibold ${muted ? 'text-slate-500' : 'text-slate-900'}`}>{fmtNum(r1(x.qis))}{x.dueQ ? <span className="ml-1 text-[11px] font-semibold text-sky-700">+{fmtNum(r1(x.dueQ))}</span> : null}</div>
+  if (dueOnly) return <div className="font-semibold text-sky-800"><Go to={dueTo}>{fmtNum(r1(x.dueQ))}</Go></div>
+  return <div className={`font-semibold ${muted ? 'text-slate-500' : 'text-slate-900'}`}><Go to={doneTo}>{fmtNum(r1(x.qis))}</Go>{x.dueQ ? <span className="ml-1 text-[11px] font-semibold text-sky-700"><Go to={dueTo}>+{fmtNum(r1(x.dueQ))}</Go></span> : null}</div>
 }
 
-function MonthGrid({ title, note, recs, v }) {
+function MonthGrid({ title, note, recs, v, kind }) {
   const [types, setTypes] = useState(ALL_TYPES)
   const [open, setOpen] = useState({})
   const cols = [...v.past.map(m => ({ k: m, kind: 'past' })), { k: v.cur, kind: 'cur' }, ...v.future.map(m => ({ k: m, kind: 'fut' }))]
@@ -283,7 +355,16 @@ function MonthGrid({ title, note, recs, v }) {
   const subTypes = c => TYPES.map(([k]) => k).filter(k => types.includes(k) && g[`${c}\u0000${k}`])
   const allOpen = cities.length > 0 && cities.every(c => open[c]) && !!open.__total
   const bg = x => (x.kind === 'cur' ? 'bg-emerald-50' : x.kind === 'fut' ? 'bg-sky-50/60' : '')
-  const cell = (x, y) => <Cell x={y} dueOnly={x.kind === 'fut'} muted={x.kind === 'past'} />
+  const what = kind === 'ho' ? 'Handover' : 'Energization'
+  const links = (x, city, typ) => {
+    const base = { cities: city ? [city] : null, types: typ ? [typ] : types }
+    const lbl = `${what} · ${city || 'all cities'}${typ ? ' · ' + typ : types.length < ALL_TYPES.length ? ' · ' + types.join(' + ') : ''} · ${mLabel(x.k)}`
+    return {
+      doneTo: v.href({ ...base, [kind]: monthRange(x.k), card: `${lbl} · done`, note: kind === 'en' ? 'Sites in Site Khojo energized this month. The table also counts QIS-tracker stations not yet linked to a site, so the two can differ by a few QIS.' : '' }),
+      dueTo: v.href({ ...base, [kind === 'ho' ? 'eho' : 'een']: monthRange(x.k), card: `${lbl} · expected` }),
+    }
+  }
+  const cell = (x, y, city, typ) => <Cell x={y} dueOnly={x.kind === 'fut'} muted={x.kind === 'past'} {...links(x, city, typ)} />
   return (
     <section className="card mb-5 overflow-hidden">
       <div className="flex flex-wrap items-start gap-3 border-b border-slate-100 px-4 py-3">
@@ -320,7 +401,7 @@ function MonthGrid({ title, note, recs, v }) {
                     <span className="mr-1.5 inline-flex h-4 w-4 items-center justify-center rounded border border-slate-300 text-[11px] font-bold leading-none text-slate-600 print:hidden">{open[c] ? '−' : '+'}</span>
                     {c}<span className="ml-1 text-[10px] font-normal text-slate-400">{v.regionOf[c] || ''}</span>
                   </td>
-                  {cols.map(x => <td key={x.k} className={`px-3 py-1.5 ${bg(x)}`}>{cell(x, g[c]?.[x.k])}</td>)}
+                  {cols.map(x => <td key={x.k} className={`px-3 py-1.5 ${bg(x)}`}>{cell(x, g[c]?.[x.k], c)}</td>)}
                   <td className="border-l border-slate-100 px-3 py-1.5 font-bold text-navy-900">{fmtNum(r1(ahead(c))) || '·'}</td>
                 </tr>
                 {open[c] && subTypes(c).map(t => {
@@ -328,7 +409,7 @@ function MonthGrid({ title, note, recs, v }) {
                   return (
                     <tr key={k} className="bg-slate-50/70 text-[13px]">
                       <td className="sticky left-0 bg-slate-50 py-1 pl-10 pr-3 text-left text-slate-600">{t === 'SPP' ? 'SPP' : t === 'Private' ? 'PVT · Private' : 'FRN · Franchise'}</td>
-                      {cols.map(x => <td key={x.k} className={`px-3 py-1 ${bg(x)}`}>{cell(x, g[k]?.[x.k])}</td>)}
+                      {cols.map(x => <td key={x.k} className={`px-3 py-1 ${bg(x)}`}>{cell(x, g[k]?.[x.k], c, t)}</td>)}
                       <td className="border-l border-slate-100 px-3 py-1 font-semibold text-slate-700">{fmtNum(r1(ahead(k))) || '·'}</td>
                     </tr>
                   )
@@ -340,7 +421,7 @@ function MonthGrid({ title, note, recs, v }) {
           <tfoot>
             <tr className="cursor-pointer border-t-2 border-slate-300 bg-slate-50 font-bold" onClick={() => setOpen(o => ({ ...o, __total: !o.__total }))}>
               <td className="sticky left-0 bg-slate-50 px-3 py-2 text-left"><span className="mr-1.5 inline-flex h-4 w-4 items-center justify-center rounded border border-slate-300 text-[11px] font-bold leading-none text-slate-600 print:hidden">{open.__total ? '−' : '+'}</span>Total</td>
-              {cols.map(x => <td key={x.k} className={`px-3 py-2 ${bg(x)}`}>{cell(x, tot(x.k))}</td>)}
+              {cols.map(x => <td key={x.k} className={`px-3 py-2 ${bg(x)}`}>{cell(x, tot(x.k), null)}</td>)}
               <td className="border-l border-slate-100 px-3 py-2 text-navy-900">{fmtNum(r1(cities.reduce((a, c) => a + ahead(c), 0)))}</td>
             </tr>
             {open.__total && TYPES.map(([t]) => t).filter(t => types.includes(t)).map(t => {
@@ -349,7 +430,7 @@ function MonthGrid({ title, note, recs, v }) {
               return (
                 <tr key={t} className="border-t border-slate-200 bg-slate-50/70 text-[13px]">
                   <td className="sticky left-0 bg-slate-50 py-1 pl-10 pr-3 text-left text-slate-600">{t === 'SPP' ? 'SPP' : t === 'Private' ? 'PVT · Private' : 'FRN · Franchise'}</td>
-                  {cols.map(x => <td key={x.k} className={`px-3 py-1 ${bg(x)}`}>{cell(x, tt(x.k))}</td>)}
+                  {cols.map(x => <td key={x.k} className={`px-3 py-1 ${bg(x)}`}>{cell(x, tt(x.k), null, t)}</td>)}
                   <td className="border-l border-slate-100 px-3 py-1 font-semibold text-slate-700">{fmtNum(r1(keys.reduce((a, kk) => a + ahead(kk), 0)))}</td>
                 </tr>
               )
@@ -361,12 +442,15 @@ function MonthGrid({ title, note, recs, v }) {
   )
 }
 
-function StageTable({ title, defs, by, v, splitNote }) {
+function StageTable({ title, defs, by, v, splitNote, types }) {
   const [open, setOpen] = useState({})
   const sumRow = xs => xs.reduce((a, x) => ({ qis: a.qis + x.qis, sites: a.sites + x.sites }), { qis: 0, sites: 0 })
   const cities = Object.keys(by).sort((a, b) => v.regionRank(a) - v.regionRank(b) || sumRow(by[b].all).qis - sumRow(by[a].all).qis)
   const tot = defs.map((_, i) => sumRow(cities.map(c => by[c].all[i])))
-  const C = ({ x }) => (x.sites ? <div className="font-semibold">{fmtNum(r1(x.qis))}</div> : <span className="text-slate-300">·</span>)
+  const allKeys = defs.flatMap(([, k]) => k)
+  const grp = types.length === 1 ? 'SPP' : 'Acquisition'
+  const to = (c, i, part) => v.href({ cities: c ? [c] : null, types, stages: i === null ? allKeys : defs[i][1], iocl: part ? (part === 'IOCL' ? '1' : '0') : '', card: `${grp} pipeline · ${c || 'all cities'}${part ? ' · ' + part : ''} · ${i === null ? 'all open stages' : defs[i][0]}` })
+  const C = ({ x, go }) => (x.sites ? <div className="font-semibold"><Go to={go}>{fmtNum(r1(x.qis))}</Go></div> : <span className="text-slate-300">·</span>)
   const canSplit = cities.some(c => by[c].parts)
   const allOpen = canSplit && cities.every(c => open[c])
   return (
@@ -391,14 +475,14 @@ function StageTable({ title, defs, by, v, splitNote }) {
                     <td className="whitespace-nowrap px-3 py-1.5 text-left font-semibold text-slate-800">
                       {parts && (open[c] ? <ChevronDown className="mr-1 inline h-3.5 w-3.5 text-slate-500" /> : <ChevronRight className="mr-1 inline h-3.5 w-3.5 text-slate-500" />)}{c}
                     </td>
-                    {by[c].all.map((x, i) => <td key={i} className="px-3 py-1.5"><C x={x} /></td>)}
-                    <td className="border-l border-slate-100 px-3 py-1.5 font-bold"><C x={sumRow(by[c].all)} /></td>
+                    {by[c].all.map((x, i) => <td key={i} className="px-3 py-1.5"><C x={x} go={to(c, i)} /></td>)}
+                    <td className="border-l border-slate-100 px-3 py-1.5 font-bold"><C x={sumRow(by[c].all)} go={to(c, null)} /></td>
                   </tr>
                   {parts && open[c] && Object.entries(parts).map(([p, xs]) => (
                     <tr key={p} className="bg-slate-50/70 text-[13px] text-slate-600">
                       <td className="py-1 pl-8 pr-3 text-left">{p}</td>
-                      {xs.map((x, i) => <td key={i} className="px-3 py-1"><C x={x} /></td>)}
-                      <td className="border-l border-slate-100 px-3 py-1"><C x={sumRow(xs)} /></td>
+                      {xs.map((x, i) => <td key={i} className="px-3 py-1"><C x={x} go={to(c, i, p)} /></td>)}
+                      <td className="border-l border-slate-100 px-3 py-1"><C x={sumRow(xs)} go={to(c, null, p)} /></td>
                     </tr>
                   ))}
                 </Fragment>
@@ -408,8 +492,8 @@ function StageTable({ title, defs, by, v, splitNote }) {
           </tbody>
           <tfoot><tr className="border-t-2 border-slate-300 bg-slate-50 font-bold">
             <td className="px-3 py-2 text-left">Total</td>
-            {tot.map((x, i) => <td key={i} className="px-3 py-2"><C x={x} /></td>)}
-            <td className="border-l border-slate-100 px-3 py-2"><C x={sumRow(tot)} /></td>
+            {tot.map((x, i) => <td key={i} className="px-3 py-2"><C x={x} go={to(null, i)} /></td>)}
+            <td className="border-l border-slate-100 px-3 py-2"><C x={sumRow(tot)} go={to(null, null)} /></td>
           </tr></tfoot>
         </table>
       </div>
@@ -566,6 +650,15 @@ function TargetTable({ v }) {
     )
   }
   const head = 'px-2 py-2 text-right font-semibold'
+  const citiesOf = r => (r.city === 'Other cities' ? v.otherCities : [r.city])
+  const drill = (cs, label) => k => {
+    const base = { cities: cs, card: `FY target · ${label} · ` }
+    if (k === 'live') return v.href({ ...base, cat: 'live', card: base.card + 'energized', note: 'Energized sites in Site Khojo. The Energized figure also counts QIS-tracker stations, so it can differ by a few QIS.' })
+    if (k === 'ho') return v.href({ ...base, stages: ['ho_done'], card: base.card + 'handed over, awaiting energization' })
+    if (k === 'expEn') return v.href({ ...base, stages: v.openKeys, card: base.card + `open pipeline (expected by ${endLbl})` })
+    if (k === 'nodate') return v.href({ ...base, stages: v.openKeys, een: `out,${v.cur}-01,${v.fyEnd}-31`, card: base.card + 'open pipeline · no energization date in plan' })
+    return v.href({ ...base, stages: v.openKeys, een: monthRange(k), card: base.card + `expected energization ${mLabel(k)}` })
+  }
   const plan = { show: showPlan, cols }
   return (
     <section className="card mb-5 overflow-hidden">
@@ -600,7 +693,7 @@ function TargetTable({ v }) {
             </tr>
           </thead>
           <tbody>
-            {rows.filter(r => r.pending > 0).map(r => <TargetRow key={r.city} r={r} n={n} Bar={Bar} plan={plan} />)}
+            {rows.filter(r => r.pending > 0).map(r => <TargetRow key={r.city} r={r} n={n} Bar={Bar} plan={plan} go={drill(citiesOf(r), r.city)} />)}
             {met.length > 0 && (
               <tr className="cursor-pointer border-t border-slate-200 bg-slate-50/70 hover:bg-slate-100" onClick={() => setShowMet(x => !x)}>
                 <td className="px-3 py-1.5 font-semibold text-slate-900">
@@ -610,27 +703,27 @@ function TargetTable({ v }) {
                   </span>
                 </td>
                 <td className="px-2 py-1.5 text-right">{n(M.target)}</td>
-                <td className="px-2 py-1.5 text-right font-semibold">{n(M.live)}</td>
+                <td className="px-2 py-1.5 text-right font-semibold"><Go to={drill(met.flatMap(citiesOf), 'Others')('live')}>{n(M.live)}</Go></td>
                 <td className="px-2 py-1.5"><Bar r={M} /></td>
                 <td className="border-l border-slate-200 bg-amber-50/50 px-2 py-1.5 text-right"><span className="text-xs font-semibold text-emerald-700">Met</span></td>
-                <td className="bg-emerald-50/30 px-2 py-1.5 text-right">{n(M.ho)}</td>
-                <td className="bg-sky-50/40 px-2 py-1.5 text-right">{n(M.expEn)}</td>
-                {showPlan && cols.map(k => <td key={k} className="bg-sky-50/20 px-2 py-1.5 text-right text-sky-900">{n(M.byMonth[k])}</td>)}
+                <td className="bg-emerald-50/30 px-2 py-1.5 text-right"><Go to={drill(met.flatMap(citiesOf), 'Others')('ho')}>{n(M.ho)}</Go></td>
+                <td className="bg-sky-50/40 px-2 py-1.5 text-right"><Go to={drill(met.flatMap(citiesOf), 'Others')('expEn')}>{n(M.expEn)}</Go></td>
+                {showPlan && cols.map(k => <td key={k} className="bg-sky-50/20 px-2 py-1.5 text-right text-sky-900"><Go to={drill(met.flatMap(citiesOf), 'Others')(k)}>{n(M.byMonth[k])}</Go></td>)}
                 <td className="bg-rose-50/40 px-2 py-1.5 text-right">{n(0)}</td>
               </tr>
             )}
-            {showMet && met.map(r => <TargetRow key={r.city} r={r} n={n} Bar={Bar} plan={plan} sub />)}
+            {showMet && met.map(r => <TargetRow key={r.city} r={r} n={n} Bar={Bar} plan={plan} sub go={drill(citiesOf(r), r.city)} />)}
           </tbody>
           <tfoot>
             <tr className="border-t-2 border-navy-900 bg-slate-50 font-bold">
               <td className="px-3 py-2">Total <span className="text-[10px] font-semibold text-slate-500">(city by city)</span></td>
               <td className="px-2 py-2 text-right">{fmtNum(CEO_TARGET_TOTAL)}</td>
-              <td className="px-2 py-2 text-right">{fmtNum(T.live)}</td>
+              <td className="px-2 py-2 text-right"><Go to={drill(null, 'all cities')('live')}>{fmtNum(T.live)}</Go></td>
               <td className="px-2 py-2"><Bar r={T} /></td>
               <td className="border-l border-slate-200 bg-amber-50 px-2 py-2 text-right text-amber-800">{fmtNum(Math.ceil(T.pending))}</td>
-              <td className="bg-emerald-50/60 px-2 py-2 text-right">{fmtNum(Math.ceil(T.ho))}</td>
-              <td className="bg-sky-50/70 px-2 py-2 text-right">{fmtNum(Math.ceil(T.expEn))}</td>
-              {showPlan && cols.map(k => <td key={k} className="bg-sky-50/40 px-2 py-2 text-right text-sky-900">{fmtNum(Math.ceil(T.byMonth[k] || 0))}</td>)}
+              <td className="bg-emerald-50/60 px-2 py-2 text-right"><Go to={drill(null, 'all cities')('ho')}>{fmtNum(Math.ceil(T.ho))}</Go></td>
+              <td className="bg-sky-50/70 px-2 py-2 text-right"><Go to={drill(null, 'all cities')('expEn')}>{fmtNum(Math.ceil(T.expEn))}</Go></td>
+              {showPlan && cols.map(k => <td key={k} className="bg-sky-50/40 px-2 py-2 text-right text-sky-900"><Go to={drill(null, 'all cities')(k)}>{fmtNum(Math.ceil(T.byMonth[k] || 0))}</Go></td>)}
               <td className="bg-rose-50 px-2 py-2 text-right text-rose-700">{fmtNum(Math.ceil(T.toFind))}</td>
             </tr>
           </tfoot>
@@ -641,17 +734,17 @@ function TargetTable({ v }) {
   )
 }
 
-function TargetRow({ r, n, Bar, sub, plan }) {
+function TargetRow({ r, n, Bar, sub, plan, go }) {
   return (
     <tr className={`border-t border-slate-100 hover:bg-slate-50/60 ${sub ? 'bg-slate-50/40 text-[13px]' : ''}`}>
       <td className={`py-1.5 ${sub ? 'pl-9 pr-3 text-slate-700' : 'px-3 font-semibold text-slate-900'}`}>{r.city}</td>
       <td className="px-2 py-1.5 text-right">{n(r.target)}</td>
-      <td className="px-2 py-1.5 text-right font-semibold">{n(r.live)}</td>
+      <td className="px-2 py-1.5 text-right font-semibold"><Go to={go('live')}>{n(r.live)}</Go></td>
       <td className="px-2 py-1.5"><Bar r={r} /></td>
       <td className="border-l border-slate-200 bg-amber-50/50 px-2 py-1.5 text-right font-bold text-amber-800">{r.pending ? fmtNum(Math.ceil(r.pending)) : <span className="text-xs font-semibold text-emerald-700">Met</span>}</td>
-      <td className="bg-emerald-50/30 px-2 py-1.5 text-right">{n(r.ho)}</td>
-      <td className="bg-sky-50/40 px-2 py-1.5 text-right">{n(r.expEn)}</td>
-      {plan.show && plan.cols.map(k => <td key={k} className="bg-sky-50/20 px-2 py-1.5 text-right text-sky-900">{n(r.byMonth?.[k])}</td>)}
+      <td className="bg-emerald-50/30 px-2 py-1.5 text-right"><Go to={r.ho ? go('ho') : null}>{n(r.ho)}</Go></td>
+      <td className="bg-sky-50/40 px-2 py-1.5 text-right"><Go to={r.expEn ? go('expEn') : null}>{n(r.expEn)}</Go></td>
+      {plan.show && plan.cols.map(k => <td key={k} className="bg-sky-50/20 px-2 py-1.5 text-right text-sky-900"><Go to={r.byMonth?.[k] ? go(k) : null}>{n(r.byMonth?.[k])}</Go></td>)}
       <td className={`bg-rose-50/40 px-2 py-1.5 text-right ${r.toFind ? 'font-bold text-rose-700' : ''}`}>{n(r.toFind)}</td>
     </tr>
   )

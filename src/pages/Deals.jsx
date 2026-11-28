@@ -31,7 +31,7 @@ export default function Deals({ fixedType, fixedSiteType }) {
   const [filters, setFilters] = useState({
     ...EMPTY_FILTERS, q: params.get('q') || '', stage: list('stage'), city: list('city'), siteType: fixedSiteType ? [fixedSiteType] : list('siteType'), region: list('region'), owner: list('owner'),
     recordType: fixedType || params.get('type') || '', age: params.get('age') || '', from: params.get('from') || '', to: params.get('to') || '',
-    ho: params.get('ho') || '', en: params.get('en') || '', openOnly: params.get('open') === '1', inPipe: params.get('inp') || '', pipeAt: params.get('at') || '', exit: params.get('exit') || '', worked: params.get('worked') || '',
+    ho: params.get('ho') || '', en: params.get('en') || '', openOnly: params.get('open') === '1', inPipe: params.get('inp') || '', pipeAt: params.get('at') || '', exit: params.get('exit') || '', worked: params.get('worked') || '', eho: params.get('eho') || '', een: params.get('een') || '', iocl: params.get('iocl') || '', cat: list('cat'),
   })
   const fromCard = params.get('card')
   const [pkind, setPkind] = useState(params.get('from') || params.get('to') || (params.get('inp') && params.get('inp') !== ',') ? 'custom' : 'all')
@@ -129,7 +129,10 @@ export default function Deals({ fixedType, fixedSiteType }) {
 
       {fromCard && (
         <div className="mb-3 flex items-center gap-2 rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-800">
-          From dashboard: <b>{fromCard}</b>
+          {params.get('src') === 'ceo' ? 'From CEO View' : 'From dashboard'}: <b>{fromCard}</b>
+          {filters.eho && <> · expected handover {filters.eho.replace(',', ' → ')}</>}
+          {filters.een && <> · {filters.een === 'none' ? 'no expected energization date' : filters.een.startsWith('out,') ? `no expected energization date between ${filters.een.split(',')[1]} and ${filters.een.split(',')[2]}` : `expected energization ${filters.een.replace(',', ' → ')}`}</>}
+          {filters.iocl && <> · {filters.iocl === '1' ? 'IOCL' : 'non-IOCL'}</>}
           {filters.from && <> · added {filters.from} → {filters.to || 'today'}</>}
           {filters.inPipe && <> · {filters.inPipe === ',' ? 'open pipeline (excl. dropped & energized)' : `in pipeline ${filters.inPipe.replace(',', ' → ')}`}</>}
           {filters.ho && <> · handed over {filters.ho.replace(',', ' → ')}</>}
