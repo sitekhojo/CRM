@@ -122,8 +122,8 @@ export default function CeoView() {
       const t = d.site_type || 'Not set'
       const done = hoDate(d)
       if (done) hoRecs.push({ city: d.city, month: ym(done), qis: q(d), due: false, type: t })
-      else if (!handedOver(d) && d.extra?.expected_ho && ym(d.extra.expected_ho) >= cur) hoRecs.push({ city: d.city, month: ym(d.extra.expected_ho), qis: q(d), due: true, type: t })
-      if (d.stage_category !== 'live' && !isTrackerCopy(d) && d.extra?.expected_en && ym(d.extra.expected_en) >= cur) enRecs.push({ city: d.city, month: ym(d.extra.expected_en), qis: q(d), due: true, type: t })
+      else if (!handedOver(d) && d.extra?.expected_ho && ym(d.extra.expected_ho) >= cur) hoRecs.push({ city: d.city, month: ym(d.extra.expected_ho), qis: q(d), due: true, type: t, hold: keyOf[d.stage_id] === 'hold' })
+      if (d.stage_category !== 'live' && !isTrackerCopy(d) && d.extra?.expected_en && ym(d.extra.expected_en) >= cur) enRecs.push({ city: d.city, month: ym(d.extra.expected_en), qis: q(d), due: true, type: t, hold: keyOf[d.stage_id] === 'hold' })
     }
     for (const e of events) if (e.date) enRecs.push({ city: e.city, month: ym(e.date), qis: e.qis, due: false, type: e.siteType })
 
@@ -323,10 +323,15 @@ function TypeTicks({ value, onChange }) {
   )
 }
 
-function Cell({ x, muted, dueOnly, doneTo, dueTo }) {
-  if (!x || (!x.qis && !x.dueQ)) return <span className="text-slate-300">·</span>
-  if (dueOnly) return <div className="font-semibold text-sky-800"><Go to={dueTo}>{fmtNum(r1(x.dueQ))}</Go></div>
-  return <div className={`font-semibold ${muted ? 'text-slate-500' : 'text-slate-900'}`}><Go to={doneTo}>{fmtNum(r1(x.qis))}</Go>{x.dueQ ? <span className="ml-1 text-[11px] font-semibold text-sky-700"><Go to={dueTo}>+{fmtNum(r1(x.dueQ))}</Go></span> : null}</div>
+function HoldTag({ x, to }) {
+  if (!x?.holdQ) return null
+  return <span className="ml-1 whitespace-nowrap rounded bg-amber-100 px-1 text-[10px] font-semibold text-amber-800" title="QIS on Hold with this expected date (not counted in the number)"><Go to={to}>{fmtNum(r1(x.holdQ))} hold</Go></span>
+}
+
+function Cell({ x, muted, dueOnly, doneTo, dueTo, holdTo }) {
+  if (!x || (!x.qis && !x.dueQ && !x.holdQ)) return <span className="text-slate-300">·</span>
+  if (dueOnly) return <div className="whitespace-nowrap font-semibold text-sky-800">{x.dueQ ? <Go to={dueTo}>{fmtNum(r1(x.dueQ))}</Go> : <span className="text-slate-300">·</span>}<HoldTag x={x} to={holdTo} /></div>
+  return <div className={`whitespace-nowrap font-semibold ${muted ? 'text-slate-500' : 'text-slate-900'}`}><Go to={doneTo}>{fmtNum(r1(x.qis))}</Go>{x.dueQ ? <span className="ml-1 text-[11px] font-semibold text-sky-700"><Go to={dueTo}>+{fmtNum(r1(x.dueQ))}</Go></span> : null}<HoldTag x={x} to={holdTo} /></div>
 }
 
 function MonthGrid({ title, note, recs, v, kind }) {
@@ -341,17 +346,18 @@ function MonthGrid({ title, note, recs, v, kind }) {
       if (!shown.has(r.month) || !(types.includes(r.type) || all)) continue
       const c = r.city || 'Not set'
       for (const key of [c, `${c}\u0000${r.type}`]) {
-        const x = ((out[key] ||= {})[r.month] ||= { qis: 0, dueQ: 0 })
-        if (r.due) x.dueQ += r.qis; else x.qis += r.qis
+        const x = ((out[key] ||= {})[r.month] ||= { qis: 0, dueQ: 0, holdQ: 0 })
+        if (r.hold) x.holdQ += r.qis; else if (r.due) x.dueQ += r.qis; else x.qis += r.qis
       }
     }
     return out
   }, [recs, types]) // eslint-disable-line
   const ahead = c => cols.filter(x => x.kind !== 'past').reduce((a, x) => { const y = g[c]?.[x.k]; return a + (y ? y.qis + y.dueQ : 0) }, 0)
+  const onHold = c => cols.filter(x => x.kind !== 'past').reduce((a, x) => a + (g[c]?.[x.k]?.holdQ || 0), 0)
   // only cities with something to show in the visible months
-  const cities = Object.keys(g).filter(c => !c.includes('\u0000')).filter(c => cols.some(x => { const y = g[c][x.k]; return y && (y.qis || y.dueQ) }))
+  const cities = Object.keys(g).filter(c => !c.includes('\u0000')).filter(c => cols.some(x => { const y = g[c][x.k]; return y && (y.qis || y.dueQ || y.holdQ) }))
     .sort((a, b) => v.regionRank(a) - v.regionRank(b) || ahead(b) - ahead(a) || a.localeCompare(b))
-  const tot = k => cities.reduce((a, c) => { const x = g[c]?.[k]; if (x) { a.qis += x.qis; a.dueQ += x.dueQ } return a }, { qis: 0, dueQ: 0 })
+  const tot = k => cities.reduce((a, c) => { const x = g[c]?.[k]; if (x) { a.qis += x.qis; a.dueQ += x.dueQ; a.holdQ += x.holdQ } return a }, { qis: 0, dueQ: 0, holdQ: 0 })
   const subTypes = c => TYPES.map(([k]) => k).filter(k => types.includes(k) && g[`${c}\u0000${k}`])
   const allOpen = cities.length > 0 && cities.every(c => open[c]) && !!open.__total
   const bg = x => (x.kind === 'cur' ? 'bg-emerald-50' : x.kind === 'fut' ? 'bg-sky-50/60' : '')
@@ -361,16 +367,18 @@ function MonthGrid({ title, note, recs, v, kind }) {
     const lbl = `${what} · ${city || 'all cities'}${typ ? ' · ' + typ : types.length < ALL_TYPES.length ? ' · ' + types.join(' + ') : ''} · ${mLabel(x.k)}`
     return {
       doneTo: v.href({ ...base, [kind]: monthRange(x.k), card: `${lbl} · done`, note: kind === 'en' ? 'Sites in Site Khojo energized this month. The table also counts QIS-tracker stations not yet linked to a site, so the two can differ by a few QIS.' : '' }),
-      dueTo: v.href({ ...base, [kind === 'ho' ? 'eho' : 'een']: monthRange(x.k), card: `${lbl} · expected` }),
+      dueTo: v.href({ ...base, [kind === 'ho' ? 'eho' : 'een']: monthRange(x.k), stages: [...v.openKeys, 'ho_done'], card: `${lbl} · expected (excl. hold)` }),
+      holdTo: v.href({ ...base, [kind === 'ho' ? 'eho' : 'een']: monthRange(x.k), stages: ['hold'], card: `${lbl} · on hold` }),
     }
   }
+  const holdAll = (city, typ) => v.href({ cities: city ? [city] : null, types: typ ? [typ] : types, stages: ['hold'], [kind === 'ho' ? 'eho' : 'een']: `${v.cur}-01,9999-12-31`, card: `${what} · ${city || 'all cities'}${typ ? ' · ' + typ : ''} · on hold (expected ${mLabel(v.cur)} onwards)` })
   const cell = (x, y, city, typ) => <Cell x={y} dueOnly={x.kind === 'fut'} muted={x.kind === 'past'} {...links(x, city, typ)} />
   return (
     <section className="card mb-5 overflow-hidden">
       <div className="flex flex-wrap items-start gap-3 border-b border-slate-100 px-4 py-3">
         <div className="min-w-0 flex-1">
           <h2 className="font-bold text-navy-900">{title}{types.length < ALL_TYPES.length && <span className="ml-2 text-sm font-semibold text-slate-500">· {types.join(' + ')}</span>}</h2>
-          <p className="text-xs text-slate-500">{note} Current month: done <span className="font-semibold text-sky-700">+ still expected</span>.</p>
+          <p className="text-xs text-slate-500">{note} Current month: done <span className="font-semibold text-sky-700">+ still expected</span>. Hold sites are not in the numbers; they show as <span className="rounded bg-amber-100 px-1 font-semibold text-amber-800">N hold</span> and in the On hold column.</p>
         </div>
         <div className="flex flex-col items-end gap-1.5">
           <TypeTicks value={types} onChange={setTypes} />
@@ -385,12 +393,13 @@ function MonthGrid({ title, note, recs, v, kind }) {
               {v.past.length > 0 && <th colSpan={v.past.length} className="border-l border-slate-100 px-2 py-1 text-center">Trend (actual)</th>}
               <th className="bg-emerald-50 px-2 py-1 text-center">This month</th>
               <th colSpan={v.future.length} className="bg-sky-50/60 px-2 py-1 text-center">Expected</th>
-              <th className="border-l border-slate-100 px-2 py-1">Ahead</th>
+              <th colSpan={2} className="border-l border-slate-100 px-2 py-1 text-center">Ahead</th>
             </tr>
             <tr className="border-b border-slate-200 text-xs text-slate-600">
               <th className="sticky left-0 bg-white px-3 py-1.5" />
               {cols.map(x => <th key={x.k} className={`px-3 py-1.5 font-semibold ${bg(x)}`}>{mLabel(x.k)}</th>)}
-              <th className="border-l border-slate-100 px-3 py-1.5 font-semibold" title="This month (done + expected) + coming months">Total</th>
+              <th className="border-l border-slate-100 px-3 py-1.5 font-semibold" title="This month (done + expected) + coming months, excluding hold">Total</th>
+              <th className="bg-amber-50 px-3 py-1.5 font-semibold text-amber-800" title="QIS on Hold with an expected date this month or later — not in Total">On hold</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -403,6 +412,7 @@ function MonthGrid({ title, note, recs, v, kind }) {
                   </td>
                   {cols.map(x => <td key={x.k} className={`px-3 py-1.5 ${bg(x)}`}>{cell(x, g[c]?.[x.k], c)}</td>)}
                   <td className="border-l border-slate-100 px-3 py-1.5 font-bold text-navy-900">{fmtNum(r1(ahead(c))) || '·'}</td>
+                  <td className="bg-amber-50/60 px-3 py-1.5 text-amber-800">{onHold(c) ? <Go to={holdAll(c)}>{fmtNum(r1(onHold(c)))}</Go> : <span className="text-slate-300">·</span>}</td>
                 </tr>
                 {open[c] && subTypes(c).map(t => {
                   const k = `${c}\u0000${t}`
@@ -411,27 +421,30 @@ function MonthGrid({ title, note, recs, v, kind }) {
                       <td className="sticky left-0 bg-slate-50 py-1 pl-10 pr-3 text-left text-slate-600">{t === 'SPP' ? 'SPP' : t === 'Private' ? 'PVT · Private' : 'FRN · Franchise'}</td>
                       {cols.map(x => <td key={x.k} className={`px-3 py-1 ${bg(x)}`}>{cell(x, g[k]?.[x.k], c, t)}</td>)}
                       <td className="border-l border-slate-100 px-3 py-1 font-semibold text-slate-700">{fmtNum(r1(ahead(k))) || '·'}</td>
+                      <td className="bg-amber-50/60 px-3 py-1 text-amber-800">{onHold(k) ? <Go to={holdAll(c, t)}>{fmtNum(r1(onHold(k)))}</Go> : <span className="text-slate-300">·</span>}</td>
                     </tr>
                   )
                 })}
               </Fragment>
             ))}
-            {!cities.length && <tr><td colSpan={cols.length + 2} className="py-6 text-center text-slate-400">Nothing for these site types</td></tr>}
+            {!cities.length && <tr><td colSpan={cols.length + 3} className="py-6 text-center text-slate-400">Nothing for these site types</td></tr>}
           </tbody>
           <tfoot>
             <tr className="cursor-pointer border-t-2 border-slate-300 bg-slate-50 font-bold" onClick={() => setOpen(o => ({ ...o, __total: !o.__total }))}>
               <td className="sticky left-0 bg-slate-50 px-3 py-2 text-left"><span className="mr-1.5 inline-flex h-4 w-4 items-center justify-center rounded border border-slate-300 text-[11px] font-bold leading-none text-slate-600 print:hidden">{open.__total ? '−' : '+'}</span>Total</td>
               {cols.map(x => <td key={x.k} className={`px-3 py-2 ${bg(x)}`}>{cell(x, tot(x.k), null)}</td>)}
               <td className="border-l border-slate-100 px-3 py-2 text-navy-900">{fmtNum(r1(cities.reduce((a, c) => a + ahead(c), 0)))}</td>
+              <td className="bg-amber-50/60 px-3 py-2 text-amber-800">{cities.reduce((a, c) => a + onHold(c), 0) ? <Go to={holdAll(null)}>{fmtNum(r1(cities.reduce((a, c) => a + onHold(c), 0)))}</Go> : <span className="text-slate-300">·</span>}</td>
             </tr>
             {open.__total && TYPES.map(([t]) => t).filter(t => types.includes(t)).map(t => {
               const keys = cities.map(c => `${c}\u0000${t}`)
-              const tt = k => keys.reduce((a, kk) => { const x = g[kk]?.[k]; if (x) { a.qis += x.qis; a.dueQ += x.dueQ } return a }, { qis: 0, dueQ: 0 })
+              const tt = k => keys.reduce((a, kk) => { const x = g[kk]?.[k]; if (x) { a.qis += x.qis; a.dueQ += x.dueQ; a.holdQ += x.holdQ } return a }, { qis: 0, dueQ: 0, holdQ: 0 })
               return (
                 <tr key={t} className="border-t border-slate-200 bg-slate-50/70 text-[13px]">
                   <td className="sticky left-0 bg-slate-50 py-1 pl-10 pr-3 text-left text-slate-600">{t === 'SPP' ? 'SPP' : t === 'Private' ? 'PVT · Private' : 'FRN · Franchise'}</td>
                   {cols.map(x => <td key={x.k} className={`px-3 py-1 ${bg(x)}`}>{cell(x, tt(x.k), null, t)}</td>)}
                   <td className="border-l border-slate-100 px-3 py-1 font-semibold text-slate-700">{fmtNum(r1(keys.reduce((a, kk) => a + ahead(kk), 0)))}</td>
+                  <td className="bg-amber-50/60 px-3 py-1 text-amber-800">{keys.reduce((a, kk) => a + onHold(kk), 0) ? <Go to={holdAll(null, t)}>{fmtNum(r1(keys.reduce((a, kk) => a + onHold(kk), 0)))}</Go> : <span className="text-slate-300">·</span>}</td>
                 </tr>
               )
             })}
